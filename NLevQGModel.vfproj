@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualStudioProject ProjectCreator="Intel Fortran" Keyword="Win32 Application" Version="11.0" ProjectIdGuid="{32CE5E70-B575-A8AF-206D-57C528F4D0DC}">
+	<Platforms>
+		<Platform Name="Win32"/>
+		<Platform Name="x64"/>
+	</Platforms>
+	<Configurations>
+		<Configuration Name="Debug|Win32" UseCompiler="ifortCompiler">
+			<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebugDLL" UseWindowsLibs="true"/>
+			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" GenerateDebugInformation="true" SubSystem="subSystemWindows" AdditionalDependencies="advapi32.lib ws2_32.lib"/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" HeaderFileName="$(InputName).h"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true"/>
+		</Configuration>
+		<Configuration Name="Debug|x64" UseCompiler="ifxCompiler">
+			<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" AdditionalIncludeDirectories="C:\Program Files (x86)\Intel\oneAPI\mkl\2025.2\include\fftw" SourceFileFormat="fileFormatFree" F2003Semantics="true" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebug" UseWindowsLibs="true"/>
+			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="..\FortranLibraries\FFTW3" GenerateDebugInformation="true" SubSystem="subSystemWindows" AdditionalDependencies="libfftw3-3.lib libfftw3f-3.lib libfftw3l-3.lib"/>
+			<Tool Name="VFResourceCompilerTool" AdditionalIncludeDirectories="&quot;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\winres.h&quot;"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64" HeaderFileName="$(InputName).h"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool" CommandLine="copy /y &quot;..\FortranLibraries\FFTW3\libfftw3-3.dll&quot; &quot;$(OutDir)&quot;&#xA;copy /y &quot;..\FortranLibraries\FFTW3\libfftw3f-3.dll&quot; &quot;$(OutDir)&quot;&#xA;copy /y &quot;..\FortranLibraries\FFTW3\libfftw3l-3.dll&quot; &quot;$(OutDir)&quot;"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true"/>
+		</Configuration>
+		<Configuration Name="Release|Win32" UseCompiler="ifortCompiler">
+			<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" RuntimeLibrary="rtMultiThreadedDLL" UseWindowsLibs="true"/>
+			<Tool Name="VFLinkerTool" SuppressStartupBanner="true" SubSystem="subSystemWindows" AdditionalDependencies="advapi32.lib ws2_32.lib"/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" HeaderFileName="$(InputName).h"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true"/>
+		</Configuration>
+		<Configuration Name="Release|x64" UseCompiler="ifxCompiler">
+			<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" RuntimeLibrary="rtMultiThreadedDLL" UseWindowsLibs="true"/>
+			<Tool Name="VFLinkerTool" SuppressStartupBanner="true" SubSystem="subSystemWindows" AdditionalDependencies="advapi32.lib ws2_32.lib"/>
+			<Tool Name="VFResourceCompilerTool"/>
+			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64" HeaderFileName="$(InputName).h"/>
+			<Tool Name="VFCustomBuildTool"/>
+			<Tool Name="VFPreLinkEventTool"/>
+			<Tool Name="VFPreBuildEventTool"/>
+			<Tool Name="VFPostBuildEventTool"/>
+			<Tool Name="VFManifestTool" SuppressStartupBanner="true"/>
+		</Configuration>
+	</Configurations>
+	<Files>
+		<Filter Name="Header Files" Filter="fi;fd">
+			<File RelativePath=".\NLevQGModel.fi"/>
+		</Filter>
+		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe">
+			<File RelativePath=".\NLevQGModel.ico"/>
+			<File RelativePath=".\NLevQGModel.rc"/>
+		</Filter>
+		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+			<Filter Name="Dialogs">
+				<File RelativePath=".\Dialogs\DialogHelpersModule.f90"/>
+				<File RelativePath=".\Dialogs\DlgProcInterfacesModule.f90"/>
+				<File RelativePath=".\Dialogs\KeyboardHooksModule.f90"/>
+				<File RelativePath=".\Dialogs\ModelControlDialogModule.f90">
+				</File>
+				<File RelativePath=".\Dialogs\SettingsDialogModule.f90">
+				</File>
+				<File RelativePath=".\Dialogs\VerticalParamsDialogModule.f90"/>
+			</Filter>
+			<Filter Name="Libraries">
+				<File RelativePath=".\Libraries\fftw3.f03"/>
+				<File RelativePath=".\Libraries\fftw3Helpers.f90"/>
+				<File RelativePath=".\Libraries\fftw3l.f03"/>
+				<File RelativePath=".\Libraries\fftw3q.f03"/>
+			</Filter>
+			<Filter Name="ModelCode">
+				<File RelativePath=".\ModelCode\ArrayDimensionsModule.f90"/>
+				<File RelativePath=".\ModelCode\ConstantsModule.f90">
+				</File>
+				<File RelativePath=".\ModelCode\InteractionCoefficientsModule.f90"/>
+				<File RelativePath=".\ModelCode\ModelFieldsModule.f90"/>
+				<File RelativePath=".\ModelCode\ModelModule.f90"/>
+				<File RelativePath=".\ModelCode\ModelParamsModule.f90">
+				</File>
+				<File RelativePath=".\ModelCode\SetupModule.f90">
+				</File>
+				<File RelativePath=".\ModelCode\UtilitiesModule.f90"/>
+			</Filter>
+			<Filter Name="PlotCode"/>
+			<File RelativePath=".\NLevQGModel.f90"/>
+			<File RelativePath=".\NLevQGModelglobals.f90"/>
+			<File RelativePath=".\WndProcInterfacesModule.f90"/>
+		</Filter>
+		<File RelativePath=".\ReadMe.txt"/>
+		<File RelativePath=".\Resource.h">
+			<FileConfiguration Name="Debug|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="deftofd &quot;$(InputPath)&quot; &quot;$(InputDir)$(InputName).fd&quot;" Description="Generating Fortran include file..." Outputs="$(InputDir)$(InputName).fd"/>
+			</FileConfiguration>
+			<FileConfiguration Name="Release|x64">
+				<Tool Name="VFCustomBuildTool" CommandLine="deftofd &quot;$(InputPath)&quot; &quot;$(InputDir)$(InputName).fd&quot;" Description="Generating Fortran include file..." Outputs="$(InputDir)$(InputName).fd"/>
+			</FileConfiguration>
+			<FileConfiguration Name="Debug|x64">
+				<Tool Name="VFCustomBuildTool" CommandLine="deftofd &quot;$(InputPath)&quot; &quot;$(InputDir)$(InputName).fd&quot;" Description="Generating Fortran include file..." Outputs="$(InputDir)$(InputName).fd"/>
+			</FileConfiguration>
+			<FileConfiguration Name="Release|Win32">
+				<Tool Name="VFCustomBuildTool" CommandLine="deftofd &quot;$(InputPath)&quot; &quot;$(InputDir)$(InputName).fd&quot;" Description="Generating Fortran include file..." Outputs="$(InputDir)$(InputName).fd"/>
+			</FileConfiguration>
+		</File>
+	</Files>
+	<Globals/>
+</VisualStudioProject>

@@ -1,0 +1,247 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+#include "winver.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_SETTINGS_DLG DIALOGEX 0, 0, 252, 199
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Model Settings"
+FONT 14, "Times New Roman", 400, 0, 0x0
+// Need to add | WS_CLIPSIBLINGS to all list controls and corresponding edit boxes to let the editing use the mouse and keyboard.
+// We also need to move the EDIT controls BEFORE the list controls.
+BEGIN
+    EDITTEXT        IDC_EDIT_USERSETTINGS, 22, 7, 67, 12, ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE | WS_CLIPSIBLINGS
+    CONTROL         "",IDC_USERSETTINGS,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | WS_BORDER | WS_CLIPSIBLINGS | WS_TABSTOP,21,23,210,39
+    COMBOBOX        IDC_COMBO_USERSETTINGS1,101,63,130,49,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Integration method",IDC_STATIC_COMBO_SETTINGS1,23,65,69,9
+    COMBOBOX        IDC_COMBO_USERSETTINGS2,101,75,130,74,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Statistics Options",IDC_STATIC_COMBO_SETTINGS2,23,77,71,10
+    PUSHBUTTON      "F2: Load data from file",IDC_BUTTON_LOAD_FROM_FILE,61,104,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F3: Save data to file",IDC_BUTTON_SAVE_TO_FILE,61,118,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F4: Go to Model Control",IDC_BUTTON_MODEL_CONTROL,61,132,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F5: Examine sensitivity run results",IDC_BUTTON_SENSITIVITY_FILES,61,147,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F1: Set contour intervals and colors",IDC_BUTTON_SET_SCALE_FACTORS,61,90,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F6: General information",IDC_BUTTON_GENERAL_INFO,61,162,135,14,0,WS_EX_STATICEDGE
+    PUSHBUTTON      "F10: Exit Program",IDC_BUTTON_EXIT_SETTINGS,158,7,87,14,0,WS_EX_STATICEDGE
+END
+
+IDD_MODEL_CONTROL DIALOGEX 0, 0, 470, 240
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Model Control Template"
+FONT 14, "Times New Roman", 400, 0, 0x0
+BEGIN
+    EDITTEXT        IDC_EDIT_REALVALUES, 22, 7, 56, 12, ES_AUTOHSCROLL | NOT WS_VISIBLE | WS_CLIPSIBLINGS
+    EDITTEXT        IDC_EDIT_INTEGERVALUES, 240, 7, 56, 12, ES_AUTOHSCROLL | ES_NUMBER | NOT WS_VISIBLE | WS_CLIPSIBLINGS
+    CONTROL         "",IDC_REALVALUES,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP | WS_CLIPSIBLINGS,7,21,216,117
+    CONTROL         "",IDC_INTEGERVALUES,"SysListView32",LVS_REPORT | LVS_SHOWSELALWAYS | LVS_ALIGNLEFT | WS_BORDER | WS_TABSTOP | WS_CLIPSIBLINGS,228,21,234,117
+    COMBOBOX        IDC_COMBO_MAP_TYPE,92,145,131,230,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Type of map to display",IDC_STATIC_COMBO_MAP_TYPE,7,146,84,8
+    COMBOBOX        IDC_COMBO_FIELD1,92,157,131,455,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Field one to display",IDC_STATIC_COMBO_FIELD1,7,158,84,8
+    COMBOBOX        IDC_COMBO_FIELD2,92,169,131,455,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Field two to display",IDC_STATIC_COMBO_FIELD2,7,170,84,8
+    COMBOBOX        IDC_COMBO_FIELD3,92,181,131,455,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Field three to display",IDC_STATIC_COMBO_FIELD3,7,182,84,8
+    COMBOBOX        IDC_COMBO_MODEL_TYPE,92,193,131,80,CBS_DROPDOWN | WS_VSCROLL | WS_TABSTOP,WS_EX_CLIENTEDGE
+    LTEXT           "Type of Model to run",IDC_STATIC_COMBO_MODEL_TYPE,7,196,84,8
+    PUSHBUTTON      " F1: Set contour intervals",IDC_BUTTON_CONFIG,229,169,89,12,BS_LEFT
+    PUSHBUTTON      " F2: Set vertical parameters",IDC_BUTTON_VERTICAL_PARAMS,229,181,89,12,BS_LEFT
+    PUSHBUTTON      " F3: Initialize flow variables",IDC_BUTTON_INIT_FLOW_VARIABLES,229,193,89,12,BS_LEFT
+    PUSHBUTTON      " F4: Save current flow",IDC_BUTTON_SAVE_CURRENT_FLOW,229,205,89,12,BS_LEFT
+    PUSHBUTTON      " F5: Load saved flow",IDC_BUTTON_LOAD_SAVED_FLOW,229,217,89,12,BS_LEFT
+    PUSHBUTTON      " F7: Run as a movie",IDC_BUTTON_RUN_MOVIE,321,181,95,12,BS_LEFT
+    PUSHBUTTON      " F6: View statistics",IDC_BUTTON_VIEW_STATISTICS2,321,169,95,12,BS_LEFT
+    PUSHBUTTON      " F8: Run as sequence of maps",IDC_BUTTON_RUN_SEQUENTIALLY,321,193,95,12,BS_LEFT
+    PUSHBUTTON      " F9: Setup 'bomb' disturbance",IDC_BUTTON_SETUP_BOMB,321,205,95,12,BS_LEFT
+    PUSHBUTTON      " F10: Return to main menu",IDC_BUTTON_RETURN_TO_MAIN,375,7,87,12,BS_LEFT
+END
+
+IDD_VERTICAL_PARAMS DIALOGEX 0, 0, 313, 179
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Vertical Parameters"
+FONT 14, "Times New Roman", 400, 0, 0x0
+BEGIN
+    EDITTEXT        IDC_EDIT_VERTICAL, 179, 7, 40, 14, ES_AUTOHSCROLL | NOT WS_VISIBLE | WS_CLIPSIBLINGS
+    CONTROL         "",IDC_LIST_LEVELS,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_ALIGNLEFT | LVS_NOSORTHEADER | WS_BORDER | WS_TABSTOP | WS_CLIPSIBLINGS,7,16,90,50
+    LTEXT           "Set pressure levels",IDC_STATIC_LEVELS,20,7,58,8
+    PUSHBUTTON      " F10: Exit to Model Control",IDC_BUTTON_EXIT_VERTICAL,219,7,87,14
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+NLEVQGMODEL             ICON                    "NLevQGModel.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName", "My Company"
+            VALUE "FileDescription", "NLevQGModel Application"
+            VALUE "FileVersion", "1.0"
+            VALUE "InternalName", "NLevQGModel"
+            VALUE "ProductName", "NLevQGModel"
+            VALUE "ProductVersion", "1.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "#include ""winver.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_SETTINGS_DLG, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 245
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 192
+    END
+
+    IDD_MODEL_CONTROL, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 462
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 233
+    END
+
+    IDD_VERTICAL_PARAMS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 306
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 172
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_SETTINGS_DLG AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_MODEL_CONTROL AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_VERTICAL_PARAMS AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    0                       " "
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

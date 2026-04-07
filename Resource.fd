@@ -1,0 +1,54 @@
+!
+! C:\Users\BrianReinhold\projects\BVE\NLevQGModel\Resource.fd generated 
+! from C:\Users\BrianReinhold\projects\BVE\NLevQGModel\Resource.h
+!
+      integer, parameter :: IDC_BUTTON_LOAD_SAVED_FLOW = 1045
+      integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
+      integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
+      integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
+      integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
+      integer, parameter :: IDC_REALVALUES = 1023
+      integer, parameter :: IDD_VERTICAL_PARAMS = 108
+      integer, parameter :: IDC_USERSETTINGS = 1008
+      integer, parameter :: IDC_COMBO_USERSETTINGS1 = 1013
+      integer, parameter :: IDC_INTEGERVALUES = 1024
+      integer, parameter :: IDC_BUTTON_LOAD_FROM_FILE = 1017
+      integer, parameter :: IDC_EDIT1 = 1046
+      integer, parameter :: IDC_COMBO_USERSETTINGS2 = 1015
+      integer, parameter :: IDD_MODEL_CONTROL = 106
+      integer, parameter :: IDC_BUTTON_GENERAL_INFO = 1022
+      integer, parameter :: IDD_SETTINGS_DLG = 107
+      integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
+      integer, parameter :: IDC_BUTTON_SET_SCALE_FACTORS = 1021
+      integer, parameter :: IDC_EDIT_INTEGERVALUES = 1026
+      integer, parameter :: IDC_BUTTON_CONFIG = 1041
+      integer, parameter :: IDC_STATIC_COMBO_FIELD1 = 1032
+      integer, parameter :: IDC_COMBO_MODEL_TYPE = 1039
+      integer, parameter :: IDC_EDIT_REALVALUES = 1025
+      integer, parameter :: IDC_STATIC_LEVELS = 1044
+      integer, parameter :: IDC_STATIC_COMBO_FIELD2 = 1034
+      integer, parameter :: ID_CONFIGURATION_SETTINGS = 30016
+      integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
+      integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
+      integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
+      integer, parameter :: IDM_ABOUT = 30015
+      integer, parameter :: IDC_BUTTON_SAVE_CURRENT_FLOW = 1044
+      integer, parameter :: IDC_STATIC_COMBO_MAP_TYPE = 1030
+      integer, parameter :: IDC_BUTTON_RUN_MOVIE = 1046
+      integer, parameter :: IDC_BUTTON_SENSITIVITY_FILES = 1020
+      integer, parameter :: IDC_BUTTON_SAVE_TO_FILE = 1018
+      integer, parameter :: IDC_COMBO_FIELD1 = 1031
+      integer, parameter :: IDC_BUTTON_VIEW_STATISTICS2 = 1047
+      integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
+      integer, parameter :: IDC_BUTTON_MODEL_CONTROL = 1019
+      integer, parameter :: IDC_BUTTON_RUN_SEQUENTIALLY = 1048
+      integer, parameter :: IDC_BUTTON_EXIT_SETTINGS = 1051
+      integer, parameter :: IDC_COMBO_FIELD2 = 1033
+      integer, parameter :: IDC_BUTTON_VERTICAL_PARAMS = 1042
+      integer, parameter :: IDC_COMBO_FIELD3 = 1037
+      integer, parameter :: IDC_EDIT_VERTICAL = 1046
+      integer, parameter :: IDC_LIST_LEVELS = 1043
+      integer, parameter :: IDC_BUTTON_INIT_FLOW_VARIABLES = 1043
+      integer, parameter :: IDC_BUTTON_SETUP_BOMB = 1049
+      integer, parameter :: IDC_STATIC_COMBO_SETTINGS1 = 1014
+      integer, parameter :: IDC_STATIC_COMBO_SETTINGS2 = 1016
