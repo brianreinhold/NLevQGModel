@@ -31,7 +31,7 @@ module ModelParamsModule
     public :: gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams, gModScalingParams, gPlotControls
     public :: gNLevFile, gSensFile
     ! Constants that are not expressed as parameters
-    public :: PI, PI_INVERSE, RAD_TO_DEGREES, SQRT2, SQRT22, CHANNEL_WIDTH, CORIOLIS, plotScales
+    public :: PI, PI_INVERSE, RAD_TO_DEGREES, SQRT2, SQRT22, CHANNEL_WIDTH, CORIOLIS, gPlotScales
 
     ! Define the model parameters
     ! These settings determine the size of the arrays used and thus the memory allocations that need to be done.
@@ -214,17 +214,18 @@ module ModelParamsModule
     type(ScaleFactors) :: gScaleFactors
 
     !-----------------------------------------------------------------  Constants:
-    real :: plotScales(PLOT_SCALES_SIZE)      ! Scale factors and scaling ratios. Constants give size of the arrays
+    real :: gPlotScales(PLOT_SCALES_SIZE)      ! Scale factors and scaling ratios. Constants give size of the arrays
 
     contains
 
         subroutine initConstants()
             use ConstantsModule
-            
+
             implicit none
 
             !-------------------------------Scaling for dissipation (in days):
-            gScaleFactors%dissipation = CORIOLIS_INVERSE / SECONDS_PER_DAY    ! 0.1122340
+            !  Non dimensionalize: FK(nondimensional) = 1/[coriolis * secondsPerDay * FK(dimensional)]
+            gScaleFactors%dissipation = CORIOLIS_INVERSE / SECONDS_PER_DAY    ! 0.1122340 = 2.7 hours
             !-------------------------------Scaling for longest wave (in kilometers):
             gScaleFactors%longestWave = PI * CHANNEL_WIDTH / 500.           ! 10000.00
             !-------------------------------Scaling for heights L*L*f*f/g in meters:
@@ -242,55 +243,55 @@ module ModelParamsModule
             !  These factors, when multipled by their nondimensional counterpart, generate scaled versions
             !  of the said field.
             !---------------------------Vorticity in 1/s * E-05:
-            plotScales(VORTICITY) = gScaleFactors%CORIOLIS * 100000.
+            gPlotScales(VORTICITY) = gScaleFactors%CORIOLIS * 100000.
             !---------------------------Heights in meters:
-            plotScales(HEIGHT) = gScaleFactors%heights
+            gPlotScales(HEIGHT) = gScaleFactors%heights
             !---------------------------Temperature in deg C-Needs 'A(n)' factor:
-            plotScales(TEMPERATURE) = gScaleFactors%temperatureScale
+            gPlotScales(TEMPERATURE) = gScaleFactors%temperatureScale
             !---------------------------Vertical velocity (omega) in mb/hr:
-            plotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480
+            gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480
             !---------------------------Temperature forcing in deg C-Needs 'A(n)' factor:
-            plotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
+            gPlotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
             !---------------------------Total height tendencies m/day:
-            plotScales(TOT_HGT_TEND) = plotScales(HEIGHT) * CORIOLIS * SECONDS_PER_DAY
+            gPlotScales(TOT_HGT_TEND) = gPlotScales(HEIGHT) * CORIOLIS * SECONDS_PER_DAY
             !---------------------------Vorticity advection + beta effect:
-            plotScales(ADV_BETA_HGT_TEND) = plotScales(TOT_HGT_TEND)
+            gPlotScales(ADV_BETA_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Vorticity tendencies from omega:
-            plotScales(OMEGA_HGT_TEND) = plotScales(TOT_HGT_TEND)
+            gPlotScales(OMEGA_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Diabatic height tendencies m/day:
-            plotScales(DIABATIC_HGT_TEND) = plotScales(TOT_HGT_TEND)
+            gPlotScales(DIABATIC_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Total temp tendencies C/day:
-            plotScales(TOT_TEMP_TEND) = plotScales(TEMPERATURE) * CORIOLIS * SECONDS_PER_DAY
+            gPlotScales(TOT_TEMP_TEND) = gPlotScales(TEMPERATURE) * CORIOLIS * SECONDS_PER_DAY
             !---------------------------Temperature advection:
-            plotScales(ADV_TEMP_TEND) = plotScales(TOT_TEMP_TEND)
+            gPlotScales(ADV_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
             !---------------------------Temperature tendencies from omega:
-            plotScales(OMEGA_TEMP_TEND) = plotScales(TOT_TEMP_TEND)
+            gPlotScales(OMEGA_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
             !---------------------------Diabatic temperature tendencies C/day:
-            plotScales(DIABATIC_TEMP_TEND) = plotScales(TOT_TEMP_TEND)
+            gPlotScales(DIABATIC_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
             !---------------------------Heights in meters (for strm forcing):
-            plotScales(HGT_FORCING) = plotScales(HEIGHT)
+            gPlotScales(HGT_FORCING) = gPlotScales(HEIGHT)
             !---------------------------Orographic advection:
-            plotScales(OROG_HGT_TEND) = plotScales(TOT_HGT_TEND)
+            gPlotScales(OROG_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Orographic heights in meters (depends upon DP(1)):
-            plotScales(OROGRAPHY) = 1.
+            gPlotScales(OROGRAPHY) = 1.
             !---------------------------No Plot:
-            plotScales(PLOT_OFF) = 1.
+            gPlotScales(PLOT_OFF) = 1.
             !------------------------------------Height tendencies for balance of forces
-            plotScales(TOT_HGT_TEND_GRAF) = plotScales(TOT_HGT_TEND)
+            gPlotScales(TOT_HGT_TEND_GRAF) = gPlotScales(TOT_HGT_TEND)
             !------------------------------------Temp tendencies for balance of forces
-            plotScales(TOT_TEMP_TEND_GRAF) = plotScales(TOT_TEMP_TEND)
+            gPlotScales(TOT_TEMP_TEND_GRAF) = gPlotScales(TOT_TEMP_TEND)
             !---------------------------Mean height tendencies
-            plotScales(MEAN_HGT_TEND_GRAF) = plotScales(TOT_HGT_TEND)
+            gPlotScales(MEAN_HGT_TEND_GRAF) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Mean temp tendencies
-            plotScales(MEAN_TEMP_TEND_GRAF) = plotScales(TOT_TEMP_TEND)
+            gPlotScales(MEAN_TEMP_TEND_GRAF) = gPlotScales(TOT_TEMP_TEND)
             !------------------------------------Ground phase speed in m/s
-            plotScales(HGT_WAVE_SPEED_GRAF) = CHANNEL_WIDTH * CORIOLIS
+            gPlotScales(HGT_WAVE_SPEED_GRAF) = CHANNEL_WIDTH * CORIOLIS
             !-------------------------------------Phase differences
-            plotScales(HGT_TEMP_PHASE_DIFF) = 1.
+            gPlotScales(HGT_TEMP_PHASE_DIFF) = 1.
             !------------------------------Growth rate:
-            plotScales(GROWTH_RATE_GRAF) = 1.
+            gPlotScales(GROWTH_RATE_GRAF) = 1.
             !------------------------------Amplitude ratio
-            plotScales(AMPLITUDE_RATIO_GRAF) = 1.
+            gPlotScales(AMPLITUDE_RATIO_GRAF) = 1.
         end subroutine initConstants
     
 

@@ -81,7 +81,7 @@ module ConstantsModule
     integer, parameter :: WEATHER_STN = 8           ! Time series of a field at a particular point (lat-lon)
     
                                                     ! Display options for variables IPLT1, IPLT2, IPLT3
-                                                    ! Also used for the scale factor array 'plotScales' below
+                                                    ! Also used for the scale factor array 'gPlotScales' below
                                                     ! Options 1-17 are for 2D contour maps
     integer, parameter :: VORTICITY  = 1            ! Vorticity in 10**-5/s
     integer, parameter :: HEIGHT  = 2               ! Height in meters

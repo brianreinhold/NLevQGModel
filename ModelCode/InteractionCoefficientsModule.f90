@@ -2,7 +2,7 @@ module InteractionCoefficientsModule
     implicit none
     public :: computeInteractionCoefficients
     public :: AllocateCintArrays, DeallocateCintArrays
-    public :: CintArrays, cintArr, BI, IBI
+    public :: CintArrays, gCintArr, BI, IBI
 
 
     !  BI(*) contains all the real interaction coefficient arrays
@@ -24,7 +24,7 @@ module InteractionCoefficientsModule
 
     ! This will contain all the interaction coefficients and it shall be treated as a global variable.
     ! It is defined here and only here.
-    type(CintArrays) :: cintArr
+    type(CintArrays) :: gCintArr
 
     real, allocatable, target :: BI(:) ! Define one array that encompasses all real interaction coeffcient arrays
     integer, allocatable, target :: IBI(:) ! Define one array that encompasses all integer interaction coefficient arrays
@@ -132,7 +132,7 @@ module InteractionCoefficientsModule
         !> of interaction coefficients. It will then call it again to allocate the arrays and
         !> populate the arrays given the number of interaction coefficients.
 
-        !! cintArr: contains
+        !! gCintArr: contains
         !!      I1M: The number of interactions per equation
         !!      JIN: The jth variable of the interaction
         !!      KIN: The kth variable of the interaction
@@ -166,7 +166,7 @@ module InteractionCoefficientsModule
             INTEGER :: L3, L4, IJK, LS, ITOT
             REAL :: RN2, T1, T2, Z1, Z2, Z3, Z4, ZJK
 
-            if (flag > 0 .AND. (.NOT. cintArr%allocated)) then
+            if (flag > 0 .AND. (.NOT. gCintArr%allocated)) then
                 numOfIntCoeffs = -1
                 return
             end if
@@ -337,17 +337,17 @@ module InteractionCoefficientsModule
                         !  the I1 loop (giving the sum over the I I1MAX elements).
                         !
                         IF(flag .NE. 0)THEN
-                            cintArr%CINT(INDX) = ZJK
-                            cintArr%JIN(INDX) = J
-                            cintArr%KIN(INDX) = K
-                            cintArr%I1M(I) = I1
+                            gCintArr%CINT(INDX) = ZJK
+                            gCintArr%JIN(INDX) = J
+                            gCintArr%KIN(INDX) = K
+                            gCintArr%I1M(I) = I1
                         END IF
                         !-------------------------------------------- Increment the counter by one:
                         INDX = INDX + 1
                         !-------------------------------------------- Maximum index value:
                         IF(INDX .GT. 75835) THEN
                             numOfIntCoeffs = -1
-                            cintArr%numOfInteractionCoeffs = -1
+                            gCintArr%numOfInteractionCoeffs = -1
                             RETURN
                         END IF
                         I1 = I1 + 1
@@ -356,16 +356,16 @@ module InteractionCoefficientsModule
             END DO
 
             numOfIntCoeffs = INDX - 1
-            cintArr%numOfInteractionCoeffs = numOfIntCoeffs
+            gCintArr%numOfInteractionCoeffs = numOfIntCoeffs
         END FUNCTION computeInteractionCoefficients
 
 
         !> Function to allocate the interaction coefficients arrays and compute the interaction coefficients
         !> THis allocation method is a little different than the other ones since here we also create the
-        !> cintArr arrays based upon the gUserSettings base parameters and calculate the the interaction coefficients.
+        !> gCintArr arrays based upon the gUserSettings base parameters and calculate the the interaction coefficients.
         !> That is because these will change for any change in the horizontal resolution requiring deallocation and 
-        !> reallocation and then recomputation. On success the arrays in cintArr will be populated.
-        !! arrayDims: The NINTD field is the only field used. You do not have to set it to any value.
+        !> reallocation and then recomputation. On success the arrays in gCintArr will be populated.
+        !! gArrayDims: The NINTD field is the only field used. You do not have to set it to any value.
         !!                   Upon return it will contain the number of interaction coefficients.
         !! gUserSettings: This type contains the number of zonal and meridional waves as well as a flag
         !!                      To indicate which integration method to use. The caller has to provide these
@@ -381,7 +381,7 @@ module InteractionCoefficientsModule
             INTEGER :: totalSize, status, ITOT, currentNoOfInteractions
 
             ITOT = gUserSettings%maxMeridWaves + 2 * gUserSettings%maxZonalWaves * gUserSettings%maxMeridWaves
-            cintArr%numOfInteractionCoeffs = -1
+            gCintArr%numOfInteractionCoeffs = -1
             status = 0
             !----------------------------------Compute ONLY number of interaction coefs:
             ! With a seting of the flag to 0 we will only count the number of interaction coefficeints
@@ -389,10 +389,10 @@ module InteractionCoefficientsModule
             ! then we switch to the transform method and do not allocate the interaction coefficients arrays.
 
             IF(.not. gUserSettings%integrationMethodTransform) then ! False means USE_INTERACTION_COEFFICIENTS
-                !----------------------------------Switch to transform method when arrayDims%NINTD = -1 (too many interaction coefficients)
-                cintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
+                !----------------------------------Switch to transform method when gArrayDims%NINTD = -1 (too many interaction coefficients)
+                gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
                                                 gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, 0)
-                IF(cintArr%numOfInteractionCoeffs .EQ. -1) THEN
+                IF(gCintArr%numOfInteractionCoeffs .EQ. -1) THEN
                     gUserSettings%integrationMethodTransform = .TRUE.
                     status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                     return
@@ -402,20 +402,20 @@ module InteractionCoefficientsModule
                 return
             end if
 
-            ALLOCATE(BI(cintArr%numOfInteractionCoeffs), STAT = status) ! Single contiguous memory block for real arrays (there is only one now)
+            ALLOCATE(BI(gCintArr%numOfInteractionCoeffs), STAT = status) ! Single contiguous memory block for real arrays (there is only one now)
             if (status /= 0) THEN
                 gUserSettings%integrationMethodTransform = .TRUE.
-                cintArr%numOfInteractionCoeffs = -1
+                gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                 RETURN
             END IF
             !-------------------------------------Size of JIN, KIN, and I1M arrays
-            totalSize = 2 * cintArr%numOfInteractionCoeffs + ITOT
+            totalSize = 2 * gCintArr%numOfInteractionCoeffs + ITOT
             ALLOCATE(IBI(totalSize), STAT = status) ! Single contiguous memory block for integer arrays
             if (status /= 0) THEN
                 gUserSettings%integrationMethodTransform = .TRUE.
                 deallocate(BI, STAT = status)
-                cintArr%numOfInteractionCoeffs = -1
+                gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                 RETURN
             end if
@@ -423,7 +423,7 @@ module InteractionCoefficientsModule
             BI(:) = 0.0 ! Zero entire set of real arrays
             IBI(:) = 0 ! Zero entire set of integer arrays
 
-            cintArr%allocated = .true. ! Set the allocated flag to true
+            gCintArr%allocated = .true. ! Set the allocated flag to true
 
             currentNoOfInteractions = computeInteractionCoefficients(gModRealParams%RN, &
                                                 gModIntParams%KMAX2, gModIntParams%LMAX2, 0)
@@ -432,14 +432,14 @@ module InteractionCoefficientsModule
             if (status /= 0) THEN
                 gUserSettings%integrationMethodTransform = .TRUE.
                 status = DeallocateCintArrays()
-                cintArr%numOfInteractionCoeffs = -1
+                gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                 RETURN
             END IF
 
             ! Now compute the interaction coefficients
-            ! arrayDims%NINTD will have a value > 0 if interaction coefficients are used
-            !cintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
+            ! gArrayDims%NINTD will have a value > 0 if interaction coefficients are used
+            !gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
             !                                    gModIntParams%KMAX2, gModIntParams%LMAX2, 1) ! flag = 1 means compute and fill arrays
         END FUNCTION AllocateCintArrays
 
@@ -457,36 +457,36 @@ module InteractionCoefficientsModule
 
             ITOT = merid_waves + 2 * zonal_waves * merid_waves
 
-            if (.not. cintArr%allocated .OR. cintArr%numOfInteractionCoeffs < 1) then
+            if (.not. gCintArr%allocated .OR. gCintArr%numOfInteractionCoeffs < 1) then
                 status = 1
                 return
             end if
 
-            if (cintArr%numOfInteractionCoeffs > size(BI)) then
+            if (gCintArr%numOfInteractionCoeffs > size(BI)) then
                 status = 1
                 return
             end if
 
-            if ((2 * cintArr%numOfInteractionCoeffs + ITOT) > size(IBI)) then
+            if ((2 * gCintArr%numOfInteractionCoeffs + ITOT) > size(IBI)) then
                 status = 1
                 return
             end if
 
             status = 0
 
-            cintArr%Cint(1 : currentNoOfInteractions)  => BI(1 : currentNoOfInteractions)
-            cintArr%JIN(1 :  currentNoOfInteractions)  => IBI(1 : currentNoOfInteractions)
-            cintArr%KIN(1 :  currentNoOfInteractions)  => IBI(cintArr%numOfInteractionCoeffs + 1 : & 
-                                cintArr%numOfInteractionCoeffs + currentNoOfInteractions)
-            cintArr%I1M(1 :  ITOT)                     => IBI(2 * cintArr%numOfInteractionCoeffs + 1 : &
-                                2 * cintArr%numOfInteractionCoeffs + ITOT)
+            gCintArr%Cint(1 : currentNoOfInteractions)  => BI(1 : currentNoOfInteractions)
+            gCintArr%JIN(1 :  currentNoOfInteractions)  => IBI(1 : currentNoOfInteractions)
+            gCintArr%KIN(1 :  currentNoOfInteractions)  => IBI(gCintArr%numOfInteractionCoeffs + 1 : & 
+                                gCintArr%numOfInteractionCoeffs + currentNoOfInteractions)
+            gCintArr%I1M(1 :  ITOT)                     => IBI(2 * gCintArr%numOfInteractionCoeffs + 1 : &
+                                2 * gCintArr%numOfInteractionCoeffs + ITOT)
             BI(:) = 0.0 ! Zero entire set of real arrays  - ===== DANGER!!  DO NOT F10 THESE TWO STEPS IN DEBUGGER !!!
             IBI(:) = 0 ! Zero entire set of integer arrays
-            cintArr%defined = .true.
+            gCintArr%defined = .true.
 
         end function createCintArr
 
-        !> Function to deallocate the interaction coefficients arrays and nullify the cintArr type
+        !> Function to deallocate the interaction coefficients arrays and nullify the gCintArr type
         !> Be sure to call at termination or before reallocation for a different resolution.
         function DeallocateCintArrays() result(statusErr)
             integer statusErr
@@ -494,14 +494,14 @@ module InteractionCoefficientsModule
             statusErr = 0
 
             IF (ALLOCATED(BI)) DEALLOCATE(BI)
-            nullify(cintArr%CINT)
+            nullify(gCintArr%CINT)
             IF (ALLOCATED(IBI)) DEALLOCATE(IBI)
-            Nullify(cintArr%JIN)
-            Nullify(cintArr%KIN)
-            Nullify(cintArr%I1M)
-            cintArr%allocated = .false. ! Set the allocated flag to false
-            cintArr%defined = .false.   ! Set the defined flag to false
-            cintArr%numOfInteractionCoeffs = 0
+            Nullify(gCintArr%JIN)
+            Nullify(gCintArr%KIN)
+            Nullify(gCintArr%I1M)
+            gCintArr%allocated = .false. ! Set the allocated flag to false
+            gCintArr%defined = .false.   ! Set the defined flag to false
+            gCintArr%numOfInteractionCoeffs = 0
 
         end function DeallocateCintArrays
 

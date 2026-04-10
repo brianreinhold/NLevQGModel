@@ -17,24 +17,24 @@
 !    INTEGER, POINTER :: KIN(:) => NULL()
 !
 ! Allocate the pool based upon some 'base' parameter determined from user settings
-!    ALLOCATE(BI(arrayDims%NINTD), STAT = status)
+!    ALLOCATE(BI(gArrayDims%NINTD), STAT = status)
 !    ALLOCATE(IBI(totalSize), STAT = status)
 !
 ! Use a create function to define the arrays in the pool. When the user sets new parameters this create function is
 ! is simply called again as long as the new parameters do not exceed the base value defining the base memory pool.
-!    cintArr%Cint(1 : numberOfInteractionCoeffs)  => BI(1 : numberOfInteractionCoeffs)
-!    cintArr%JIN(1 :  numberOfInteractionCoeffs)  => IBI(1 : numberOfInteractionCoeffs)
-!    cintArr%KIN(1 :  numberOfInteractionCoeffs)  => IBI(numberOfInteractionCoeffs : 2 * numberOfInteractionCoeffs)
-!    cintArr%I1M(1 :  ITOT)                       => IBI(2 * numberOfInteractionCoeffs : ITOT)
+!    gCintArr%Cint(1 : numberOfInteractionCoeffs)  => BI(1 : numberOfInteractionCoeffs)
+!    gCintArr%JIN(1 :  numberOfInteractionCoeffs)  => IBI(1 : numberOfInteractionCoeffs)
+!    gCintArr%KIN(1 :  numberOfInteractionCoeffs)  => IBI(numberOfInteractionCoeffs : 2 * numberOfInteractionCoeffs)
+!    gCintArr%I1M(1 :  ITOT)                       => IBI(2 * numberOfInteractionCoeffs : ITOT)
 !
 ! Deallocate if the user parameter exceeds the current base value
 !
 !    IF (ALLOCATED(BI)) DEALLOCATE(BI)
-!    nullify(cintArr%CINT)
+!    nullify(gCintArr%CINT)
 !    IF (ALLOCATED(IBI)) DEALLOCATE(IBI)
-!    Nullify(cintArr%JIN)
-!    Nullify(cintArr%KIN)
-!    Nullify(cintArr%I1M)
+!    Nullify(gCintArr%JIN)
+!    Nullify(gCintArr%KIN)
+!    Nullify(gCintArr%I1M)
 !
 ! Then the whole allocation and creation process has to be repeated if base value is exceeded with a new base value.
 
@@ -47,7 +47,7 @@ MODULE ModelFieldsModule
     public :: AllocateStatsArrays, DeallocateStatsArrays
 
     ! Variables
-    public :: vertArr, horzArr, statsArr
+    public :: gVertArr, gHorzArr, gStatsArr
     public :: BV
 
     !========================== Vertical arrays
@@ -83,7 +83,7 @@ MODULE ModelFieldsModule
         REAL, POINTER :: PRF(:) => null()   !  PRF(maxLevels,4) are profile arrays for functional behavior of model
     END TYPE VertArrays
 
-    TYPE(VertArrays) :: vertArr
+    TYPE(VertArrays) :: gVertArr
     REAL, ALLOCATABLE, TARGET :: BV(:)      ! Define one array that encompasses all vertical arrays
 
     !=============================== Horizontal arrays
@@ -122,15 +122,15 @@ MODULE ModelFieldsModule
     COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc(KX) complex grid point array for the periodic transform routine
     REAL, ALLOCATABLE, TARGET :: WRK_pool(:)      !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
     real, allocatable, target :: GZonal_pool(:)   !  G1Zonal(LY) grid point array for zonal component of transform 
-    REAL, ALLOCATABLE, TARGET :: TMP_pool(:)      !  TMP(arrayDims%LYD)
+    REAL, ALLOCATABLE, TARGET :: TMP_pool(:)      !  TMP(gArrayDims%LYD)
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
     REAL, ALLOCATABLE, TARGET :: AKL_pool(:)      !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: AKLI_pool(:)     !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels)
     REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:,:) !  PSSAVE(ITOTD,maxLevels)
     REAL, ALLOCATABLE, TARGET :: RML_pool(:,:)    !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-    REAL, ALLOCATABLE, TARGET :: TRX_pool(:)      !  TRX(arrayDims%ITRXD)
-    REAL, ALLOCATABLE, TARGET :: TRY_pool(:)      !  TRY(arrayDims%ITRYD)
+    REAL, ALLOCATABLE, TARGET :: TRX_pool(:)      !  TRX(gArrayDims%ITRXD)
+    REAL, ALLOCATABLE, TARGET :: TRY_pool(:)      !  TRY(gArrayDims%ITRYD)
     
     INTEGER, ALLOCATABLE, TARGET :: IXL_pool(:)   !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
     INTEGER, ALLOCATABLE, TARGET :: IYL_pool(:)   !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
@@ -172,22 +172,22 @@ MODULE ModelFieldsModule
         REAL, POINTER :: WRK(:) => null()       !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
         REAL, POINTER :: GZonal(:) => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
         REAL, POINTER :: GZonalplot(:) => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
-        REAL, POINTER :: TMP(:) => null()       !  TMP(arrayDims%LYD)
+        REAL, POINTER :: TMP(:) => null()       !  TMP(gArrayDims%LYD)
         REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
         REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
         REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
         REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
         REAL, POINTER :: RML(:,:) => null()     !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-        REAL, POINTER :: TRX(:) => null()       !  TRX(arrayDims%ITRXD)
-        REAL, POINTER :: TRY(:) => null()       !  TRY(arrayDims%ITRYD)
+        REAL, POINTER :: TRX(:) => null()       !  TRX(gArrayDims%ITRXD)
+        REAL, POINTER :: TRY(:) => null()       !  TRY(gArrayDims%ITRYD)
 
         INTEGER, POINTER :: IXL(:) => null()    !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
         INTEGER, POINTER :: IYL(:) => null()    !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
     END TYPE HorzArrays
 
     !TYPE(HorzArraysPool) :: horzArr_pool
-    TYPE(HorzArrays) :: horzArr
+    TYPE(HorzArrays) :: gHorzArr
     !REAL, ALLOCATABLE, TARGET :: BH(:)      ! Define one array that encompasses all real horizontal arrays
     !INTEGER, ALLOCATABLE, TARGET :: BHI(:)  ! Define one array that encompasses all integer horizontal arrays
 
@@ -209,7 +209,7 @@ MODULE ModelFieldsModule
         REAL, ALLOCATABLE :: EK(:)
     END TYPE StatsArrays
 
-    TYPE(StatsArrays) :: statsArr
+    TYPE(StatsArrays) :: gStatsArr
     !REAL, ALLOCATABLE, TARGET :: BA(:)      ! Define one array that encompasses all real statistics arrays
     
 
@@ -225,7 +225,7 @@ MODULE ModelFieldsModule
             if (status /= 0) RETURN
 
             call ZeroVerticalArrays()  ! Zero entire set of array
-            vertArr%allocated = .TRUE. ! Set allocated flag to true
+            gVertArr%allocated = .TRUE. ! Set allocated flag to true
 
         END FUNCTION AllocateVerticalArrays
 
@@ -242,59 +242,59 @@ MODULE ModelFieldsModule
             integer :: status
 
             status = 0
-            if (.not. vertArr%allocated) then
+            if (.not. gVertArr%allocated) then
                 status = 1
                 return
             end if
 
-            vertArr%PV(1 : levels)  => BV(             1 : levels)
-            vertArr%DP(1 : levels)  => BV(    levels + 1 : 2 * levels)
-            vertArr%DPI(1 : levels) => BV(2 * levels + 1 : 3 * levels)
-            vertArr%THS(1 : levels) => BV(3 * levels + 1 : 4 * levels)
-            vertArr%FK(1 : levels)  => BV(4 * levels + 1 : 5 * levels)
-            vertArr%FJ(1 : levels)  => BV(5 * levels + 1 : 6 * levels)
-            vertArr%AU(1 : levels)  => BV(6 * levels + 1 : 7 * levels)
-            vertArr%A(1 : levels)   => BV(7 * levels + 1 : 8 * levels)
-            vertArr%H(1 : levels)   => BV(8 * levels + 1 : 9 * levels)
-            vertArr%G(1 : levels)   => BV(9 * levels + 1 : 10 * levels)
-            vertArr%SIG(1 : levels) => BV(10 * levels + 1 : 11 * levels)
-            vertArr%X(1 : levels)   => BV(11 * levels + 1 : 12 * levels)
-            vertArr%Y(1 : levels)   => BV(12 * levels + 1 : 13 * levels)
-            vertArr%PP(1 : levels + 1)  => BV(13 * levels + 1 : 14 * levels + 1)  ! This array has one extra element; 1=sfc and maxLevels+1=Top. The size is levels + 1
-            vertArr%PRF(1 : 4 * levels) => BV(14 * levels + 2 : 18 * levels + 1)  ! This array has size 4 * levels
+            gVertArr%PV(1 : levels)  => BV(             1 : levels)
+            gVertArr%DP(1 : levels)  => BV(    levels + 1 : 2 * levels)
+            gVertArr%DPI(1 : levels) => BV(2 * levels + 1 : 3 * levels)
+            gVertArr%THS(1 : levels) => BV(3 * levels + 1 : 4 * levels)
+            gVertArr%FK(1 : levels)  => BV(4 * levels + 1 : 5 * levels)
+            gVertArr%FJ(1 : levels)  => BV(5 * levels + 1 : 6 * levels)
+            gVertArr%AU(1 : levels)  => BV(6 * levels + 1 : 7 * levels)
+            gVertArr%A(1 : levels)   => BV(7 * levels + 1 : 8 * levels)
+            gVertArr%H(1 : levels)   => BV(8 * levels + 1 : 9 * levels)
+            gVertArr%G(1 : levels)   => BV(9 * levels + 1 : 10 * levels)
+            gVertArr%SIG(1 : levels) => BV(10 * levels + 1 : 11 * levels)
+            gVertArr%X(1 : levels)   => BV(11 * levels + 1 : 12 * levels)
+            gVertArr%Y(1 : levels)   => BV(12 * levels + 1 : 13 * levels)
+            gVertArr%PP(1 : levels + 1)  => BV(13 * levels + 1 : 14 * levels + 1)  ! This array has one extra element; 1=sfc and maxLevels+1=Top. The size is levels + 1
+            gVertArr%PRF(1 : 4 * levels) => BV(14 * levels + 2 : 18 * levels + 1)  ! This array has size 4 * levels
             
-            vertArr%defined = .TRUE. ! Set defined flag to true
+            gVertArr%defined = .TRUE. ! Set defined flag to true
         end function createVertArr
 
         function DeallocateVerticalArrays() result(statusErr)
             integer statusErr
             
             IF (ALLOCATED(BV)) DEALLOCATE(BV, STAT = statusErr)
-            NULLIFY(vertArr%PP)
-            NULLIFY(vertArr%PV)
-            NULLIFY(vertArr%DP)
-            NULLIFY(vertArr%DPI)
-            NULLIFY(vertArr%THS)
-            NULLIFY(vertArr%FK)
-            NULLIFY(vertArr%FJ)
-            NULLIFY(vertArr%AU)
-            NULLIFY(vertArr%A)
-            NULLIFY(vertArr%H)
-            NULLIFY(vertArr%G)
-            NULLIFY(vertArr%SIG)
-            NULLIFY(vertArr%X)
-            NULLIFY(vertArr%Y)
-            NULLIFY(vertArr%PRF)
-            vertArr%allocated = .FALSE. ! Set allocated flag to false
-            vertArr%defined = .FALSE.   ! Set defined flag to false
+            NULLIFY(gVertArr%PP)
+            NULLIFY(gVertArr%PV)
+            NULLIFY(gVertArr%DP)
+            NULLIFY(gVertArr%DPI)
+            NULLIFY(gVertArr%THS)
+            NULLIFY(gVertArr%FK)
+            NULLIFY(gVertArr%FJ)
+            NULLIFY(gVertArr%AU)
+            NULLIFY(gVertArr%A)
+            NULLIFY(gVertArr%H)
+            NULLIFY(gVertArr%G)
+            NULLIFY(gVertArr%SIG)
+            NULLIFY(gVertArr%X)
+            NULLIFY(gVertArr%Y)
+            NULLIFY(gVertArr%PRF)
+            gVertArr%allocated = .FALSE. ! Set allocated flag to false
+            gVertArr%defined = .FALSE.   ! Set defined flag to false
 
         end function DeallocateVerticalArrays
 
     ! ================================== Allocate and deallocate Horizontal arrays
         !> This function allocates the horizontal arrays used in the model. 
-        !> Upon success, the horzArr%allocated flag is set to .TRUE.
+        !> Upon success, the gHorzArr%allocated flag is set to .TRUE.
         !>
-        !! arrayDims The Dims object that contains the dimensions of the model arrays.
+        !! gArrayDims The Dims object that contains the dimensions of the model arrays.
         !!                  Before passing in this object, the caller should have called the SetDimensions() method
         !!                  which populates some of the fields. This function then populates more of the
         !!                  fields in the Dims object as shown above.
@@ -313,41 +313,41 @@ MODULE ModelFieldsModule
 
             status = 0
             
-            !arrayDims%ITOTND = arrayDims%ITOT * gUserSettings%maxLevels ! Forgot to add this
-            !arrayDims%ITRXD = 3 * arrayDims%IXMAX / 2 + 1
-            !arrayDims%ITRYD = 3 * arrayDims%IYMAX / 2 + 1
+            !gArrayDims%ITOTND = gArrayDims%ITOT * gUserSettings%maxLevels ! Forgot to add this
+            !gArrayDims%ITRXD = 3 * gArrayDims%IXMAX / 2 + 1
+            !gArrayDims%ITRYD = 3 * gArrayDims%IYMAX / 2 + 1
 
             ! Sample allocation — continue as needed
-            ALLOCATE(GQ_pool(arrayDims%itot , gUserSettings%maxLevels),&
-                    BTA_pool(arrayDims%itot),                         &
-                    PSB_pool(arrayDims%itot),                         &
-                    PS_pool(14 * arrayDims%itot * gUserSettings%maxLevels),  &
+            ALLOCATE(GQ_pool(gArrayDims%itot , gUserSettings%maxLevels),&
+                    BTA_pool(gArrayDims%itot),                         &
+                    PSB_pool(gArrayDims%itot),                         &
+                    PS_pool(14 * gArrayDims%itot * gUserSettings%maxLevels),  &
 
-                    ADO_pool(arrayDims%itot),                         &
-                    TOP_pool(arrayDims%itot),                         &
-                    Gc_pool(arrayDims%KX),                            &
-                    G1_pool(arrayDims%KXLYD),                         &
-                    G2_pool(arrayDims%KXLYD),                         &
-                    G3_pool(arrayDims%KXLYD),                         &
-                    G4_pool(arrayDims%KXLYD),                         &
-                    WRK_pool(arrayDims%ibig),                         &
-                    GZonal_pool(arrayDims%LY),                        &
-                    TMP_pool(arrayDims%lyd),                          &
-                    DAT_pool(arrayDims%itot),                         &
-                    AKL_pool(arrayDims%itot),                         &
-                    AKLI_pool(arrayDims%itot),                        &
-                    ZS_pool(arrayDims%ITOT, gUserSettings%maxLevels),  &
-                    PSSAVE_pool(arrayDims%itot, gUserSettings%maxLevels), &
+                    ADO_pool(gArrayDims%itot),                         &
+                    TOP_pool(gArrayDims%itot),                         &
+                    Gc_pool(gArrayDims%KX),                            &
+                    G1_pool(gArrayDims%KXLYD),                         &
+                    G2_pool(gArrayDims%KXLYD),                         &
+                    G3_pool(gArrayDims%KXLYD),                         &
+                    G4_pool(gArrayDims%KXLYD),                         &
+                    WRK_pool(gArrayDims%ibig),                         &
+                    GZonal_pool(gArrayDims%LY),                        &
+                    TMP_pool(gArrayDims%lyd),                          &
+                    DAT_pool(gArrayDims%itot),                         &
+                    AKL_pool(gArrayDims%itot),                         &
+                    AKLI_pool(gArrayDims%itot),                        &
+                    ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels),  &
+                    PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels), &
                     RML_pool((2 * gUserSettings%maxLevels + 1) , gUserSettings%maxLevels), &
-                    TRX_pool(arrayDims%ITRXD),              &
-                    TRY_pool(arrayDims%ITRYD),              &
-                    IXL_pool(arrayDims%lyd),                &
-                    IYL_pool(arrayDims%lyd), STAT = status)
+                    TRX_pool(gArrayDims%ITRXD),              &
+                    TRY_pool(gArrayDims%ITRYD),              &
+                    IXL_pool(gArrayDims%lyd),                &
+                    IYL_pool(gArrayDims%lyd), STAT = status)
 
             IF (status /= 0) RETURN
             ! Zero everything
             CALL ZeroHorzArrays(.false.)
-            horzArr%ALLOCATED = .TRUE.
+            gHorzArr%ALLOCATED = .TRUE.
         END FUNCTION AllocateHorizontalArrays
 
         !> This subroutine zeros all horizontal arrays in the horzArr_pool type
@@ -400,7 +400,7 @@ MODULE ModelFieldsModule
             IYL_pool = 0.0
         end subroutine ZeroHorzArrays
 
-        !> This function creates the horizontal arrays by associating the pointers in the horzArr type
+        !> This function creates the horizontal arrays by associating the pointers in the gHorzArr type
         !> This function needs to be called after the AllocateHorizontalArrays() method when first allocating
         !> when setting the overall model size from the gUserSettings struct. It needs to be called again
         !> if the horizontal resolution and number of levels are changed in the gModIntParams struct.
@@ -422,7 +422,7 @@ MODULE ModelFieldsModule
             integer :: itot, size2d
 
             status = 0
-            if (.not. horzArr%allocated) then
+            if (.not. gHorzArr%allocated) then
                 status = 1
                 return
             end if
@@ -435,65 +435,65 @@ MODULE ModelFieldsModule
                 status = 1
                 return
             end if
-            horzArr%GQ(1 : itot, 1 : levels) => GQ_pool(1 : itot, 1 : levels)
+            gHorzArr%GQ(1 : itot, 1 : levels) => GQ_pool(1 : itot, 1 : levels)
 
-            horzArr%PS(1 : itot, 1 : levels) =>  PS_pool(             1 :     size2d) ! PS_pool has all 14 fields
-            horzArr%TH(1 : itot, 1 : levels) =>  PS_pool(    size2d + 1 : 2 * size2d)
-            horzArr%TH(1 : itot, 1 : levels) =>  PS_pool(2 * size2d + 1 : 3 * size2d)
-            horzArr%WW(1 : itot, 1 : levels) =>  PS_pool(3 * size2d + 1 : 4 * size2d)
-            horzArr%TF(1 : itot, 1 : levels) =>  PS_pool(4 * size2d + 1 : 5 * size2d)
-            horzArr%FS(1 : itot, 1 : levels) =>  PS_pool(5 * size2d + 1 : 6 * size2d)
-            horzArr%ADS(1 : itot, 1 : levels) => PS_pool(6 * size2d + 1 : 7 * size2d)
-            horzArr%WS(1 : itot, 1 : levels) =>  PS_pool(7 * size2d + 1 : 8 * size2d)
-            horzArr%S(1 : itot, 1 : levels) =>   PS_pool(8 * size2d + 1 : 9 * size2d)
-            horzArr%FT(1 : itot, 1 : levels) =>  PS_pool(9 * size2d + 1 : 10 * size2d)
-            horzArr%ADT(1 : itot, 1 : levels) => PS_pool(10 * size2d + 1 : 11 * size2d)
-            horzArr%WT(1 : itot, 1 : levels) =>  PS_pool(11 * size2d + 1 : 12 * size2d)
-            horzArr%T(1 : itot, 1 : levels) =>   PS_pool(12 * size2d + 1 : 13 * size2d)
-            horzArr%SF(1 : itot, 1 : levels) =>  PS_pool(13 * size2d + 1 : 14 * size2d)
+            gHorzArr%PS(1 : itot, 1 : levels) =>  PS_pool(             1 :     size2d) ! PS_pool has all 14 fields
+            gHorzArr%TH(1 : itot, 1 : levels) =>  PS_pool(    size2d + 1 : 2 * size2d)
+            gHorzArr%TH(1 : itot, 1 : levels) =>  PS_pool(2 * size2d + 1 : 3 * size2d)
+            gHorzArr%WW(1 : itot, 1 : levels) =>  PS_pool(3 * size2d + 1 : 4 * size2d)
+            gHorzArr%TF(1 : itot, 1 : levels) =>  PS_pool(4 * size2d + 1 : 5 * size2d)
+            gHorzArr%FS(1 : itot, 1 : levels) =>  PS_pool(5 * size2d + 1 : 6 * size2d)
+            gHorzArr%ADS(1 : itot, 1 : levels) => PS_pool(6 * size2d + 1 : 7 * size2d)
+            gHorzArr%WS(1 : itot, 1 : levels) =>  PS_pool(7 * size2d + 1 : 8 * size2d)
+            gHorzArr%S(1 : itot, 1 : levels) =>   PS_pool(8 * size2d + 1 : 9 * size2d)
+            gHorzArr%FT(1 : itot, 1 : levels) =>  PS_pool(9 * size2d + 1 : 10 * size2d)
+            gHorzArr%ADT(1 : itot, 1 : levels) => PS_pool(10 * size2d + 1 : 11 * size2d)
+            gHorzArr%WT(1 : itot, 1 : levels) =>  PS_pool(11 * size2d + 1 : 12 * size2d)
+            gHorzArr%T(1 : itot, 1 : levels) =>   PS_pool(12 * size2d + 1 : 13 * size2d)
+            gHorzArr%SF(1 : itot, 1 : levels) =>  PS_pool(13 * size2d + 1 : 14 * size2d)
 
-            horzArr%ZS(1 : itot, 1 : levels) => ZS_pool(1 : itot, 1 : levels)
-            horzArr%PSSAVE(1 : itot, 1 : levels) => PSSAVE_pool(1 : itot, 1 : levels)
+            gHorzArr%ZS(1 : itot, 1 : levels) => ZS_pool(1 : itot, 1 : levels)
+            gHorzArr%PSSAVE(1 : itot, 1 : levels) => PSSAVE_pool(1 : itot, 1 : levels)
 
             ! Handle 1-d arrays that have size itot
             if (itot > size(BTA_pool)) then
                 status = 1
                 return
             end if
-            horzArr%BTA(1 : itot) => BTA_pool(1 : itot)
-            horzArr%PSB(1 : itot) => PSB_pool(1 : itot)
-            horzArr%ADO(1 : itot) => ADO_pool(1 : itot)
-            horzArr%TOP(1 : itot) => TOP_pool(1 : itot)
-            horzArr%DAT(1 : itot) => DAT_pool(1 : itot)
-            horzArr%AKL(1 : itot) => AKL_pool(1 : itot)
-            horzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
+            gHorzArr%BTA(1 : itot) => BTA_pool(1 : itot)
+            gHorzArr%PSB(1 : itot) => PSB_pool(1 : itot)
+            gHorzArr%ADO(1 : itot) => ADO_pool(1 : itot)
+            gHorzArr%TOP(1 : itot) => TOP_pool(1 : itot)
+            gHorzArr%DAT(1 : itot) => DAT_pool(1 : itot)
+            gHorzArr%AKL(1 : itot) => AKL_pool(1 : itot)
+            gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
 
             ! RML is always the same size?
-            horzArr%RML(1 : 2 * gUserSettings%maxMeridWaves + 1, 1 : gUserSettings%maxMeridWaves) => RML_pool
+            gHorzArr%RML(1 : 2 * gUserSettings%maxMeridWaves + 1, 1 : gUserSettings%maxMeridWaves) => RML_pool
             
             ! Transform arrays
-            horzArr%TRX(1 : arraySizes%ITRXD) => TRX_pool(1 : arraySizes%ITRXD)
-            horzArr%TRY(1 : arraySizes%ITRYD) => TRY_pool(1 : arraySizes%ITRYD)
-            horzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
-            horzArr%IYL(1 : arraySizes%lyd) => IYL_pool(1 : arraySizes%lyd)
-            horzArr%Gc(1 : arraySizes%KX) => Gc_pool(1 : arraySizes%KX)
-            horzArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            horzArr%G1plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G1plot_1D(1 : arraySizes%KX * arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            horzArr%G2plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G2plot_1D(1 : arraySizes%KX * arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            horzArr%G3plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G3plot_1D(1 : arraySizes%KX * arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            horzArr%G4plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%G4plot_1D(1 : arraySizes%KX * arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
-            horzArr%WRK(1 : arrayDims%ibig) => WRK_pool(1 : arrayDims%ibig)
-            horzArr%GZonal(1 : arrayDims%IYMAX) => GZonal_pool(1 : arraySizes%IYMAX)
-            horzArr%GZonalplot(1 : arrayDims%LY) => GZonal_pool(1 : arraySizes%LY)
-            horzArr%TMP(1 : arraySizes%lyd) => TMP_pool(1 : arraySizes%lyd)
-            horzArr%defined = .TRUE. ! Set defined flag to true
+            gHorzArr%TRX(1 : arraySizes%ITRXD) => TRX_pool(1 : arraySizes%ITRXD)
+            gHorzArr%TRY(1 : arraySizes%ITRYD) => TRY_pool(1 : arraySizes%ITRYD)
+            gHorzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
+            gHorzArr%IYL(1 : arraySizes%lyd) => IYL_pool(1 : arraySizes%lyd)
+            gHorzArr%Gc(1 : arraySizes%KX) => Gc_pool(1 : arraySizes%KX)
+            gHorzArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gHorzArr%G1plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G1plot_1D(1 : arraySizes%KX * arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gHorzArr%G2plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G2plot_1D(1 : arraySizes%KX * arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gHorzArr%G3plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G3plot_1D(1 : arraySizes%KX * arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gHorzArr%G4plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%G4plot_1D(1 : arraySizes%KX * arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
+            gHorzArr%WRK(1 : gArrayDims%ibig) => WRK_pool(1 : gArrayDims%ibig)
+            gHorzArr%GZonal(1 : gArrayDims%IYMAX) => GZonal_pool(1 : arraySizes%IYMAX)
+            gHorzArr%GZonalplot(1 : gArrayDims%LY) => GZonal_pool(1 : arraySizes%LY)
+            gHorzArr%TMP(1 : arraySizes%lyd) => TMP_pool(1 : arraySizes%lyd)
+            gHorzArr%defined = .TRUE. ! Set defined flag to true
 
         end function createHorzArr
 
@@ -506,7 +506,7 @@ MODULE ModelFieldsModule
             integer :: statusErr
 
             statusErr = 0
-            IF (horzArr%allocated .EQV. .FALSE.) RETURN
+            IF (gHorzArr%allocated .EQV. .FALSE.) RETURN
 
             ! Deallocate all allocated components
             IF (ALLOCATED(GQ_pool))      DEALLOCATE(GQ_pool)
@@ -534,67 +534,67 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(TRY_pool))     DEALLOCATE(TRY_pool)
             IF (ALLOCATED(IXL_pool))     DEALLOCATE(IXL_pool)
             IF (ALLOCATED(IYL_pool))     DEALLOCATE(IYL_pool)
-            ! The following below is equivalent to nullifying all pointers in horzArr type
-            horzArr%GQ  => null()      !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
-            horzArr%BTA => null()       !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
-            horzArr%PSB => null()       !  PSB(ITOT) is the vert. mean flow for the waves in the modelType = ZONAL_MEAN_FLOWS option
-            horzArr%PS  => null()      !  PS(ITOT,maxLevels) is the streamfunction spectral components
-            horzArr%TH  => null()      !  TH(ITOT,maxLevels) is the temperature spectral components
-            horzArr%WW  => null()      !  WW(ITOT,maxLevels) is the omega spectral components
-            horzArr%TF  => null()      !  TF(ITOT,maxLevels) is the thermal forcing field
-            horzArr%FS  => null()      !  FS(ITOT,maxLevels) is the streamfunction tendency
-            horzArr%ADS => null()     !  ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
-            horzArr%WS  => null()      !  WS(ITOT,maxLevels) is the omega forcing on the streamfunction
-            horzArr%S   => null()       !  S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
-            horzArr%FT  => null()      !  FT(ITOT,maxLevels) is the temperature tendency
-            horzArr%ADT => null()     !  ADT(ITOT,maxLevels) is the spectral form of the temperature advection
-            horzArr%WT  => null()      !  WT(ITOT,maxLevels) is the omega forcing on the temperature
-            horzArr%T   => null()       !  T(ITOT,maxLevels) is the diabatic forcing on the temperature
-            horzArr%SF  => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
-            horzArr%ADO => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
-            horzArr%TOP => null()       !  TOP(ITOT) is the surface orographic field
-            horzArr%Gc  => null()        !  Gc(KX) complex grid point array for the periodic transform routine
-            horzArr%G1  => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            horzArr%G1plot => null() !  G1plot(KX, LY) grid point arrays for transform routines in 2 d
-            horzArr%G1plot_1D  => null() !  G1plot(KX*LY) grid point arrays for transform routines in 1 d
-            horzArr%G2  => null()     !  G2(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            horzArr%G2plot  => null() !  G2plot(KX*LY) grid point arrays for transform routines (?)
-            horzArr%G2plot_1D  => null() !  G2plot(KX*LY) grid point arrays for transform routines in 1 d
-            horzArr%G3  => null()     !  G3(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            horzArr%G3plot  => null() !  G3plot(KX*LY) grid point arrays for transform routines (?)
-            horzArr%G3plot_1D  => null() !  G3plot(KX*LY) grid point arrays for transform routines in 1 d
-            horzArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            horzArr%G4plot  => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
-            horzArr%G4plot_1D  => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
-            horzArr%WRK  => null()       !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
-            horzArr%GZonal  => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
-            horzArr%GZonalplot  => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
-            horzArr%TMP  => null()       !  TMP(arrayDims%LYD)
-            horzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
-            horzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
-            horzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
-            horzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)
-            horzArr%PSSAVE  => NULL()  !  PSSAVE(ITOTD,maxLevels)
-            horzArr%RML  => null()     !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-            horzArr%TRX  => null()       !  TRX(arrayDims%ITRXD)
-            horzArr%TRY  => null()       !  TRY(arrayDims%ITRYD)
+            ! The following below is equivalent to nullifying all pointers in gHorzArr type
+            gHorzArr%GQ  => null()      !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
+            gHorzArr%BTA => null()       !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
+            gHorzArr%PSB => null()       !  PSB(ITOT) is the vert. mean flow for the waves in the modelType = ZONAL_MEAN_FLOWS option
+            gHorzArr%PS  => null()      !  PS(ITOT,maxLevels) is the streamfunction spectral components
+            gHorzArr%TH  => null()      !  TH(ITOT,maxLevels) is the temperature spectral components
+            gHorzArr%WW  => null()      !  WW(ITOT,maxLevels) is the omega spectral components
+            gHorzArr%TF  => null()      !  TF(ITOT,maxLevels) is the thermal forcing field
+            gHorzArr%FS  => null()      !  FS(ITOT,maxLevels) is the streamfunction tendency
+            gHorzArr%ADS => null()     !  ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+            gHorzArr%WS  => null()      !  WS(ITOT,maxLevels) is the omega forcing on the streamfunction
+            gHorzArr%S   => null()       !  S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
+            gHorzArr%FT  => null()      !  FT(ITOT,maxLevels) is the temperature tendency
+            gHorzArr%ADT => null()     !  ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+            gHorzArr%WT  => null()      !  WT(ITOT,maxLevels) is the omega forcing on the temperature
+            gHorzArr%T   => null()       !  T(ITOT,maxLevels) is the diabatic forcing on the temperature
+            gHorzArr%SF  => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
+            gHorzArr%ADO => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
+            gHorzArr%TOP => null()       !  TOP(ITOT) is the surface orographic field
+            gHorzArr%Gc  => null()        !  Gc(KX) complex grid point array for the periodic transform routine
+            gHorzArr%G1  => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gHorzArr%G1plot => null() !  G1plot(KX, LY) grid point arrays for transform routines in 2 d
+            gHorzArr%G1plot_1D  => null() !  G1plot(KX*LY) grid point arrays for transform routines in 1 d
+            gHorzArr%G2  => null()     !  G2(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gHorzArr%G2plot  => null() !  G2plot(KX*LY) grid point arrays for transform routines (?)
+            gHorzArr%G2plot_1D  => null() !  G2plot(KX*LY) grid point arrays for transform routines in 1 d
+            gHorzArr%G3  => null()     !  G3(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gHorzArr%G3plot  => null() !  G3plot(KX*LY) grid point arrays for transform routines (?)
+            gHorzArr%G3plot_1D  => null() !  G3plot(KX*LY) grid point arrays for transform routines in 1 d
+            gHorzArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gHorzArr%G4plot  => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
+            gHorzArr%G4plot_1D  => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
+            gHorzArr%WRK  => null()       !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
+            gHorzArr%GZonal  => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
+            gHorzArr%GZonalplot  => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
+            gHorzArr%TMP  => null()       !  TMP(gArrayDims%LYD)
+            gHorzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
+            gHorzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
+            gHorzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+            gHorzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)
+            gHorzArr%PSSAVE  => NULL()  !  PSSAVE(ITOTD,maxLevels)
+            gHorzArr%RML  => null()     !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
+            gHorzArr%TRX  => null()       !  TRX(gArrayDims%ITRXD)
+            gHorzArr%TRY  => null()       !  TRY(gArrayDims%ITRYD)
 
-            horzArr%IXL  => null()
-            horzArr%IYL  => null()
+            gHorzArr%IXL  => null()
+            gHorzArr%IYL  => null()
 
-            horzArr%allocated = .FALSE.
-            horzArr%defined = .FALSE.
+            gHorzArr%allocated = .FALSE.
+            gHorzArr%defined = .FALSE.
         END function DeallocateHorizontalArrays
 
     ! ================================== Allocate and deallocate Statistics arrays
-        !> This function allocates the statistics arrays used in the model and sets sizes in the arrayDims.
+        !> This function allocates the statistics arrays used in the model and sets sizes in the gArrayDims.
         !> Before calling this function the SetDimensions() and the AllocateHorizontalArrays() must
         !> have been called. The AllocateStatsArrays() method sets the %ITOTA, %KXLYA, %NALA, %KXV, %LYV, KXLYA
         !> values. The %KXV and %LYV are used to allocate space for the variance arrays
-        !! arrayDims is The Dims object that contains the dimensions of the model arrays.
+        !! gArrayDims is The Dims object that contains the dimensions of the model arrays.
         !!                  The fields in this object need to be set by calling the SetDimensions()
         !!                  and AllocateHorizontalArrays() methods. This function then populates 
-        !!                  more of the arrayDims fields.
+        !!                  more of the gArrayDims fields.
         !! gUserSettings is The Settings object which contains the current statistics option as
         !!                     well as the horizonal and vertical resolutions.
         FUNCTION AllocateStatsArrays() RESULT(status)
@@ -606,13 +606,13 @@ MODULE ModelFieldsModule
             
             status = 0
             levels = 1
-            IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) levels = arrayDims%NALA
+            IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) levels = gArrayDims%NALA
             !!---------------------------------Statistical array sizes:
-            !arrayDims%ITOTA = 1
-            !arrayDims%NALA = 1
-            !arrayDims%KXV = 1
-            !arrayDims%LYV = 1
-            !arrayDims%KXLYA = 1
+            !gArrayDims%ITOTA = 1
+            !gArrayDims%NALA = 1
+            !gArrayDims%KXV = 1
+            !gArrayDims%LYV = 1
+            !gArrayDims%KXLYA = 1
             !levels = 1
             !
             !!----------------------------------- Total sizes:
@@ -622,28 +622,28 @@ MODULE ModelFieldsModule
             !!-------------PSA,(WWA,FSA,ADSA,FTA,ADTA,ADOA) APE,RKE,PSS,V1,V2:  The (WWA,FSA,ADSA,FTA,ADTA,ADOA) are the other 6 fields in PSA
             !
             !IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN ! Both mean and variance use this
-            !    arrayDims%ITOTA = arrayDims%ITOT
-            !    arrayDims%NALA = gUserSettings%maxLevels
+            !    gArrayDims%ITOTA = gArrayDims%ITOT
+            !    gArrayDims%NALA = gUserSettings%maxLevels
             !end if
             !IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) THEN
-            !    arrayDims%KXLYA = 2 * arrayDims%KXLYD * gUserSettings%maxLevels
-            !    arrayDims%NALA = gUserSettings%maxLevels
-            !    arrayDims%KXV = arrayDims%KX
-            !    arrayDims%LYV = arrayDims%IYH
-            !    levels = arrayDims%NALA
+            !    gArrayDims%KXLYA = 2 * gArrayDims%KXLYD * gUserSettings%maxLevels
+            !    gArrayDims%NALA = gUserSettings%maxLevels
+            !    gArrayDims%KXV = gArrayDims%KX
+            !    gArrayDims%LYV = gArrayDims%IYH
+            !    levels = gArrayDims%NALA
             !end if
             
             !---------------------------------------------------------Try to allocate:
             ! PSA, APE, RKE, PSS, V1, V2
-            ALLOCATE(statsArr%PSA(arrayDims%ITOTA, arrayDims%NALA, 7),  &
-                     statsArr%APE(arrayDims%ITOTA, arrayDims%NALA),     &
-                     statsArr%RKE(arrayDims%ITOTA, arrayDims%NALA),     &
-                     statsArr%PSS(arrayDims%ITOTA, arrayDims%NALA, 7),  &
-                     statsArr%V1(arrayDims%KXV*arrayDims%LYV, levels),      &   ! V1(KXV*LYV,NALA) when variance options otherwise V(1,1)
-                     statsArr%V2(arrayDims%KXV*arrayDims%LYV, levels),      &   ! V2(KXV*LYV,NALA)
-                     statsArr%EK(300))
+            ALLOCATE(gStatsArr%PSA(gArrayDims%ITOTA, gArrayDims%NALA, 7),  &
+                     gStatsArr%APE(gArrayDims%ITOTA, gArrayDims%NALA),     &
+                     gStatsArr%RKE(gArrayDims%ITOTA, gArrayDims%NALA),     &
+                     gStatsArr%PSS(gArrayDims%ITOTA, gArrayDims%NALA, 7),  &
+                     gStatsArr%V1(gArrayDims%KXV*gArrayDims%LYV, levels),      &   ! V1(KXV*LYV,NALA) when variance options otherwise V(1,1)
+                     gStatsArr%V2(gArrayDims%KXV*gArrayDims%LYV, levels),      &   ! V2(KXV*LYV,NALA)
+                     gStatsArr%EK(300))
 
-            statsArr%allocated = .TRUE. ! Set allocated flag to true
+            gStatsArr%allocated = .TRUE. ! Set allocated flag to true
 
         END FUNCTION AllocateStatsArrays
 
@@ -651,16 +651,16 @@ MODULE ModelFieldsModule
             integer statusErr
             
             statusErr = 0
-            IF (.NOT. statsArr%allocated) RETURN
+            IF (.NOT. gStatsArr%allocated) RETURN
 
-            IF (ALLOCATED(statsArr%PSA))      DEALLOCATE(statsArr%PSA)
-            IF (ALLOCATED(statsArr%APE))     DEALLOCATE(statsArr%APE)
-            IF (ALLOCATED(statsArr%RKE))     DEALLOCATE(statsArr%RKE)
-            IF (ALLOCATED(statsArr%PSS))      DEALLOCATE(statsArr%PSS)
-            IF (ALLOCATED(statsArr%V1))      DEALLOCATE(statsArr%V1)
-            IF (ALLOCATED(statsArr%V2))      DEALLOCATE(statsArr%V2)
-            IF (ALLOCATED(statsArr%EK))      DEALLOCATE(statsArr%EK)
-            statsArr%allocated = .FALSE. ! Set allocated flag to false
+            IF (ALLOCATED(gStatsArr%PSA))      DEALLOCATE(gStatsArr%PSA)
+            IF (ALLOCATED(gStatsArr%APE))     DEALLOCATE(gStatsArr%APE)
+            IF (ALLOCATED(gStatsArr%RKE))     DEALLOCATE(gStatsArr%RKE)
+            IF (ALLOCATED(gStatsArr%PSS))      DEALLOCATE(gStatsArr%PSS)
+            IF (ALLOCATED(gStatsArr%V1))      DEALLOCATE(gStatsArr%V1)
+            IF (ALLOCATED(gStatsArr%V2))      DEALLOCATE(gStatsArr%V2)
+            IF (ALLOCATED(gStatsArr%EK))      DEALLOCATE(gStatsArr%EK)
+            gStatsArr%allocated = .FALSE. ! Set allocated flag to false
 
         end function DeallocateStatsArrays
 

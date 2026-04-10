@@ -4,6 +4,8 @@
 !
       integer, parameter :: IDC_BUTTON_LOAD_SAVED_FLOW = 1045
       integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
+      integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
+      integer, parameter :: IDC_LIST_TEMPERATURES2 = 1049
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
@@ -21,6 +23,7 @@
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
       integer, parameter :: IDC_BUTTON_SET_SCALE_FACTORS = 1021
       integer, parameter :: IDC_EDIT_INTEGERVALUES = 1026
+      integer, parameter :: IDC_STATIC_EKMAN_FRICTION = 1050
       integer, parameter :: IDC_BUTTON_CONFIG = 1041
       integer, parameter :: IDC_STATIC_COMBO_FIELD1 = 1032
       integer, parameter :: IDC_COMBO_MODEL_TYPE = 1039
@@ -30,6 +33,7 @@
       integer, parameter :: ID_CONFIGURATION_SETTINGS = 30016
       integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
       integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
+      integer, parameter :: IDC_LIST_EKMAN_FRICTION = 1049
       integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
       integer, parameter :: IDM_ABOUT = 30015
       integer, parameter :: IDC_BUTTON_SAVE_CURRENT_FLOW = 1044
@@ -39,6 +43,7 @@
       integer, parameter :: IDC_BUTTON_SAVE_TO_FILE = 1018
       integer, parameter :: IDC_COMBO_FIELD1 = 1031
       integer, parameter :: IDC_BUTTON_VIEW_STATISTICS2 = 1047
+      integer, parameter :: IDC_LIST_TEMPERATURES = 1047
       integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
       integer, parameter :: IDC_BUTTON_MODEL_CONTROL = 1019
       integer, parameter :: IDC_BUTTON_RUN_SEQUENTIALLY = 1048

@@ -3,19 +3,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     implicit none
     
     ! Declare the subroutines that will be used in this module
-    public :: StartUp           ! initializes the model when program starts reading data from NLEVELQG.SAV
-    public :: newAllocation     ! allocates the model arrays based upon gUserSettings and modINtParams assuming nothing has been allocated yet.
+    public :: StartUp           ! Initializes the model when program starts reading data from NLEVQG.SAV (if the file exists) or defaults otherwise
+    public :: newAllocation     ! Allocates the model arrays based upon gUserSettings and gModIntParams assuming nothing has been allocated yet.
                                 ! This would be the case when starting with defaults or when reading data from a file at start up.
-    public :: SaveModelState    ! writes current model parameters to the file NLEVELQG.SAV. Called at program close.
-    public :: READFL
-    public :: RHEAD
-    public :: RDATA
+    public :: SaveModelState    ! Writes current model parameters to the file NLEVQG.SAV. Called at program close.
+    public :: ReadSaveFile
+    public :: ReadFileHeader
+    public :: ReadFileData
     public :: WriteSensFileHeader
-    public :: WDATA
+    public :: WriteFileData
     public :: CheckUserSettingsChanges  ! Function to check potentially new gUserSettings values and change allocations if needed
     public :: CheckUserSettingsData     ! Function to santity check the gUserSettings values
     public :: CheckModelResolutions     ! Function to sanity check and correct model resolution parameters in gModIntParams
-    !public :: ALLOC             ! Function to allocate the ModelFieldsModule arrays
     public :: CheckModelControlChanges
     public :: SetDimensions     ! SetDimensions which gets the dimensions for array sizes for allocation
     public :: DIMENSIONALIZE    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
@@ -23,8 +22,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     public :: DEFAULTS  ! This creates the default values for all the fields in the ModelParamsModule
     public :: DFDIAB    ! Computes default diabatic vertical profiles
     public :: PERTB     ! Introduces a perturbation into the flow:
-    public :: VERTP     ! Computes outside-loop Vertical arrays
-    public :: RADPRF    ! Radiation profile based upon ECMWF radiation model
+    public :: ComputeVerticalProfiles     ! Computes outside-loop Vertical arrays
+    public :: RaisanenRadiationProfile    ! Radiation profile based upon ECMWF radiation model
 
     !  ReshuffleArrays which resdistributes the horizontal variables after K, L res. change
     !  PSAXPS exchanges PSA and PS arrays
@@ -40,17 +39,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     contains
 
         ! The major type instances that are defined in the array and parameter modules are
-        ! gUserSettings, arrayDims, vertArr, horzArr, statsArr, cintArr
+        ! gUserSettings, gArrayDims, gVertArr, gHorzArr, gStatsArr, gCintArr
 
         !> **************************************************** StartUp
         function StartUp() result(errorCode)
             use ifwinty!, only ERROR_FILE_NOT_FOUND
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: MAP_OVERLAY_1, POTENTIAL_TEMP, OMEGA, INVALID
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, &
+                gNLevFile, gPlotControls, gSensFile, initConstants
             use NlevelQGModelGlobals, only: LogMessage    ! For logging
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gArrayDims, gCurrentDims
             use ModelFieldsModule, only: createHorzArr
-            use Fftw3HelpersModule
+            use Fftw3HelpersModule, only: setup_fftw_plans
 
             implicit none
 
@@ -82,7 +82,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gSensFile%fileHandle = INVALID
             !---------------------------Read in input parameters and allocate memory:
             ! If file does not exist or another error occurred we will set defaults
-            errorCode = READFL(gNLevFile)      ! function is 1ocated in this file
+            errorCode = ReadSaveFile(gNLevFile)      ! function is 1ocated in this file
             if (errorCode .NE. 0) then
                 ! We get here the file was not found or there was an error reading it
                 if (errorCode == ERROR_FILE_NOT_FOUND) then
@@ -106,12 +106,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 !---------------------------------Set array dimensions for allocation:
                 !  This method loads the IXMAX, IYMAX, IZMAX, KX, LY, IBIG, IBOX, ITOT, IYH, IXMAX1
-                !  values into the arrayDims type.
-                arrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
-                currentDims = arrayDims
+                !  values into the gArrayDims type.
+                gArrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
+                gCurrentDims = gArrayDims
 
                 ! This function allocates all the arrays and creates the default vertical profiles and perturbs the fields
-                ! The dimensions in the gUserSettings and gModIntParams types are the same as is the arrayDims and currentDims.
+                ! The dimensions in the gUserSettings and gModIntParams types are the same as is the gArrayDims and gCurrentDims.
                 errorCode = newAllocation()
                 if (errorCode .NE. 0) then
                     call LogMessage('The model arrays could not be allocated. Cannot run model.')
@@ -121,16 +121,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! At this time the user is presented with the 'main menu'. There the user has the chance to 
             ! the values in the gUserSettings fields (max zonal, meridional, levels, integration method
             ! and stats options
-            call setup_fftw_plans(currentDims%IXMAX, currentDims%IYMAX)
+            call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
         end function StartUp
 
         !> This method allocates all the model arrays assuming that nothing has been allocated yet BUT
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
-            use ArrayDimensionsModule
-            use ModelFieldsModule
-            use InteractionCoefficientsModule
-            use ModelParamsModule
+            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateVerticalArrays, AllocateStatsArrays, createHorzArr, createVertArr
+            use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
 
             implicit none
 
@@ -140,7 +139,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             error = AllocateHorizontalArrays()
             if (error .NE. 0) return
-            error = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, currentDims)
+            error = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
             if (error .NE. 0) return
             error = AllocateVerticalArrays()
             if (error .NE. 0) return
@@ -163,15 +162,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 !currentNoOfInteractions = computeInteractionCoefficients(gModRealParams%RN, &
                 !                             gModIntParams%KMAX2, gModIntParams%LMAX2, 0)
                 !error = createCintArr(gModIntParams%KMAX2, gModIntParams%LMAX2, currentNoOfInteractions)
-                cintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
+                gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
                                              gModIntParams%KMAX2, gModIntParams%LMAX2, 1) ! flag = 1 means compute and fill arrays
             end if
         end function newAllocation
 
         !> **************************************************** SaveModelState
         function SaveModelState() result(errorCode)
-            use NlevelQGModelGlobals
-            use ModelParamsModule
+            use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            use ModelParamsModule, only: gNLevFile
             use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
 
             integer :: errorCode
@@ -192,7 +191,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 call LogMessage('The file ' // trim(gNLevFile%fileName) // ' could not be opened')
                 return
             end if
-            errorCode = WDATA(gNLevFile%fileHandle)
+            errorCode = WriteFileData(gNLevFile%fileHandle)
             if (errorCode .NE. 0) then
                 call LogMessage('Error writing data to file. Model state could not be saved.')
             else
@@ -205,14 +204,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             fileExists = DeallocateStatsArrays()
         end function SaveModelState
 
-        !***************************************************************** READFL:
+        !***************************************************************** ReadSaveFile:
         !>  Routine which reads in data from SAV file and allocates memory.
         !>
-        !! @Param arrayDims: type containing the dimensions of all the arrays that need to be allocated
-        function READFL(fileData) result(errorCode)
-            use ModelParamsModule
-            use ArrayDimensionsModule
-            use ModelFieldsModule
+        !! @Param fileData: FileStruct type containing the information about the saved file
+        function ReadSaveFile(fileData) result(errorCode)
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gUserSettingsPrev, FileStruct
+            use ModelFieldsModule, only: gVertArr
             use NlevelQGModelGlobals, only: LogMessage
             use kernel32            ! For windows system calls like GetLastError
             use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -244,7 +242,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         !---------------------------------------Read header for allocation:
             ! This loads all the ModelParamsModule fields
-            errorCode = RHEAD(fileData%fileHandle)   ! Function 1ocated in this file
+            errorCode = ReadFileHeader(fileData%fileHandle)   ! Function 1ocated in this file
         !---------------------------------------Incorrect identifier, or error reading ModelParamsModule data. Hop out:
             IF(errorCode .NE. 0) then           ! Log message in rhead routine
                 close(fileData%fileHandle)
@@ -262,8 +260,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! Since we are on the way to the model control variables here, we don't care about the return
             ! value which only says something was out of bounds and has been fixed.
 
-            arrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
-            currentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+            gArrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
+            gCurrentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
             !---------------------------------------------Allocate arrays based upon what we have read:
 
             errorCode = newAllocation()  ! Function 1ocated in this file
@@ -275,7 +273,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 return
             end if
         !------------------------------------------Read in data:
-            errorCode = RDATA(fileData%fileHandle)   ! function 1ocated in this file
+            errorCode = ReadFileData(fileData%fileHandle)   ! function 1ocated in this file
             IF(errorCode .NE. 0) then
                 CLOSE(fileData%fileHandle)
                 fileData%fileHandle = -1
@@ -285,7 +283,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !------------------------------------------Check PV profile:
         ! This makes sure that the pressure level decreases as one goes up.
             DO I = 1, gModIntParams%NLEV - 1
-                IF(vertArr%PV(I + 1) .GT. vertArr%PV(I) .OR. vertArr%PV(I + 1) .LT. 0.) THEN
+                IF(gVertArr%PV(I + 1) .GT. gVertArr%PV(I) .OR. gVertArr%PV(I + 1) .LT. 0.) THEN
                     errorCode = -3
                     CLOSE(fileData%fileHandle)
                     fileData%fileHandle = -1
@@ -298,9 +296,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 !120        IF(IEXEC .NE. 5) CLOSE(fileHandle)
             CLOSE(fileData%fileHandle)
             fileData%fileHandle = -1
-        END function READFL
+        END function ReadSaveFile
 
-        !********************************************* Function RHEAD:
+        !********************************************* Function ReadFileHeader:
         !> Reads just the header data from the file specified by fileHandle. This reads
         !> in the data that populates the data types specified in the ModelParamsModule.
         !> These values are needed to allocate the space needed for the read of the 
@@ -308,8 +306,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> The OPEN and CLOSE statements are handled by the caller.
         !! @param fileHandle The file handle to read from.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
-        function RHEAD(fileHandle) result(errorCode)
-            use ModelParamsModule
+        function ReadFileHeader(fileHandle) result(errorCode)
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gUserSettingsPrev
             use NlevelQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -337,16 +335,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gUserSettingsPrev = gUserSettings
 
             !errorCode = GetLastError()  ! Get the last error code from Windows System
-        END function RHEAD
+        END function ReadFileHeader
 
-        !****************************************************************** RDATA:
+        !****************************************************************** ReadFileData:
         !> With the header data read and memory allocated for the ModelFieldsModule arrays
         !> This method reads the array data. The OPEN and CLOSE statements are handled by the caller.
         !! @param fileHandle The file handle to read from.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
-        FUNCTION RDATA(fileHandle) RESULT(errorCode)
-            use ModelFieldsModule
-            use InteractionCoefficientsModule
+        FUNCTION ReadFileData(fileHandle) RESULT(errorCode)
+            use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
+            use InteractionCoefficientsModule, only: gCintArr
             !use NlevelQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -361,42 +359,42 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             errorCode = 0
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  vertArr%allocated, &
-                  vertArr%PP, vertArr%PV, vertArr%DP, vertArr%DPI, vertArr%THS, vertArr%FK, vertArr%FJ, &
-                  vertArr%AU, vertArr%A, vertArr%H, vertArr%G, vertArr%SIG, &
-                  vertArr%X, vertArr%Y, vertArr%PRF
+                  gVertArr%allocated, &
+                  gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
+                  gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, &
+                  gVertArr%X, gVertArr%Y, gVertArr%PRF
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  horzArr%allocated, &
-                  horzArr%GQ, horzArr%BTA, horzArr%PSB, horzArr%PS, horzArr%TH, horzArr%WW, horzArr%TF, &
-                  horzArr%FS, horzArr%ADS, horzArr%WS, horzArr%S, horzArr%FT, horzArr%ADT, horzArr%WT, &
-                  horzArr%T, horzArr%SF, horzArr%ADO, horzArr%TOP, &
-                  horzArr%G1, horzArr%G2, horzArr%G3, horzArr%WRK, horzArr%TMP, horzArr%DAT, &
-                  horzArr%AKL, horzArr%AKLI, horzArr%ZS, horzArr%PSSAVE, horzArr%RML, &
-                  horzArr%TRX, horzArr%TRY, horzArr%IXL, horzArr%IYL
+                  gHorzArr%allocated, &
+                  gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
+                  gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
+                  gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
+                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%WRK, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
+                  gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  statsArr%allocated, &
-                  statsArr%PSA, statsArr%APE, statsArr%RKE, &
-                  statsArr%PSS, statsArr%V1, statsArr%V2, &
-                  cintArr%allocated
+                  gStatsArr%allocated, &
+                  gStatsArr%PSA, gStatsArr%APE, gStatsArr%RKE, &
+                  gStatsArr%PSS, gStatsArr%V1, gStatsArr%V2, &
+                  gCintArr%allocated
 
-            if (cintArr%allocated) then
+            if (gCintArr%allocated) then
                 READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                    cintArr%CINT, cintArr%I1M, cintArr%JIN, cintArr%KIN
+                    gCintArr%CINT, gCintArr%I1M, gCintArr%JIN, gCintArr%KIN
             endif
 
             ! Do not close the file if this is a sensitivity file, as it will be used later.
 
-        END FUNCTION RDATA
+        END FUNCTION ReadFileData
         
         !****************************************************************** WriteSensFileHeader:
         !> Writes standard header and the vertical arrays. The others change.
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function WriteSensFileHeader(fileHandle) RESULT(errorCode)
-            use ModelParamsModule
-            use ModelFieldsModule, only: vertArr
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams
+            use ModelFieldsModule, only: gVertArr
             
             implicit none
 
@@ -410,22 +408,22 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! Write data
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  vertArr%allocated, &
-                  vertArr%PP, vertArr%PV, vertArr%DP, vertArr%DPI, vertArr%THS, vertArr%FK, vertArr%FJ, &
-                  vertArr%AU, vertArr%A, vertArr%H, vertArr%G, vertArr%SIG, vertArr%X, vertArr%Y, vertArr%PRF
+                  gVertArr%allocated, &
+                  gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
+                  gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, gVertArr%X, gVertArr%Y, gVertArr%PRF
 
         end function WriteSensFileHeader
 
-        !****************************************************************** WDATA:
+        !****************************************************************** WriteFileData:
         !> Writes the data to the file specified by fileHandle. This write does both
         !> the header and the data arrays. The OPEN statement and CLOSE statements
         !> are done by the caller.
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
-        FUNCTION WDATA(fileHandle) RESULT(errorCode)
-            use ModelParamsModule
-            use ModelFieldsModule
-            use InteractionCoefficientsModule
+        FUNCTION WriteFileData(fileHandle) RESULT(errorCode)
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams
+            use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
+            use InteractionCoefficientsModule, only: gCintArr
             !use NlevelQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -446,48 +444,48 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Write header data
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams
-            ! Write model arrays
+            ! Write model arrays (since they are allocatable, we need to write each array indivually and not just the type gVertArr, etc.)
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  vertArr%allocated, &
-                  vertArr%PP, vertArr%PV, vertArr%DP, vertArr%DPI, vertArr%THS, vertArr%FK, vertArr%FJ, &
-                  vertArr%AU, vertArr%A, vertArr%H, vertArr%G, vertArr%SIG, &
-                  vertArr%X, vertArr%Y, vertArr%PRF
+                  gVertArr%allocated, &
+                  gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
+                  gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, &
+                  gVertArr%X, gVertArr%Y, gVertArr%PRF
 
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  horzArr%allocated, &
-                  horzArr%GQ, horzArr%BTA, horzArr%PSB, horzArr%PS, horzArr%TH, horzArr%WW, horzArr%TF, &
-                  horzArr%FS, horzArr%ADS, horzArr%WS, horzArr%S, horzArr%FT, horzArr%ADT, horzArr%WT, &
-                  horzArr%T, horzArr%SF, horzArr%ADO, horzArr%TOP, &
-                  horzArr%G1, horzArr%G2, horzArr%G3, horzArr%WRK, horzArr%TMP, horzArr%DAT, &
-                  horzArr%AKL, horzArr%AKLI, horzArr%ZS, horzArr%PSSAVE, horzArr%RML, &
-                  horzArr%TRX, horzArr%TRY, horzArr%IXL, horzArr%IYL
+                  gHorzArr%allocated, &
+                  gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
+                  gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
+                  gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
+                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%WRK, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
+                  gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
 
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                  statsArr%allocated, &
-                  statsArr%PSA, statsArr%APE, statsArr%RKE, &
-                  statsArr%PSS, statsArr%V1, statsArr%V2, &
-                  cintArr%allocated
+                  gStatsArr%allocated, &
+                  gStatsArr%PSA, gStatsArr%APE, gStatsArr%RKE, &
+                  gStatsArr%PSS, gStatsArr%V1, gStatsArr%V2, &
+                  gCintArr%allocated
 
-            if (cintArr%allocated) then
+            if (gCintArr%allocated) then
                 WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
-                    cintArr%CINT, cintArr%I1M, cintArr%JIN, cintArr%KIN
+                    gCintArr%CINT, gCintArr%I1M, gCintArr%JIN, gCintArr%KIN
             endif
 
-        END FUNCTION WDATA
+        END FUNCTION WriteFileData
 
         !> This function checks if the user has changed the base parameters
         !> (gUserSettings). If any of those settings have been changed, reallocation
         !> will be needed for the arrays that depend upon those settings. 
-        !> A change in the number of levels effects vertArr and thus new vertical profiles
-        !> A change in the number of zonal or meridional waves effects horzArr and 
-        !>   cintArr (interaction coefficients) if they are being used.
-        !> A change in the integration method will effect cintArr
+        !> A change in the number of levels effects gVertArr and thus new vertical profiles
+        !> A change in the number of zonal or meridional waves effects gHorzArr and 
+        !>   gCintArr (interaction coefficients) if they are being used.
+        !> A change in the integration method will effect gCintArr
         !! @returns 0 on success. Any other value means the user should check.
         function CheckUserSettingsChanges() result(errorCode)
-            use ConstantsModule
-            use ModelParamsModule
-            use ModelFieldsModule
-            use InteractionCoefficientsModule
+            use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams, gModRealParams
+            use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, createHorzArr, createVertArr, &
+                AllocateHorizontalArrays, AllocateVerticalArrays, gVertArr, gHorzArr
+            use InteractionCoefficientsModule, only: DeallocateCintArrays, AllocateCintArrays, computeInteractionCoefficients, gCintArr
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
             integer :: errorCode
@@ -517,15 +515,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gUserSettings%statsOption .NE. gUserSettingsPrev%statsOption) boolStatsResult = .true.
             
             if (boolHorzResult .OR. boolVertResult) then
-                arrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
-                currentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+                gArrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
+                gCurrentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
                 ! Handle horizontal array changes (which includes vertical dimensions):
-                if (horzArr%allocated) errorCode = deallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
+                if (gHorzArr%allocated) errorCode = deallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
 
                 errorCode = allocateHorizontalArrays()    ! Reallocate horizontal arrays
                 if(errorCode .NE. 0) return
                 ! But use the model settings for KMAX2, LMAX2, NLEV for actual array dimensions.
-                errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, currentDims)
+                errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 if(errorCode .NE. 0) return
             end if
 
@@ -534,19 +532,19 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
                                                      boolHorzResult)) then      ! the horizontal array dimensions have changed
                 ! Handle interaction coefficient array changes:
-                if (cintArr%allocated) errorCode = DeallocateCintArrays()  ! Deallocate interaction coefficient arrays if allocated
+                if (gCintArr%allocated) errorCode = DeallocateCintArrays()  ! Deallocate interaction coefficient arrays if allocated
 
-                ! This method allocates the interaction coefficient arrays, and creates the cintArr arrays using the gUserSettings
+                ! This method allocates the interaction coefficient arrays, and creates the gCintArr arrays using the gUserSettings
                 ! dimensions (not the gModIntParams values) and computes the interaction coefficients. It also switches to the
                 ! transform method if too many interaction coefficients are needed.
                 errorCode = AllocateCintArrays()
-                if (errorCode == 0) cintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
+                if (errorCode == 0) gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
                                                 gModIntParams%KMAX2, gModIntParams%LMAX2, 1) ! flag = 1 means compute and fill arrays
             endif
 
             ! Handle vertical array changes:
             IF(boolVertResult) THEN
-                if (vertArr%allocated) errorCode = DeallocateVerticalArrays()  ! Deallocate vertical arrays if allocated
+                if (gVertArr%allocated) errorCode = DeallocateVerticalArrays()  ! Deallocate vertical arrays if allocated
                 errorCode = AllocateVerticalArrays()    ! Reallocate vertical arrays
                 if (errorCode .NE. 0) return
                 ! CheckModelResolutions has assured that gModIntParams%NLEV is within bounds of gUserSettings%maxLevels
@@ -571,14 +569,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @return  true if all fields are okay. false if one or more parameters had to
         !!          be reset because they were inconsistent
         function CheckUserSettingsData() result(mCode)
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: STATS_OPT_NONE, STATS_OPT_VAR
+            use ModelParamsModule, only: gUserSettings
+            
+            implicit none
 
             ! Local variables
             logical :: mCode
 
             mCode = .true.   ! No error
-        !-----------------------Check for bad user parameters in the gUserSettings Settings struct:
+            !-----------------------Check for bad user parameters in the gUserSettings Settings struct:
 
             IF(gUserSettings%maxZonalWaves .LE. 0) THEN
                 gUserSettings%maxZonalWaves = 1
@@ -601,8 +601,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end function CheckUserSettingsData
 
         function CheckModelResolutions() result(mCode)
-            use ConstantsModule
-            use ModelParamsModule
+             use ModelParamsModule, only: gModIntParams, gUserSettings
+             
+             implicit none
 
             ! Local variables
             logical :: mCode
@@ -633,10 +634,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 mCode = mCode .AND. .false.
             ENDIF
         end function CheckModelResolutions
-        
+
         function CheckModParams() result(errorCode)
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: WAVE_AMP_TIME_SERIES, PHASE_SPACE, MEAN_TEMP_TEND_GRAF, AMPLITUDE_RATIO_GRAF, VORTICITY, PLOT_OFF, OROGRAPHY
+            use ModelParamsModule, only: gModRealParams, gModIntParams, gModPlotParams
 
             integer :: errorCode
             integer :: I2
@@ -733,7 +734,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModPlotParams%ISCRN .GT. 1 .OR. gModPlotParams%ISCRN .LT. 0) gModPlotParams%ISCRN = 0
             !---------------------------------------------Some idiot tests:
             IF(gModRealParams%RN .LE. 0. .OR. gModRealParams%DELT .LE. 0.) errorCode = IOR(errorCode, RN_BAD)
-            IF(gModIntParams%NUMBX .GT. 8 .OR. gModIntParams%NUMBY .GT. 8) errorCode = IOR(errorCode, NUMBER_OF_MAPS_TOO_LARGE)
             IF(gModRealParams%TPP .LT. 0) gModRealParams%TPP = 0.
             IF(gModRealParams%BOT .LE. gModRealParams%TPP) errorCode = IOR(errorCode, PRESSURE_LEVELS_BAD)
 
@@ -759,7 +759,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !
         !!---------------------------------Set array dimensions for allocation:
         !    !  This method loads the IXMAX, IYMAX, IZMAX, KX, LY, IBIG, IBOX, ITOT, IYH, IXMAX1
-        !    !  values into the arrayDims type.
+        !    !  values into the gArrayDims type.
         !    !res = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
         !
         !    !=====================================Set aside space for all vertical arrays:
@@ -791,7 +791,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !            return
         !        ELSE
         !            isAlloced(HORZ_ARRAYS) = IS_ALLOCATED
-        !            errorCode = createHorzArr(gModIntParams%kmax2, gModIntParams%lmax2, gModIntParams%nlev, currentDims)
+        !            errorCode = createHorzArr(gModIntParams%kmax2, gModIntParams%lmax2, gModIntParams%nlev, gCurrentDims)
         !        END IF
         !    END IF
         !
@@ -834,10 +834,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings
-            use InteractionCoefficientsModule
-            use ModelFieldsModule
-            use ArrayDimensionsModule, only: currentDims
-            use Fftw3HelpersModule
+            use InteractionCoefficientsModule, only: gCintArr, createCintArr, computeInteractionCoefficients
+            use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr
+            use ArrayDimensionsModule, only: gCurrentDims
+            use Fftw3HelpersModule, only: setup_fftw_plans
 
             integer, intent(in) :: prevZonalWaves, prevMeridWaves, prevLevels
             real, intent(in) :: prevRN  ! nondimensional
@@ -873,8 +873,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Check if the resolutions have changed and we need to reshuffle arrays
             if (boolHorzChange .OR. boolVertChange) then
-                currentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
-                total = arrayDims%itot * gUserSettings%maxLevels ! This is for reshuffling arrays so we need to know their base size
+                gCurrentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+                total = gArrayDims%itot * gUserSettings%maxLevels ! This is for reshuffling arrays so we need to know their base size
                 itot_old = prevMeridWaves + 2 * prevZonalWaves * prevMeridWaves
                 itot_new = gModIntParams%LMAX2 + 2 * gModIntParams%KMAX2 * gModIntParams%LMAX2
                 ALLOCATE(DAT(itot_new, gModIntParams%NLEV)) ! Temporary array for reshuffling
@@ -882,21 +882,21 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ! Signal that we need to update the interaction coefficents if using interaction coefficients and the horizontal resolution has changed
                 if (gUserSettings%integrationMethodTransform .EQV. .false. .AND. boolHorzChange) boolUpdateCint = .true.
 
-                errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, currentDims)
-                call setup_fftw_plans(currentDims%IXMAX, currentDims%IYMAX)
-                call ReshuffleArrays(horzArr%PS, DAT, PS_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
+                call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
+                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 
-                CALL ReshuffleArrays(horzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(horzArr%SF, DAT, PS_pool(5 * total + 1 : 6 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(horzArr%PSSAVE, DAT, PSSave_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(horzArr%TOP, DAT, TOP_pool, itot_old, 1, itot_new, 1, arrayDims%itot)
+                CALL ReshuffleArrays(gHorzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(5 * total + 1 : 6 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, itot_old, 1, itot_new, 1, gArrayDims%itot)
             !  !===================================================Reshuffle stats arrays:
             !        IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
-            !            CALL ReshuffleArrays(DAT, statsArr%APE(:, N), prevZonalWaves, prevMeridWaves)
-            !            CALL ReshuffleArrays(DAT, statsArr%RKE(:, N), prevZonalWaves, prevMeridWaves)
+            !            CALL ReshuffleArrays(DAT, gStatsArr%APE(:, N), prevZonalWaves, prevMeridWaves)
+            !            CALL ReshuffleArrays(DAT, gStatsArr%RKE(:, N), prevZonalWaves, prevMeridWaves)
             !            DO I = 1,7
-            !                CALL ReshuffleArrays(DAT, statsArr%PSS(:, N, I), prevZonalWaves, prevMeridWaves)
-            !                CALL ReshuffleArrays(DAT, statsArr%PSA(:, N, I), prevZonalWaves, prevMeridWaves)
+            !                CALL ReshuffleArrays(DAT, gStatsArr%PSS(:, N, I), prevZonalWaves, prevMeridWaves)
+            !                CALL ReshuffleArrays(DAT, gStatsArr%PSA(:, N, I), prevZonalWaves, prevMeridWaves)
             !            END DO
             !        ENDIF
             !    END DO
@@ -907,7 +907,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     !----------------------------------------Compute default Diabatic terms:
                     CALL DFDIAB(.true.) ! True indicates that pressure levels have to be determined.
                     !----------------------------------------Zero Omega array for Barotropic flow:
-                    IF(gModIntParams%NLEV .EQ. 1) horzArr%WW = 0.0   ! Fortran shortcut
+                    IF(gModIntParams%NLEV .EQ. 1) gHorzArr%WW = 0.0   ! Fortran shortcut
                 ENDIF
             endif
             ! If only the RN value has changed, all we need to do is recompute the interaction coefficients; all the 
@@ -917,7 +917,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (boolUpdateCint .OR. (prevRN .NE. gModRealParams%RN)) then
                 ! Horizontal resolution has changed, need to recompute cint arrays.
                 if (boolUpdateCint) then
-                    ! Compute number of coefficients only. flag = 0 singals to do that. Need to create the cintArr array shapes.
+                    ! Compute number of coefficients only. flag = 0 singals to do that. Need to create the gCintArr array shapes.
                     
                     currentNoOfInteractions = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 0)
                     ! The way we have it now is that as long as KMAX2 and LMAX2 are within bounds, we are under the limit of interaction coefficients
@@ -925,7 +925,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     errorCode = createCintArr(gModIntParams%KMAX2, gModIntParams%LMAX2, currentNoOfInteractions)
                 endif
                 ! Now compute the interaction coefficients. flag > 0 indicates to do that versus just count them
-                cintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 1)
+                gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 1)
             endif
 
         end function CheckModelControlChanges
@@ -1051,9 +1051,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @Param levels: the number of model levels
         !! @returns true always
         function SetDimensions(zonalWaves, meridWaves, levels) result(arraySizes)  ! Previously called SETDIM
-            use ConstantsModule
-            use ModelParamsModule
-            use ArrayDimensionsModule
+            use ConstantsModule, only: MIN_ASXY_SIZE, STATS_OPT_NONE, STATS_OPT_VAR
+            use ModelParamsModule, only: gUserSettings
+            use ArrayDimensionsModule, only: Dims
     
             implicit none
 
@@ -1072,7 +1072,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                                       315, 320, 324, 330, 336, 343, 350, 360, 363, 375, 378, 384, 385, 396, 400, 405, 420, 432, &
                                       440, 441, 448, 450, 462, 480, 486, 495, 500, 504, 512]
 
-            call ZeroArrayDims(arraySizes)  ! This subroutine initializes all dimensions in arrayDims to zero.
+            call ZeroArrayDims(arraySizes)  ! This subroutine initializes all dimensions in gArrayDims to zero.
             !------------------------------------------------------------ Set up FFTs:
             J = 3 * zonalWaves + 1
             DO I = 1, SIZE(gridPoints)
@@ -1160,9 +1160,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !>  changable diabatic parameters that require recalculation of the vertical profiles.
         !!  @Param needPressureLevels: logical indicating whether pressure levels need to be computed
         SUBROUTINE DFDIAB(needPressureLevels)
-            use ModelFieldsModule
-            use ModelParamsModule
-            use ArrayDimensionsModule
+            use ConstantsModule, only: KAPPA
+            use ModelFieldsModule, only: gVertArr, BV
+            use ModelParamsModule, only: gModIntParams, gScaleFactors
 
             Logical, intent(in) :: needPressureLevels
 
@@ -1178,15 +1178,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(needPressureLevels) THEN
                 BV = 0.0              ! Clear all the vertical arrays (in ModelFieldsModule). BV encapsulates all the vertical arrays.
         !----------------------------------------Set surface and upper level pressure:
-                vertArr%PP(1) = 1000.
-                vertArr%PP(gModIntParams%NLEV + 1) = 0.
+                gVertArr%PP(1) = 1000.
+                gVertArr%PP(gModIntParams%NLEV + 1) = 0.
         !-------------------------Compute pressure levels PV, diss FK and FJ:
-                DELP = (vertArr%PP(1) - vertArr%PP(gModIntParams%NLEV + 1)) / REAL(gModIntParams%NLEV)
-                vertArr%PV(1) = vertArr%PP(1) - DELP / 2.
+                DELP = (gVertArr%PP(1) - gVertArr%PP(gModIntParams%NLEV + 1)) / REAL(gModIntParams%NLEV)
+                gVertArr%PV(1) = gVertArr%PP(1) - DELP / 2.
                 DO N = 1, gModIntParams%NLEV
-                    vertArr%PP(N) = vertArr%PP(1) - (N - 1) * DELP
+                    gVertArr%PP(N) = gVertArr%PP(1) - (N - 1) * DELP
                     !--------------------------------Leaves PV(1) alone:
-                    vertArr%PV(N) = vertArr%PV(1) - (N - 1) * DELP
+                    gVertArr%PV(N) = gVertArr%PV(1) - (N - 1) * DELP
                 END DO
             ENDIF
         !========================================Compute Basic state temp profile:
@@ -1194,55 +1194,61 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             THS0 = 285.         ! Potential temperature at surface (1000 mb)
             THS1 = .14          ! Increase in potential temperature per 100 mb
         !----------------------------------Potential temperature at tropopause
-            EX = THS0 + (vertArr%PV(1) - TROP) * THS1
+            EX = THS0 + (gVertArr%PV(1) - TROP) * THS1
             DO N = 1, gModIntParams%NLEV
-                IF(vertArr%PV(N) .GT. TROP) THEN
-                    vertArr%THS(N) = THS0 + THS1 * (vertArr%PV(1) - vertArr%PV(N))
+                IF(gVertArr%PV(N) .GT. TROP) THEN
+                    gVertArr%THS(N) = THS0 + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
                 ELSE
         !-----------------------------------Stratospheric isothermal profile in Temp.
-                    vertArr%THS(N) = EX * (TROP / vertArr%PV(N))**KAPPA
+                    gVertArr%THS(N) = EX * (TROP / gVertArr%PV(N))**KAPPA
                 ENDIF
             END DO
-            vertArr%FK(1 : gModIntParams%NLEV) = 0.     ! Zero ekman friction for every level
+            gVertArr%FK(1 : gModIntParams%NLEV) = 0.     ! Zero ekman friction for every level
         !========================Thermal mixing exp decay (Convective mixing of temperature):
             EX = 6.
             DO N = 1, gModIntParams%NLEV - 1
-                R = EX * (1. - vertArr%PV(N) / vertArr%PV(1))
+                R = EX * (1. - gVertArr%PV(N) / gVertArr%PV(1))
         !------------------------------Stop convection at Tropopause
-                IF(vertArr%PV(N + 1) .GT. TROP) THEN
-                    vertArr%G(N) = gScaleFactors%dissipation / EXP(R / 2.)
+                IF(gVertArr%PV(N + 1) .GT. TROP) THEN
+                    gVertArr%G(N) = gScaleFactors%dissipation / EXP(R / 2.)
                 ELSE
-                    vertArr%G(N) = gScaleFactors%dissipation / 20.
+                    gVertArr%G(N) = gScaleFactors%dissipation / 20.
                 ENDIF
             END DO
             !  Vort mix=Constant=20 days:
-            vertArr%FJ(1:gModIntParams%NLEV - 1) = gScaleFactors%dissipation / 20.  ! This gives the same value for all N
-            vertArr%FJ(gModIntParams%NLEV) = 0.
+            gVertArr%FJ(1:gModIntParams%NLEV - 1) = gScaleFactors%dissipation / 20.  ! This gives the same value for all N
+            gVertArr%FJ(gModIntParams%NLEV) = 0.
         !====================================================Compute PP,DPI,A,AU,SIG
-            CALL VERTP()
+            CALL ComputeVerticalProfiles()
         !------------------------------------------Compute Petri TF and H profiles:
-            CALL RADPRF()
-            IF(gModIntParams%NLEV .NE. 1) vertArr%G(gModIntParams%NLEV - 1) = 0.
+            CALL RaisanenRadiationProfile()
+            IF(gModIntParams%NLEV .NE. 1) gVertArr%G(gModIntParams%NLEV - 1) = 0.
         !==========================================Set surface heating and Ekman fric:
-            vertArr%H(1) = gScaleFactors%dissipation / 8.   ! THis was set in the RADPRF method. Why is it done here?
-            vertArr%FK(1) = gScaleFactors%dissipation * 1000. / (vertArr%PP(1) - vertArr%PP(2))
+            gVertArr%H(1) = gScaleFactors%dissipation / 8.  
+            ! This was set in the RaisanenRadiationProfile method. The conversion between a dimensional dissipation value in 1/days
+            ! is dimensional_FK = 1.0_wp / (secondsPerDay * nondimensional_FK * scaleCoriolis)
+            ! gScaleFactors%dissipation = 1.0_wp / (secondsPerDay * scaleCoriolis)
+            ! to increase the damping. Not sure why it is divided by 8. Probably because
+            ! the scale factor gives 0.11 / day or about 2.7 hr damping.
+            
+            gVertArr%FK(1) = gScaleFactors%dissipation * 1000. / (gVertArr%PP(1) - gVertArr%PP(2))
         END subroutine DFDIAB
 
         !*****************************************Place perturbation in flow:
         SUBROUTINE PERTB()
-            use ModelFieldsModule
-            use ModelParamsModule
-            use ArrayDimensionsModule
+            use ModelFieldsModule, only: gHorzArr
+            use ModelParamsModule, only: gModIntParams
+            use ArrayDimensionsModule, only: gCurrentDims
 
             implicit none
 
             INTEGER :: N
         !---------------------------------Place in zonal flow that starts at 0 and increases with height:
             DO N = 1, gModIntParams%NLEV
-                horzArr%PS(1, N) = .1 * REAL(N - 1) / REAL(gModIntParams%NLEV)
+                gHorzArr%PS(1, N) = .1 * REAL(N - 1) / REAL(gModIntParams%NLEV)
             END DO
         !---------------------------------Perturb ALL surface components:
-            horzArr%PS(1 : currentDims%ITOT, 1) = .001
+            gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
         END SUBROUTINE PERTB
 
         !***************************************************** DEFAULTS:
@@ -1250,8 +1256,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> gModPlotParams, and gModSensParams when there is no save file already containing these
         !> fields.
         SUBROUTINE DEFAULTS()
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
+                OROG_HGT_TEND, HGT_FORCING, PLOT_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
+                HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
+                AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
+                gModScalingParams, gModPlotParams, gModSensParams, gPlotScales
 
             INTEGER I, I1, J, J1
             
@@ -1322,27 +1332,27 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  Plot order of 2-D: VOR,PS,TH,WW,TF,S,T,FS,ADS,ADT
         !  Plot order of 1-D: ADO,TOP,SF
         !---------------------------------------- (Gives 60m contours for L=5000km/PI)
-            gModScalingParams%VR(VORTICITY) = 1.0 / plotScales(VORTICITY)
+            gModScalingParams%VR(VORTICITY) = 1.0 / gPlotScales(VORTICITY)
         !---------------------------------------- (Gives 60m contours for L=5000km/PI)
-            gModScalingParams%VR(HEIGHT) = 60.0 / plotScales(HEIGHT)
-            gModScalingParams%VR(TEMPERATURE) = 5.0 / plotScales(TEMPERATURE)
-            gModScalingParams%VR(VERTICAL_WIND) = 5.0 / plotScales(VERTICAL_WIND)
+            gModScalingParams%VR(HEIGHT) = 60.0 / gPlotScales(HEIGHT)
+            gModScalingParams%VR(TEMPERATURE) = 5.0 / gPlotScales(TEMPERATURE)
+            gModScalingParams%VR(VERTICAL_WIND) = 5.0 / gPlotScales(VERTICAL_WIND)
             gModScalingParams%VR(TEMP_FORCING) = gModScalingParams%VR(TEMPERATURE)
             DO I = 1, 4
-               gModScalingParams%VR(I + 5) = 60.0 / plotScales(I+5)
-               gModScalingParams%VR(I + 9) = 5.0 / plotScales(I+9)
+               gModScalingParams%VR(I + 5) = 60.0 / gPlotScales(I+5)
+               gModScalingParams%VR(I + 9) = 5.0 / gPlotScales(I+9)
             END DO
-            gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / plotScales(OROG_HGT_TEND)
+            gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / gPlotScales(OROG_HGT_TEND)
             gModScalingParams%VR(OROGRAPHY) = 100.0 / (90.0 * 11.0)
-            gModScalingParams%VR(HGT_FORCING) = 60.0 / plotScales(HGT_FORCING)
-            gModScalingParams%VR(PLOT_OFF) = 1.0 / plotScales(PLOT_OFF)
+            gModScalingParams%VR(HGT_FORCING) = 60.0 / gPlotScales(HGT_FORCING)
+            gModScalingParams%VR(PLOT_OFF) = 1.0 / gPlotScales(PLOT_OFF)
         !------------------------------Graphs only forces:
-            gModScalingParams%VR(TOT_HGT_TEND_GRAF) = 60.0 / plotScales(TOT_HGT_TEND_GRAF)
-            gModScalingParams%VR(TOT_TEMP_TEND_GRAF) = 5.0 / plotScales(TOT_TEMP_TEND_GRAF)
-            gModScalingParams%VR(MEAN_HGT_TEND_GRAF) = 60.0 / plotScales(MEAN_HGT_TEND_GRAF)
-            gModScalingParams%VR(MEAN_TEMP_TEND_GRAF) = 5.0 / plotScales(MEAN_TEMP_TEND_GRAF)
+            gModScalingParams%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
+            gModScalingParams%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
+            gModScalingParams%VR(MEAN_HGT_TEND_GRAF) = 60.0 / gPlotScales(MEAN_HGT_TEND_GRAF)
+            gModScalingParams%VR(MEAN_TEMP_TEND_GRAF) = 5.0 / gPlotScales(MEAN_TEMP_TEND_GRAF)
         !------------------------------Phase speed and phase difference
-            gModScalingParams%VR(HGT_WAVE_SPEED_GRAF) = 50.0 / plotScales(HGT_WAVE_SPEED_GRAF)
+            gModScalingParams%VR(HGT_WAVE_SPEED_GRAF) = 50.0 / gPlotScales(HGT_WAVE_SPEED_GRAF)
             gModScalingParams%VR(HGT_TEMP_PHASE_DIFF) = 180.0
             gModScalingParams%VR(GROWTH_RATE_GRAF) = 1.0
             gModScalingParams%VR(AMPLITUDE_RATIO_GRAF) = 1.0
@@ -1467,8 +1477,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> Subroutine to dimensionalize the gModRealParams before displaying to the user
         !> Only five of the parameters are affected.
         subroutine DIMENSIONALIZE()
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: RAD_TO_DEGREES
+            use ModelParamsModule, only: gModRealParams, gScaleFactors
             
             ! If already dimensionalized dont do it again!
             if (gModRealParams%isDimensionalized) return
@@ -1484,8 +1494,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
         !> user has examined and or changed them. Only five of the parameters are affected.
         subroutine NONDIMENSIONALIZE()
-            use ConstantsModule
-            use ModelParamsModule
+            use ConstantsModule, only: RAD_TO_DEGREES
+            use ModelParamsModule, only: gModRealParams, gScaleFactors
 
             ! If already non-dimensionalized dont do it again!
             if (.NOT. gModRealParams%isDimensionalized) return
@@ -1504,15 +1514,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !>  This routine computes all the vertical profiles given the user input
         !>  pressure levels PV and hydrostatic basic state potential temperature
         !>  profile THS.  From these two profiles all the remaining arrays SIG,PP,
-        !>  DP,DPI,A, and AU are computed. These fields are located in vertArr
+        !>  DP,DPI,A, and AU are computed. These fields are located in gVertArr
         !>  which is declared and instantiated in the ModelFieldsModule.
         !>  Method is called after reading the default save file and from within
         !>  DFDIAB.
         !  
-        SUBROUTINE VERTP()
-            use ModelFieldsModule
-            use ArrayDimensionsModule
-            use ModelParamsModule
+        SUBROUTINE ComputeVerticalProfiles()
+            use ModelFieldsModule, only: gVertArr
+            use ConstantsModule, only: OROGRAPHY, CP, CORIOLIS, KAPPA
+            use ModelParamsModule, only: gModIntParams, gScaleFactors, gPlotScales
 
             !---------------------------------Order of storage:
             !  PP,PV,DP,DPI,THS,FK,FJ,AU,A,H,G,SIG
@@ -1522,7 +1532,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !  layers.  Thus the PP has maxLevels+1 elements.  PP(1)=surface and PP(maxLevels+1)
             !  is the top. The delta-P's are needed at the interfaces where omega is
             !  defined (DPI) and for computing the strm at temperature level (DP).
-            !  The vertArr instance has been allocated such that all the field are
+            !  The gVertArr instance has been allocated such that all the field are
             !  one after the other in the order above.
 
             !--------------------------------------Local variables:
@@ -1531,15 +1541,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             !-----------------------------Compute PP by setting to the middle of PV's:
             DO N = 2, gModIntParams%NLEV
-                vertArr%PP(N) = (vertArr%PV(N - 1) + vertArr%PV(N)) / 2.
+                gVertArr%PP(N) = (gVertArr%PV(N - 1) + gVertArr%PV(N)) / 2.
             END DO
             !-----------------------------Compute the delta P's and the ratio PP(1)/DP(n)
             DO N = 1, gModIntParams%NLEV
-                vertArr%DP(N) = vertArr%PP(N) - vertArr%PP(N + 1)
-                vertArr%DPI(N) = vertArr%PP(1) / vertArr%DP(N)
+                gVertArr%DP(N) = gVertArr%PP(N) - gVertArr%PP(N + 1)
+                gVertArr%DPI(N) = gVertArr%PP(1) / gVertArr%DP(N)
             END DO
             !--------------------------------Set scale height for orography as 11m/mb:
-            plotScales(OROGRAPHY) = (vertArr%PP(1) - vertArr%PP(2)) * 11.
+            gPlotScales(OROGRAPHY) = (gVertArr%PP(1) - gVertArr%PP(2)) * 11.
             !--------------------------------------------Compute ratio array AU:
             !  This ratio is needed in the turbulent transfer term. At each layer inter-
             !  face we need the ratios AU(N)=A(N)/A(N+1) and AL(N)=A(N)/A(N-1)=1./AU(N-1).
@@ -1547,43 +1557,57 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !  not the interface, so we have to approximate those values. Call PL the
             !  center of the level under PP(N) and PU the center of the level over PP(N).
             !  There is no AL at level 1 and no AU at level NLEV-1, so just NLEV-2 values.
+            
+            ! A(N) will be the scaling factor for the temperature.
             !
-            PL = vertArr%PV(1)**KAPPA
-            PU = vertArr%PV(2)**KAPPA
-            RL = PL - PU
-            R = CP / (2. * CORIOLIS * vertArr%PP(1)**KAPPA)
-            vertArr%A(1) = R * RL
-            vertArr%AU(1) = 0.
+            PL = gVertArr%PV(1)**KAPPA      ! p(1)**kappa
+            PU = gVertArr%PV(2)**KAPPA      ! p(2)**kappa
+            RL = PL - PU                    ! p(1)**kappa - p(2)**kappa
+            R = CP / (CORIOLIS * gVertArr%PP(1)**KAPPA)  ! Cp/ (2*Omega*p(sfc)**kappa) NO - removing divisor 2
+            gVertArr%A(1) = R * RL          ! Cp(p(1)**kappa - p(2)**kappa)/ (2*Omega*p(sfc)**kappa)
+                                            ! Cp has units of J/kg/K, the pressures have units of mb**kappa, 
+                                            ! and the Coriolis parameter has units of 1/s.
+                                            ! Joule = kg m**2 / s**2 giving A units of m**2/(s K) 
+                                            ! General: A(N) = CP * (PV(N)**KAPPA - PV(N+1)**KAPPA) / (CORIOLIS * PP(1)**KAPPA)
+            gVertArr%AU(1) = 0.
             DO N = 2, gModIntParams%NLEV - 1
             !----------------------------Get pressure at Strm level below temp level N:
                 PL = PU
             !----------------------------Get pressure at strm level above temp level N:
-                PU = vertArr%PV(N + 1)**KAPPA
+                PU = gVertArr%PV(N + 1)**KAPPA
             !----------------------------------Compute the numerator A at level N:
                 RU = PL - PU
             !----------------------------------Divide value into A at level N-1 for ratio:
-                vertArr%AU(N - 1) = RL / RU
+                gVertArr%AU(N - 1) = RL / RU
             !----------------------------------Compute A at level N
-                vertArr%A(N) = R * RU
+                gVertArr%A(N) = R * RU
                 RL = RU
             END DO
             !--------------------------------Set aside root scale factor:
-                !AT = vertArr%A(1)      ! We'll figure this out later. This is some kind of item for plotting
+                !AT = gVertArr%A(1)      ! We'll figure this out later. This is some kind of item for plotting
             !--------------------------------Compute sigma profile AND nondimensionalize:
-            R = vertArr%PP(1) / gScaleFactors%temperatureScale
+
+            R = gVertArr%PP(1) / gScaleFactors%temperatureScale
+            ! gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS    ! 2.6121725E+08 m*m/s
+            ! R = mb s / m**2
+            ! gVertArr%A(N) has units of m**2/(s K) 
+            ! X has units of mb*s*m**2/(s*K*m**2) = mb/K
+            ! SIG has units K /mb
             DO N = 1, gModIntParams%NLEV - 1
-                X = R * vertArr%A(N) / (vertArr%PV(N) - vertArr%PV(N + 1))
-                vertArr%SIG(N) = (vertArr%THS(N + 1) - vertArr%THS(N)) * X
+                X = R * gVertArr%A(N)
+                gVertArr%SIG(N) = (gVertArr%THS(N + 1) - gVertArr%THS(N)) / (gVertArr%PV(N) - gVertArr%PV(N + 1))
+                gVertArr%SIG(N) = gVertArr%SIG(N) * X
             END DO
 
-        END subroutine VERTP
+        END subroutine ComputeVerticalProfiles
 
         !********************************************"Radiation" Routine:
-        SUBROUTINE RADPRF()
-            use ModelFieldsModule
-            use ModelParamsModule
-            use ArrayDimensionsModule
-            use UtilitiesModule
+        SUBROUTINE RaisanenRadiationProfile()
+            use ConstantsModule, only: KAPPA, SQRT2, TEMPERATURE
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            use ModelParamsModule, only: gModIntParams, gScaleFactors, gPlotScales
+            !use ArrayDimensionsModule
+            !use UtilitiesModule
         
             implicit none
 
@@ -1618,357 +1642,57 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             INTEGER I, J, N
             
         ! Pressure levels where the values have been calculated.
-            REAL, PARAMETER :: Pressure(23) = [950.0, 850.0, 750.0, 650.0, 550.0, 450.0, 375.0, &
+            REAL, PARAMETER :: PRESSURE(23) = [950.0, 850.0, 750.0, 650.0, 550.0, 450.0, 375.0, &
                                                325.0, 275.0, 237.5, 212.5, 187.5, 162.5, 137.5, &
                                                112.5, 87.5, 62.5, 40.0, 25.0, 15.0, 7.5, 3.5, 1.0]
         !---------------------------------------------------------SW forcing:
-            real, parameter :: ShortWave(23) = [1.06, 1.11, 1.18, 1.20, 1.12, 1.06, .93, .81, .68, .53,&
+        ! These values are heating rates in units of degrees K per day
+            real, parameter :: SHORT_WAVE(23) = [1.06, 1.11, 1.18, 1.20, 1.12, 1.06, .93, .81, .68, .53,&
                                                 .43, .36, .36, .40, .47, .62, .93,1.47,2.07,3.03,4.72, &
                                                 9.40, 16.38]
         !---------------------------------------------------------------H0(N):
+        ! These values are a cooling rate in units of degrees K per day.
             real, parameter :: H0(23) = [1.77, 1.73, 1.75, 1.74, 1.63, 1.64, 1.71, 1.48, 1.33, 1.03, .63, &
                                          .31, .21, .25, .30, .38, .55, .90, 1.32, 2.00, 3.10, 5.54, 8.96]
 
         !---------------------------------------------------------------Start:
-        !  For now we will approximate the meridional profile of ShortWave based upon a simple
-        !  Acosy profile. To get A we divide ShortWave(L,N)/(FLOAT(L)*.05).  This works
+        !  For now we will approximate the meridional profile of SHORT_WAVE based upon a simple
+        !  Acosy profile. To get A we divide SHORT_WAVE(L,N)/(FLOAT(L)*.05).  This works
         !  very well in the troposphere.  The stratosphere decreases more rapidly.
-        !  Here we have L=10 so we simply divide ShortWave by 2.
+        !  Here we have L=10 so we simply divide SHORT_WAVE by 2.
         !
         !  The work is interpolating NLEV to the 23 levels available:
         !  Everything is dimensional since THS is dimensional.
         !-------------------------------------------------------Start:
             DO N = 1, gModIntParams%NLEV - 1
                 J = 1
-                IF(vertArr%PP(N + 1) .LE. Pressure(1)) THEN
+                IF(gVertArr%PP(N + 1) .LE. PRESSURE(1)) THEN
                     DO I = 1, 22
-                        IF(vertArr%PP(N + 1) .LE. Pressure(I) .AND. vertArr%PP(N + 1) .GT. Pressure(I + 1))THEN
+                        IF(gVertArr%PP(N + 1) .LE. PRESSURE(I) .AND. gVertArr%PP(N + 1) .GT. PRESSURE(I + 1))THEN
                             J = I
                             EXIT
                         ENDIF
                     end DO
                 ENDIF
         !------------------------------------------------------Get weights:
-                AA = (vertArr%PP(N + 1) - Pressure(J + 1)) / (Pressure(J) - Pressure(J + 1))
+                AA = (gVertArr%PP(N + 1) - PRESSURE(J + 1)) / (PRESSURE(J) - PRESSURE(J + 1))
                 BB = 1. - AA
-        !--------------------------------------------------Get cooling rate:
+        !--------------------------------------------------Get weighted cooling rate in deg K/day:
                 Y = H0(J) * AA + H0(J + 1) * BB
         !--------------------------------------------------TH = R*T Potential temperature conv:
-                R = (1000. / vertArr%PP(N))**KAPPA
-        !--------------------------------------------------Compute time scale:
-                vertArr%H(N) = .25 * vertArr%THS(N) / (Y * R)
+                R = (1000. / gVertArr%PP(N))**KAPPA
+        !--------------------------------------------------Compute time scale (Y * R converts the Y temperature to potential temperation):
+                gVertArr%H(N) = .25 * gVertArr%THS(N) / (Y * R) ! The .25 is the linearization of the T**4 boltzmann radiation I believe.
         !--------------------------------------------------Nondimensionalize:
-                IF(vertArr%H(N) .NE. 0.) vertArr%H(N) = gScaleFactors%dissipation / vertArr%H(N)
+                IF(gVertArr%H(N) .NE. 0.) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N)
         !--------------------------------------------------Zero TF at level N
-                horzArr%TF(1 : arrayDims%ITOT, N) = 0.0
+                gHorzArr%TF(1 : gArrayDims%ITOT, N) = 0.0
         !--------------------------------------------------Compute equilibrium TF:
-                X = (ShortWave(J) * AA + ShortWave(J + 1) * BB) * vertArr%THS(N)
-                horzArr%TF(1, N) = X/(4.*Y*SQRT2)
-                horzArr%TF(1, N) = horzArr%TF(1, N) * vertArr%A(N) / plotScales(TEMPERATURE)
+                X = (SHORT_WAVE(J) * AA + SHORT_WAVE(J + 1) * BB) * gVertArr%THS(N)
+                gHorzArr%TF(1, N) = X / (4. * Y * SQRT2)
+                gHorzArr%TF(1, N) = gHorzArr%TF(1, N) * gVertArr%A(N) / gPlotScales(TEMPERATURE)
             END DO
 
-        END subroutine RADPRF
+        END subroutine RaisanenRadiationProfile
 
-!!****************************************************************************
-!!  Routine copies the linear form of the array PS with old resolution prevZonalWaves,
-!!  LOLD to KNEW,LNEW.  DAT is used as a buffer for the transfer.  When one
-!!  decreases the resolution, data values will, of course, be lost if they
-!!  are no longer within the realms of the new resolution.
-!!
-!    SUBROUTINE ReshuffleArrays(DAT,PS,KOLD,LOLD,KNEW,LNEW)
-!    REAL*4 DAT(1),PS(1)
-!    INTEGER*4 IOLD,KOLD,LOLD,INEW,KNEW,LNEW
-!    INTEGER*4 I,II,J,K,L
-!!
-!!  To go from I to K,L we use K=(I-1-LMAX)/(2*LMAX)+1, L=(I-(2*K-1)*LMAX+1)/2
-!!  where MOD(L,2)=0 (before division by 2) means the component is real.
-!!
-!!------------------------------------------------ Compute old and new I-sizes:
-!    IOLD=LOLD+2*LOLD*KOLD
-!    INEW=LNEW+2*LNEW*KNEW
-!!----------------------------------------------------- Copy old data into DAT:
-!    DO 10 I=1,IOLD
-!10       DAT(I)=PS(I)
-!!------------------------------------------------- Zero any old data in array:
-!    CALL ZeroRealArray(PS,INEW)
-!!------------------------------------------------ Compute K,L,II for old data:
-!    DO 15 I=1,IOLD
-!       K=(I-1-LOLD)/(2*LOLD)+1
-!       L=I-(2*K-1)*LOLD+1
-!!-------------------------------------------- See if we have cosknx or sinknx:
-!       II=MOD(L,2)
-!       L=L/2
-!!---------------------------------------------- Compute position in new array:
-!       J=(2*K-1)*LNEW+2*L-1+II
-!!------------------------------------------ Special case for I less than LOLD:
-!       IF(I.LE.LOLD)THEN
-!        K=0
-!        J=I
-!!----------------------------------------- Check that new array has the value:
-!        IF(J.GT.LNEW)GO TO 15
-!        ENDIF
-!       IF(J.GT.INEW)GO TO 15
-!       PS(J)=DAT(I)
-!15       CONTINUE
-!    RETURN
-!    END
-!!***************************************************** Exchange PSA and PS
-!!  Takes array PS and places it in array PSA while PSA goes in PS
-!!
-!    SUBROUTINE PSAXPS(PS,PSA,I)
-!    INTEGER*4 I,M
-!    REAL*4 PS(1),PSA(1),R
-!    DO M=1,I
-!       R=PSA(M)
-!       PSA(M)=PS(M)
-!       PS(M)=R
-!       END DO
-!    RETURN
-!    END
-!!**************************************************Perturbation bomb routine:
-!    SUBROUTINE BOMB(PS,PP)
-!    INCLUDE 'NPARAM.f90'
-!    REAL*4 PS(ITOTD,1),PP(1),ANG,AMP,P0,RC,RS,Y
-!    INTEGER*4 N,J
-!!----------------------------------------Start:
-!    P0=PP(1)
-!    Y=PI-ASIN(AMPS/AMPT)
-!    Y=ALOG(2.*Y/PI)/ALOG(P0/TROP)
-!    J=LMAX2+2*(KMODE-1)*LMAX2+LMODE
-!    IF(KMODE.EQ.0)J=LMODE
-!    DO N=1,NLEV
-!!---------------------------------------------------Compute phase tilt:
-!       ANG=ANGS*EXP(-EFOLD*(P0-PP(N))/(P0-TROP))
-!!---------------------------------------Compute amplitude below TROPOPAUSE:
-!       IF(PP(N).GT.TROP)THEN
-!        AMP=(PI/2.)*(PP(N)/TROP)**Y
-!        AMP=AMPT*SIN(AMP)
-!!---------------------------------------Amplitude above tropopause:
-!       ELSE
-!        AMP=PI*(TROP-PP(N))/TROP
-!        AMP=AMPT*(1.+COS(AMP))/2.
-!        ENDIF
-!!---------------------------------------Zonal perturbation:
-!       IF(KMODE.EQ.0)THEN
-!        RC=AMP
-!        RS=0.
-!!---------------------------------------Wave perturbation:
-!       ELSE
-!        RC=.5*AMP*COS(ANG*PI/180.)/plotScales(HEIGHT)
-!        RS=.5*AMP*SIN(ANG*PI/180.)/plotScales(HEIGHT)
-!        ENDIF
-!!---------------------------------------Combine with current:
-!       IF(IADD.EQ.1)THEN
-!        PS(J,N)=PS(J,N)+RC
-!        PS(J+1,N)=PS(J+1,N)+RS
-!!---------------------------------------Replace current:
-!       ELSE
-!        PS(J,N)=RC
-!        PS(J+1,N)=RS
-!        ENDIF
-!       END DO
-!    RETURN
-!    END
-!!**********************************************************Plot inital points:
-!    SUBROUTINE FIRSTP(IPTS,NPTS,IXL,IYL)
-!    INTEGER*4 IPTS,NPTS
-!    INTEGER*2 IXL(1),IYL(1)
-!    INCLUDE 'NPARAM.f90'
-!    INCLUDE 'NTEXT.f90'
-!    INCLUDE 'PLOTPRM.f90'
-!    INTEGER*2 IX
-!    INTEGER*4 J
-!!----------------------------Special case for Balance of forces:
-!    IF(IPLT1.GE.18.AND.IPLT1.LE.21)THEN
-!       NPTS=7
-!       DO J=1,NPTS
-!        IXL(J)=0
-!        IYL(J)=0
-!        END DO
-!       RETURN
-!       ENDIF
-!!-------------------------------------Plot all levels or K or L:
-!    NPTS=1
-!!-------------------------------------Multi Points & variable indicator:
-!    IPTS=0
-!    IF(LEVP.EQ.0)THEN
-!       NPTS=NLEV
-!       IF(JTEMP(IPLT1).EQ.1.OR.IPLT1.EQ.23)NPTS=NLEV-1
-!       IPTS=13
-!       ENDIF
-!    IF(JY.EQ.0.AND.MPLOT.NE.8)THEN
-!       NPTS=LMAX2
-!       IPTS=12
-!       ENDIF
-!    IF(JX.EQ.-1.AND.MPLOT.NE.8)THEN
-!       NPTS=KMAX2
-!       IPTS=11
-!       ENDIF
-!    IX=LPL
-!!----------------------------------------No JHOV operation for too few pnts:
-!    IF(NPTS.LE.2)JHOV=-1
-!!-----------------------------------------Do not print crosses for JHOV on:
-!!    IF(NPTS.GT.2.AND.JHOV.EQ.1)RETURN
-!    DO J=1,NPTS
-!!------------------------------------------------------- Plot old point LP1:
-!       IF(NPTS.GT.1)THEN
-!        IX=MOD(J-1,NCOLOR-1)+1
-!        ENDIF
-!       IXL(J)=0
-!!       CALL CROSS(IXL(J),IYL(J),IX)
-!       END DO
-!    RETURN
-!    END
-
-!!************************************************* Routine to clip line ends
-!!  of vectors in balance of forces diagram:
-!!
-!    SUBROUTINE CLIPP(IXP,IYP,IX1,IY1)
-!!
-!!  IXP,IYP are the end points of the vector
-!!  IX1,IY1 are the origin points of the vector
-!!
-!    INTEGER*2 IX1,IY1
-!    INTEGER*4 IXP,IYP
-!    INCLUDE 'PLOTPRM.f90'
-!    INTEGER*4 I,J,K,L
-!    REAL*4 R,S
-!!------------------------------------Do end point to right/left of window
-!    IF(IXP.GT.KU.OR.IXP.LT.KL)THEN
-!       IF(IXP.GT.KU)THEN
-!        I=KU-IX1
-!        J=IXP-IX1
-!       ELSE
-!        I=IX1-KL
-!        J=IX1-IXP
-!        ENDIF
-!       L=IYP-IY1
-!!----------------------------Is the y-point above the origin?
-!       IF(IYP.GT.IY1)THEN
-!        K=LU-IY1
-!       ELSE
-!        K=IY1-LL
-!        ENDIF
-!       R=FLOAT(L)/FLOAT(J)
-!       S=FLOAT(K)/FLOAT(I)
-!!------------------------------If ABS(R)<S point is to right of window:
-!       IF(ABS(R).LE.S)THEN
-!        IF(IXP.GT.KU)THEN
-!           IXP=KU
-!        ELSE
-!           IXP=KL
-!           ENDIF
-!        IYP=FLOAT(I)*R+IY1
-!        RETURN
-!        ENDIF
-!       ENDIF
-!!------------------------------If not and L<0, point is below window
-!!  If not and L>0, point is above window
-!!  Exit if IYP is within bounds; 
-!!
-!    IF(IYP.LT.LL.OR.IYP.GT.LU)THEN
-!!====================================Now do point above/below window:
-!    IF(IYP.LT.LL)THEN
-!       I=IY1-LL
-!       J=IY1-IYP
-!    ELSE
-!       I=LU-IY1
-!       J=IYP-IY1
-!       ENDIF
-!    L=IXP-IX1
-!!----------------------------Is the x-point above the origin?
-!    IF(IXP.GT.IX1)THEN
-!       K=KU-IX1
-!    ELSE
-!       K=IX1-KL
-!       ENDIF
-!!----------------------------Set the y-coordinate to frame:
-!    IF(IYP.GT.LU)THEN
-!       IYP=LU
-!    ELSE
-!       IYP=LL
-!       ENDIF
-!    IXP=FLOAT(I*L)/FLOAT(J)+IX1
-!    ENDIF
-!    RETURN
-!    END
-
-!!********************************************Subroutine to compute increments:
-!!  Routine increments either strm, vertical diabatic arrays or RN or BETA
-!!  given R so the model can be rerun. It gives which quantity (1-9).
-!!  PRF is the start and end profile for the incrementing:
-!!
-!    SUBROUTINE PROFIL(PS,PV,PRF,R,II)
-!    INCLUDE 'NPARAM.f90'
-!!---------------------------------------------Flow variables:
-!    REAL*4 PS(ITOTD,maxLevels,15),PV(maxLevels,17),PRF(maxLevels,1),R
-!!--------------------------------------------------------------
-!!  PS(1,1,1)=PS    PV(1,1)=PV
-!!  PS(1,1,2)=TH    PV(1,2)=DP
-!!  PS(1,1,3)=WW    PV(1,3)=DPI
-!!  PS(1,1,4)=TF    PV(1,4)=THS
-!!  PS(1,1,5)=FS    PV(1,5)=FK
-!!  PS(1,1,6)=ADS    PV(1,6)=FJ
-!!  PS(1,1,7)=WS    PV(1,7)=AU
-!!  PS(1,1,8)=S    PV(1,8)=A
-!!  PS(1,1,9)=FT    PV(1,9)=H
-!!  PS(1,1,10)=ADT    PV(1,10)=G
-!!  PS(1,1,11)=WT    PV(1,11)=SIG
-!!  PS(1,1,12)=T    PV(1,12)=X
-!!  PS(1,1,13)=SF    PV(1,13)=Y
-!!  PS(1,1,14)=ADO    PV(1,14)=PRF(1,1)
-!!  PS(1,1,15)=TOP    PV(1,15)=PRF(1,2)
-!!              PV(1,16)=PRF(1,3)
-!!              PV(1,17)=PRF(1,4)
-!    INTEGER*2 II
-!!-----------------------------------------------Local variables:
-!    INTEGER*4 I,J,K,N,M
-!    REAL*4 X,Y
-!    I=II
-!!------------------------------------------New profile with PSSAVE restart:
-!    IF(II.GT.20)I=II-20
-!!-----------------------------------------------Do RN and BETA options
-!    IF(I.EQ.1)VAR(I)=PRF(1,1)*PRF(1,2)/(PRF(1,2)+R*(PRF(1,1)-PRF(1,2)))
-!    IF(I.EQ.2)VAR(I)=PRF(1,1)+R*(PRF(1,2)-PRF(1,1))
-!!-----------------------------------------------Do  profiles:
-!    IF(I.GE.3.AND.I.LE.11)THEN
-!       J=LMODE
-!       IF(KMODE.GT.0)J=(2*KMODE-1)*LMAX2+2*J
-!       M=NLEV
-!       IF(I.EQ.11)M=1
-!       DO N=1,M
-!!-----------------------------------------------Compute increment:
-!        IF(I.GE.4.AND.I.LE.7)THEN
-!           X=(PRF(N,2)+R*(PRF(N,1)-PRF(N,2)))
-!           IF(X.NE.0.)X=PRF(N,1)*PRF(N,2)/X
-!!-----------------------------------------------Load it in FK,FJ,H,G profile:
-!           IF(I.LE.5)PV(N,I+1)=X
-!           IF(I.GE.6)PV(N,I+3)=X
-!        ELSE
-!           X=PRF(N,1)+R*(PRF(N,2)-PRF(N,1))
-!!-----------------------------------------------Load it in THS profile:
-!           IF(I.EQ.3)PV(N,4)=X
-!!-----------------------------------------------Load spectral profiles:
-!           IF(I.GE.8)THEN
-!!-----------------------------------------------Load it in PS
-!            IF(I.EQ.8)K=1
-!!-----------------------------------------------Load it in TF
-!            IF(I.EQ.9)K=4
-!!-----------------------------------------------Load it in SF
-!            IF(I.EQ.10)K=13
-!!-----------------------------------------------Load it in TOP
-!            IF(I.EQ.11)K=15
-!            PS(J,N,K)=X
-!!-----------------------------------------------Get phase:
-!            IF(KMODE.GE.1)THEN
-!               Y=(PRF(N,3)+R*(PRF(N,4)-PRF(N,3)))/RAD_TO_DEGREES
-!               PS(J-1,N,K)=X*COS(Y)
-!               PS(J,N,K)=X*SIN(Y)
-!               ENDIF
-!            ENDIF
-!           ENDIF
-!        END DO
-!       ENDIF
-!    RETURN
-!    END
 end module SetUpModule

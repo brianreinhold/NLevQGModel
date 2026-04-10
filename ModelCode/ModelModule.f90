@@ -27,7 +27,7 @@ module ModelModule
         function InitModelWithModelControlVals() result(errorCode)
             use ConstantsModule, only: ZONAL_MEAN_FLOW, ERR_SCALING_PARAMETER_ZERO, ZLEVEL_1
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: horzArr, vertArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gModRealParams, gModPlotParams, gModScalingParams, gUserSettings
             use InteractionCoefficientsModule, only: computeInteractionCoefficients
             !use FFT991Module, only: SET99
@@ -43,20 +43,20 @@ module ModelModule
                             ! This precomputes some of the factors used in the inverse transform like wavenumber squared, etc. that
                             ! will reduce the muliplications and divisions during the time loop.
             !----------------------------------------Compute trig arrays for FFT991:
-            !CALL FFTFAX(currentDims%IXMAX, currentDims%IFX, horzArr%TRX)
-            !ALL SET99 (horzArr%TRX, currentDims%IFX, currentDims%IXMAX)
-            !CALL FFTFAX(currentDims%IYMAX, currentDims%IFY, horzArr%TRY)
-            !CALL SET99 (horzArr%TRY, currentDims%IFY, currentDims%IYMAX)
+            !CALL FFTFAX(gCurrentDims%IXMAX, gCurrentDims%IFX, gHorzArr%TRX)
+            !ALL SET99 (gHorzArr%TRX, gCurrentDims%IFX, gCurrentDims%IXMAX)
+            !CALL FFTFAX(gCurrentDims%IYMAX, gCurrentDims%IFY, gHorzArr%TRY)
+            !CALL SET99 (gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%IYMAX)
 
             !===========================================================Zonal model type setup:
             IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW .AND. gModPlotParams%isBarotropic .EQ. 0) THEN
                 !----------------------------Create QcosG and QsinG and place in WW for waves:
                 call GQSET()        ! In this file
                 !----------------------------Initialize barotropic mean flow:       DO I=LMAX2+1,ITOT
-                DO I = gModIntParams%LMAX2 + 1, currentDims%ITOT
-                    horzArr%PSB(I) = 0.
+                DO I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT
+                    gHorzArr%PSB(I) = 0.
                     DO N = 1, gModIntParams%NLEV
-                        horzArr%PSB(I) = horzArr%PSB(I) + horzArr%PS(I, N) / vertArr%DPI(N)
+                        gHorzArr%PSB(I) = gHorzArr%PSB(I) + gHorzArr%PS(I, N) / gVertArr%DPI(N)
                     END DO
                 END DO
                 !------------------------------------------------ Indicator for Zonal run:
@@ -77,9 +77,9 @@ module ModelModule
         function StartTimeLoop() result(errorCode)
             use ConstantsModule
             use ArrayDimensionsModule
-            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, plotScales
-            use ModelFieldsModule, only: horzArr, vertArr, statsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
-            use SetUpModule, only: WriteSensFileHeader, SetDimensions, VERTP, WDATA, PERTB
+            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
+            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, PERTB
             use InteractionCoefficientsModule
             use NlevelQGModelGlobals, only: ghwndMain, LogMessage
             use iso_c_binding
@@ -104,18 +104,15 @@ module ModelModule
             
             ! Test transforms
             !call test_transforms()
-            
-            horzArr%TOP(3) = .2
-            horzArr%TF(1, 1) = .15
-            
-            write(msg, '(*(I2, 1X))') (cintArr%JIN(K), K = 1, cintArr%numOfInteractionCoeffs)
+
+            write(msg, '(*(I2, 1X))') (gCintArr%JIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
             call LogMessage(msg)
-            write(msg, '(*(I2, 1X))') (cintArr%KIN(K), K = 1, cintArr%numOfInteractionCoeffs)
+            write(msg, '(*(I2, 1X))') (gCintArr%KIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
             call LogMessage(msg)
 
 
             errorCode = 0
-            ALLOCATE(buffer(currentDims%ITOT))
+            ALLOCATE(buffer(gCurrentDims%ITOT))
             bufferIsAllocated = .TRUE.  ! Use this to make sure the buffer gets deallocated at the end of its use
             !call EquationSystem(buffer)
 
@@ -155,8 +152,8 @@ module ModelModule
                     ! each run.
                     IF(gModIntParams%IPRM1 .GT. 20 .OR. gModIntParams%IPRM2 .GT. 20) then
                         DO N = 1, gModIntParams%NLEV
-                            DO I = 1, currentDims%ITOT
-                                horzArr%PSSAVE(I, N) = horzArr%PS(I, N)
+                            DO I = 1, gCurrentDims%ITOT
+                                gHorzArr%PSSAVE(I, N) = gHorzArr%PS(I, N)
                             END DO
                         END DO
                     end if
@@ -170,12 +167,12 @@ module ModelModule
                     !-----------------------------------------Reinitialize flow if IPRM1>20
                     IF(gModIntParams%IPRM1 .GT. 20) then
                         DO N = 1, gModIntParams%NLEV
-                            DO I = 1, currentDims%ITOT
-                                horzArr%PS(I, N) = horzArr%PSSAVE(I, N)
+                            DO I = 1, gCurrentDims%ITOT
+                                gHorzArr%PS(I, N) = gHorzArr%PSSAVE(I, N)
                             END DO
                         END DO
                     end if
-                    CALL PROFIL(vertArr%PRF, R, gModIntParams%IPRM1) 
+                    CALL PROFIL(gVertArr%PRF, R, gModIntParams%IPRM1) 
                             ! PRF is 4 arrays in one. PRF((Yindex-1) * maxLevels + 1) Passing like this is effectively a pointer
                             ! That pointer will avoid any copies. With PRF(1, 1) all we need to pass is PRF
                 END IF
@@ -187,13 +184,13 @@ module ModelModule
                         R = REAL(ISHR - 1) / REAL(gModIntParams%ITER2 - 1)
                         IF(gModIntParams%IPRM2 .GT. 20) then
                             DO N = 1, gModIntParams%NLEV
-                                DO I = 1, currentDims%ITOT
-                                    horzArr%PS(I, N) = horzArr%PSSAVE(I, N)
+                                DO I = 1, gCurrentDims%ITOT
+                                    gHorzArr%PS(I, N) = gHorzArr%PSSAVE(I, N)
                                 END DO
                             END DO
                         end if
                         ! So now it seems I need to put in the : and change the subroutine to PRF(:) instead of PRF(*)
-                        CALL PROFIL(vertArr%PRF(2 * gUserSettings%maxLevels :), R, gModIntParams%IPRM2)  ! PRF(1, 3)
+                        CALL PROFIL(gVertArr%PRF(2 * gUserSettings%maxLevels :), R, gModIntParams%IPRM2)  ! PRF(1, 3)
                     END IF
                     !---------------------------------------------Are we looping?
                     IF(ICONV .GT. 2) THEN
@@ -206,13 +203,13 @@ module ModelModule
                         ! RN can change if we are doing a sensitivity run varying the channel length.
                         IF(RNP .NE. gModRealParams%RN) THEN
                             ! This change will not effect the number of interaction coefficients
-                            cintArr%numOfInteractionCoeffs = &
-                                            computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, cintArr%numOfInteractionCoeffs)
+                            gCintArr%numOfInteractionCoeffs = &
+                                            computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, gCintArr%numOfInteractionCoeffs)
                             CALL RMLAKL()           ! Subroutine is in this file
                             RNP = gModRealParams%RN
                         END IF
                         !-----------------------------------------Static stability? Check if changed
-                        IF(gModIntParams%IPRM1 .EQ. SENS_STATIC_LAPSE_RATE .OR. gModIntParams%IPRM2 .EQ. SENS_STATIC_LAPSE_RATE) CALL VERTP()
+                        IF(gModIntParams%IPRM1 .EQ. SENS_STATIC_LAPSE_RATE .OR. gModIntParams%IPRM2 .EQ. SENS_STATIC_LAPSE_RATE) CALL ComputeVerticalProfiles()
                         !---------------------------------------------Set convergence-test values:
                         AMPP = 0.
                         PAMPP = 0.
@@ -226,17 +223,17 @@ module ModelModule
 
                     !--------------------------------------------------- Stats setup:
                     IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
-                        statsArr%PSA = 0.0       ! F90 shortcut to zero an N-d array
-                        statsArr%PSS = 0.0
-                        statsArr%EK = 0.0
-                        statsArr%APE = 0.0
-                        statsArr%RKE = 0.0
+                        gStatsArr%PSA = 0.0       ! F90 shortcut to zero an N-d array
+                        gStatsArr%PSS = 0.0
+                        gStatsArr%EK = 0.0
+                        gStatsArr%APE = 0.0
+                        gStatsArr%RKE = 0.0
                         !-----------------------------------Zero variance arrays:
-                        IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) statsArr%V1 = 0.0       ! F90 shortcut to zero an N-d array
+                        IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) gStatsArr%V1 = 0.0       ! F90 shortcut to zero an N-d array
                         !-----------------------------------Do not zero GQ arrays in Zonal run:
                         IF(gModIntParams%modelType .NE. ZONAL_MEAN_FLOW) THEN
-                            horzArr%GQ = 0.0
-                            horzArr%BTA = 0.0
+                            gHorzArr%GQ = 0.0
+                            gHorzArr%BTA = 0.0
                         END IF
                     END IF
                     !------------------------------------------------ Time stepping variables:
@@ -247,7 +244,7 @@ module ModelModule
                     ITOTS = 1
                     !--------------------------------- Turn off integration of zonal fields:
                     IF(gModIntParams%modelType .EQ. BAROCLINIC_STRUCTS) ITOTS = gModIntParams%LMAX2 + 1
-                    ITOTB = currentDims%ITOT
+                    ITOTB = gCurrentDims%ITOT
                     IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) ITOTB = gModIntParams%LMAX2
                     !--------------------------------------------------- Actual beginning of loop:
         900         DO KCYC = 1, gModIntParams%ICYC
@@ -262,19 +259,19 @@ module ModelModule
                             B1 = RD
                             !--------------------------------------Normalize structures KE for modelType=BAROCLINIC_STRUCTS
                             IF(gModIntParams%modelType .EQ. BAROCLINIC_STRUCTS .AND. gModIntParams%NLEV .GT. 1)THEN
-                                DO I = gModIntParams%LMAX2 + 1, currentDims%ITOT, 2
+                                DO I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT, 2
                                     !-------------------------------------Find KE:
                                     R1 = 0.
                                     DO N = 1, gModIntParams%NLEV
-                                        R1 = R1 + (horzArr%PS(I, N)**2 + horzArr%PS(I + 1, N)**2) / vertArr%DPI(N)
+                                        R1 = R1 + (gHorzArr%PS(I, N)**2 + gHorzArr%PS(I + 1, N)**2) / gVertArr%DPI(N)
                                     END DO
                                     IF(R1 .GT. 0.)THEN
                                         !-------------------------------------Set normalization factor to .05:
                                         R1 = .05 * SQRT(1. / R1)
                                         !-------------------------------------Normalize structure:
                                         DO N = 1, gModIntParams%NLEV
-                                            horzArr%PS(I, N) = R1 * horzArr%PS(I, N)
-                                            horzArr%PS(I + 1, N) = R1 * horzArr%PS(I + 1, N)
+                                            gHorzArr%PS(I, N) = R1 * gHorzArr%PS(I, N)
+                                            gHorzArr%PS(I + 1, N) = R1 * gHorzArr%PS(I + 1, N)
                                         END DO
                                     ENDIF
                                 END DO
@@ -298,23 +295,23 @@ module ModelModule
                                     IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
                                         CALL ComputeGQ()
                                         !-------------------------------Lorenz Energy cycle: Routine for correlations:
-                                        !CALL LORENZ(horzArr%PS, horzArr%TH, horzArr%WW, horzArr%S, horzArr%T, horzArr%ADO, vertArr%DPI, &
-                                        !    vertArr%SIG, horzArr%AKL, statsArr%EK, statsArr%APE, statsArr%RKE)
+                                        !CALL LORENZ(gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%S, gHorzArr%T, gHorzArr%ADO, gVertArr%DPI, &
+                                        !    gVertArr%SIG, gHorzArr%AKL, gStatsArr%EK, gStatsArr%APE, gStatsArr%RKE)
                                         !----------------------------------------------Variance computations:
                                         IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) THEN
                                             DO N = 1, gModIntParams%NLEV
-                                                CALL PICK(horzArr%DAT, horzArr%PS, N, gModIntParams%IV1)
-                                                CALL TRANS(G2_pool, horzArr%DAT, horzArr%WRK, horzArr%TRX, horzArr%TMP)
-                                                CALL PICK(horzArr%DAT, horzArr%PS, N, gModIntParams%IV2)
-                                                CALL TRANS(G3_pool, horzArr%DAT, horzArr%WRK, horzArr%TRX, horzArr%TMP)
+                                                CALL PICK(gHorzArr%DAT, gHorzArr%PS, N, gModIntParams%IV1)
+                                                CALL TRANS(G2_pool, gHorzArr%DAT, gHorzArr%WRK, gHorzArr%TRX, gHorzArr%TMP)
+                                                CALL PICK(gHorzArr%DAT, gHorzArr%PS, N, gModIntParams%IV2)
+                                                CALL TRANS(G3_pool, gHorzArr%DAT, gHorzArr%WRK, gHorzArr%TRX, gHorzArr%TMP)
                                                 JXS = 0
-                                                DO K = 1, currentDims%IYH
-                                                    DO I = 1, currentDims%IXMAX1
+                                                DO K = 1, gCurrentDims%IYH
+                                                    DO I = 1, gCurrentDims%IXMAX1
                                                         JYS = JXS + I
-                                                        statsArr%V1(JYS, N) = statsArr%V1(JYS, N) + G2_pool(JYS) * G2_pool(JYS)
-                                                        statsArr%V2(JYS, N) = statsArr%V2(JYS, N) + G3_pool(JYS) * G3_pool(JYS)
+                                                        gStatsArr%V1(JYS, N) = gStatsArr%V1(JYS, N) + G2_pool(JYS) * G2_pool(JYS)
+                                                        gStatsArr%V2(JYS, N) = gStatsArr%V2(JYS, N) + G3_pool(JYS) * G3_pool(JYS)
                                                     END DO
-                                                    JXS = JXS + currentDims%KX
+                                                    JXS = JXS + gCurrentDims%KX
                                                 END DO
                                             END DO
                                         ENDIF ! End variance:
@@ -332,17 +329,17 @@ module ModelModule
                                         L = gModIntParams%LMAX2 + 1
                                         !------------------------------------------Find amplitude tendency:
                                         IF(gModIntParams%modelType .NE. ZONAL_MEAN_FLOW) AMP = &
-                                                ABS(horzArr%FS(L, N) * horzArr%PS(L,N) + horzArr%FS(L + 1, N) * horzArr%PS(L + 1, N))
+                                                ABS(gHorzArr%FS(L, N) * gHorzArr%PS(L,N) + gHorzArr%FS(L + 1, N) * gHorzArr%PS(L + 1, N))
                                         !-------------------------------------------------Compute amplitude:
-                                        PAMP = SQRT(horzArr%PS(L, N)**2 + horzArr%PS(L + 1, N)**2)
+                                        PAMP = SQRT(gHorzArr%PS(L, N)**2 + gHorzArr%PS(L + 1, N)**2)
                                         !-------------------------------------------------Compute tendency:
                                         IF(PAMP .GT. 0.) AMP = AMP / PAMP
                                         !-------------------------------------------------Add zonal flow tendency:
-                                        IF(gModIntParams%modelType .NE. BAROCLINIC_STRUCTS) AMP = AMP + ABS(horzArr%FS(1, N))
+                                        IF(gModIntParams%modelType .NE. BAROCLINIC_STRUCTS) AMP = AMP + ABS(gHorzArr%FS(1, N))
                                         !-------------------------------------------------Scale to meters/day:
-                                        AMP = AMP * plotScales(TOT_HGT_TEND)  ! plotScales is defined in ModelParametersModule
+                                        AMP = AMP * gPlotScales(TOT_HGT_TEND)  ! gPlotScales is defined in ModelParametersModule
                                         !-------------------------------------------------Scale to meters:
-                                        PAMP = PAMP * plotScales(HEIGHT)      ! plotScales is defined in ModelParametersModule
+                                        PAMP = PAMP * gPlotScales(HEIGHT)      ! gPlotScales is defined in ModelParametersModule
                                         !---------------------------------------------Find difference from previous:
                                         RSS = ABS(AMP - AMPP)
                                         PDIF = ABS(PAMP - PAMPP)
@@ -360,30 +357,30 @@ module ModelModule
                                 B1N = 1. / B1
                                 !--------------------------------------Do barotropic part for waves:
                                 IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW)THEN
-                                    DO I = gModIntParams%LMAX2 + 1, currentDims%ITOT
-                                        horzArr%ZS(I, 2) = 0.
+                                    DO I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT
+                                        gHorzArr%ZS(I, 2) = 0.
                                         !--------------------------------------Take vertical average of forcing:
                                         !  Place vertical average FS in ZS(I,2)
                                         !  Use ZS(I,1) for the barotropic ZS array
                                         !  PSB is the barotropic flow
                                         !-----------------------------------------------------------------------
                                         DO N = 1, gModIntParams%NLEV
-                                            horzArr%ZS(I, 2) = horzArr%ZS(I, 2) + horzArr%FS(I, N) / vertArr%DPI(N)  ! Why not vertArr%DP(N)
+                                            gHorzArr%ZS(I, 2) = gHorzArr%ZS(I, 2) + gHorzArr%FS(I, N) / gVertArr%DPI(N)  ! Why not gVertArr%DP(N)
                                         END DO
-                                        horzArr%ZS(I, 1) = A1 * horzArr%ZS(I, 1)
-                                        horzArr%ZS(I, 1) = (horzArr%ZS(I, 1) + horzArr%ZS(I, 2)) * B1N
-                                        horzArr%PSB(I) = horzArr%PSB(I) + horzArr%ZS(I, 1)
+                                        gHorzArr%ZS(I, 1) = A1 * gHorzArr%ZS(I, 1)
+                                        gHorzArr%ZS(I, 1) = (gHorzArr%ZS(I, 1) + gHorzArr%ZS(I, 2)) * B1N
+                                        gHorzArr%PSB(I) = gHorzArr%PSB(I) + gHorzArr%ZS(I, 1)
                                     END DO
                                 ENDIF
                                 !-------------------------------------------Time step all levels and waves:
                                 DO N = 1, gModIntParams%NLEV
                                     DO I = ITOTS, ITOTB
-                                        horzArr%ZS(I, N) = A1 * horzArr%ZS(I, N)
-                                        horzArr%ZS(I, N) = (horzArr%ZS(I, N) + horzArr%FS(I, N)) * B1N
-                                        horzArr%PS(I, N) = horzArr%PS(I, N) + horzArr%ZS(I, N)
+                                        gHorzArr%ZS(I, N) = A1 * gHorzArr%ZS(I, N)
+                                        gHorzArr%ZS(I, N) = (gHorzArr%ZS(I, N) + gHorzArr%FS(I, N)) * B1N
+                                        gHorzArr%PS(I, N) = gHorzArr%PS(I, N) + gHorzArr%ZS(I, N)
                                     END DO
                                     !---------------------------------------------Numerical instability check:
-                                    IF(ABS(horzArr%PS(1, N)) .GT. 100. .OR. ieee_is_nan(horzArr%PS(1, N))) THEN
+                                    IF(ABS(gHorzArr%PS(1, N)) .GT. 100. .OR. ieee_is_nan(gHorzArr%PS(1, N))) THEN
                                         M = 28
                                         write(msg, '(A, I4, A, I4, A, I4)') 'Level=', N, ' KSTEP=', KSTEP, ' NCYC4=', NCYC4
                                         call LogMessage("Numerical instability. Exiting. " // msg)
@@ -395,7 +392,7 @@ module ModelModule
                                 B1 = B1 - RDD
                                 A1 = A1 - RDD
                             END DO !==============================================================End of N-cycle:
-                            write(msg, '(A, I4, A, (F10.6, 1X), A, *(F10.6, 1X))') ' KSTEP=', KSTEP, ': ', horzArr%PS(1, (gModIntParams%NLEV/2 + 1)), ' ', (horzArr%PS(i, (gModIntParams%NLEV/2 + 1)), i = 1 + gModIntParams%LMAX2, currentDims%ITOT, 2 * gModIntParams%LMAX2)
+                            write(msg, '(A, I4, A, (F10.6, 1X), A, *(F10.6, 1X))') ' KSTEP=', KSTEP, ': ', gHorzArr%PS(1, (gModIntParams%NLEV/2 + 1)), ' ', (gHorzArr%PS(i, (gModIntParams%NLEV/2 + 1)), i = 1 + gModIntParams%LMAX2, gCurrentDims%ITOT, 2 * gModIntParams%LMAX2)
                             call LogMessage("Values: " // msg)
                         END DO ! Inner loop ISTEP done
                     END DO ! Outer loop ICYCL done   Total number of time steps = ISTEP * ICYCL 
@@ -408,7 +405,7 @@ module ModelModule
                         ICOUNT = ICOUNT + 1
                         !-------------------------------------------------------Save results to file:
                         WRITE(newSensFile%fileHandle) ICONV
-                        M = WDATA(newSensFile%fileHandle)
+                        M = WriteFileData(newSensFile%fileHandle)
                         !---------------------------------------------------Reset ICONV for SPINUP:
                         ICONV = 3
                     ENDIF
@@ -432,27 +429,27 @@ module ModelModule
         subroutine GQSET()
             use ArrayDimensionsModule
             use ModelParamsModule, only: gModIntParams
-            use ModelFieldsModule, only: horzArr
+            use ModelFieldsModule, only: gHorzArr
             
             implicit none
 
             integer I, K, N
             real R
             !----------------------------------Reset GQ field to Q(cosG,sinG)
-            DO I = gModIntParams%LMAX2 + 1, currentDims%ITOT
+            DO I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT
                 K = 2 * ((I - gModIntParams%LMAX2 - 1) / 2) + gModIntParams%LMAX2 + 1
-                R = horzArr%BTA(K)
+                R = gHorzArr%BTA(K)
                 IF(R .GT. 0.) R = 1. / (R * R)
                 !--------------------------------------------We have PSB*TH in wave part:
                 DO N = 1, gModIntParams%NLEV
-                    horzArr%GQ(I, N) = horzArr%GQ(I, N) * R
+                    gHorzArr%GQ(I, N) = gHorzArr%GQ(I, N) * R
                 END DO
             END DO
         end subroutine GQSET
 
         !******************************************** Precompute ARRAYs RML,AKL for inverse transform:
         SUBROUTINE RMLAKL()
-            use ModelFieldsModule, only: horzArr
+            use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams, gModRealParams, PI
 
             implicit none
@@ -469,14 +466,14 @@ module ModelModule
                 DO M = 1, 2 * gModIntParams%LMAX2 + 1
                     RM2 = REAL((M - 1)**2)
                     RTEM = PI * (RM2 - RL2)
-                    horzArr%RML(M, L) = 0.      ! RML(2 * maxMeridWaves+1, maxMeridWaves)
-                    IF (RTEM .NE. 0.) horzArr%RML(M, L) = 4. / RTEM
+                    gHorzArr%RML(M, L) = 0.      ! RML(2 * maxMeridWaves+1, maxMeridWaves)
+                    IF (RTEM .NE. 0.) gHorzArr%RML(M, L) = 4. / RTEM
                 END DO
             END DO
         !----------------------------------------Compute AKL and AKLI:
             DO L = 1, gModIntParams%LMAX2
-                horzArr%AKL(L) = REAL(L * L)
-                horzArr%AKLI(L) = 1. / horzArr%AKL(L)
+                gHorzArr%AKL(L) = REAL(L * L)
+                gHorzArr%AKLI(L) = 1. / gHorzArr%AKL(L)
             END DO
 
             I = gModIntParams%LMAX2
@@ -484,11 +481,11 @@ module ModelModule
                 R = gModRealParams%RN * gModRealParams%RN * REAL(K * K)
                 DO L = 1, gModIntParams%LMAX2
                     I = I + 1
-                    horzArr%AKL(I) = R + REAL(L * L)
-                    horzArr%AKLI(I) = 1. / horzArr%AKL(I)
+                    gHorzArr%AKL(I) = R + REAL(L * L)
+                    gHorzArr%AKLI(I) = 1. / gHorzArr%AKL(I)
                     I = I + 1
-                    horzArr%AKL(I) = horzArr%AKL(I - 1)
-                    horzArr%AKLI(I) = horzArr%AKLI(I - 1)
+                    gHorzArr%AKL(I) = gHorzArr%AKL(I - 1)
+                    gHorzArr%AKLI(I) = gHorzArr%AKLI(I - 1)
                 END DO
             END DO
         END subroutine RMLAKL
@@ -506,7 +503,7 @@ module ModelModule
             real, intent(inout) :: buffer(:)
 
             !---------------------------------------------Flow variables:
-            !REAL*4 PS(currentDims%ITOT, currSettings%maxLevels, 13)
+            !REAL*4 PS(gCurrentDims%ITOT, currSettings%maxLevels, 13)
             !  PS(:, N, 1) = PS at level N
             !  PS(:, N, 2) = TH
             !  PS(:, N, 3) = WW
@@ -524,7 +521,7 @@ module ModelModule
             !  PS(:, N, 15) = TOP
 
             !----------------------------DAT and eigennumbers:
-            !REAL*4 DAT(currentDims%ITOT, 3)
+            !REAL*4 DAT(gCurrentDims%ITOT, 3)
             !  DAT(:, 1)=DAT
             !  DAT(:, 2)=AKL
             !  DAT(:, 3)=AKLI
@@ -555,7 +552,7 @@ module ModelModule
             !  G1(:, 3)=G3
 
             !-----------------------------Trig work space; TMP=WRK(IBIG+1):
-            !REAL*4 WRK(currentDims%IBIG + LYD)
+            !REAL*4 WRK(gCurrentDims%IBIG + LYD)
             
             !----------------------------TRX, TRY in TRX(ITRXD+ITRYD)
             !REAL*4 TRX(ITRXD + ITRYD)
@@ -574,10 +571,10 @@ module ModelModule
             IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) THEN
                 !-----------------Compute waves at level "N" based upon structures and PSB:
                 DO N = 1, gModIntParams%NLEV
-                    DO K = gModIntParams%LMAX2 + 1, currentDims%ITOT, 2
+                    DO K = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT, 2
                         L = K + 1
-                        horzArr%PS(K, N) = horzArr%GQ(K, N) * horzArr%PSB(K) + horzArr%GQ(L, N) * horzArr%PSB(L) + horzArr%PSB(K)
-                        horzArr%PS(L, N) = horzArr%GQ(K, N) * horzArr%PSB(L) - horzArr%GQ(L, N) * horzArr%PSB(K) + horzArr%PSB(L)
+                        gHorzArr%PS(K, N) = gHorzArr%GQ(K, N) * gHorzArr%PSB(K) + gHorzArr%GQ(L, N) * gHorzArr%PSB(L) + gHorzArr%PSB(K)
+                        gHorzArr%PS(L, N) = gHorzArr%GQ(K, N) * gHorzArr%PSB(L) - gHorzArr%GQ(L, N) * gHorzArr%PSB(K) + gHorzArr%PSB(L)
                     END DO
                 END DO
             ENDIF
@@ -590,30 +587,30 @@ module ModelModule
             !  Then we do the iterative proceedure to compute omega.
             !  Lastly we get the tendency for the streamfunction at each level.
             !----------------------------------------Compute indices:
-            ITY = currentDims%ITRXD + 1
+            ITY = gCurrentDims%ITRXD + 1
 
             !----------------------------------------Compute Orographic influence:
-            CALL NONLIN(horzArr%ADO, horzArr%PS(:, 1), horzArr%TOP)
+            CALL NONLIN(gHorzArr%ADO, gHorzArr%PS(:, 1), gHorzArr%TOP)
 
             !---------------------------------------------Normalize by AKL:
             ! This is needed since the d(del**2(PS))/dt = -J(PS, TOP) + other terms including further jacobians. The del-squared operation gives the AKL factor
             ! dPS(k,l)/dt = -ADO(k,l)/AKL(k,l) where ADO = J(PS,TOP)
             ! ADO is the tendency due to orography 
-            DO I = 1, currentDims%ITOT
-                horzArr%ADO(I) = -horzArr%AKLI(I) * horzArr%ADO(I)
+            DO I = 1, gCurrentDims%ITOT
+                gHorzArr%ADO(I) = -gHorzArr%AKLI(I) * gHorzArr%ADO(I)
             END DO
 
             !-----------------------------------------Compute vorticity advection:
             DO N = 1, gModIntParams%NLEV
                 !----------------------------------------Compute vorticity:
-                DO I = 1, currentDims%ITOT
-                    buffer(I) = -horzArr%AKL(I) * horzArr%PS(I, N)
+                DO I = 1, gCurrentDims%ITOT
+                    buffer(I) = -gHorzArr%AKL(I) * gHorzArr%PS(I, N)
                 END DO
-                CALL NONLIN(horzArr%ADS(:, N), horzArr%PS(:, N), buffer)
+                CALL NONLIN(gHorzArr%ADS(:, N), gHorzArr%PS(:, N), buffer)
 
                 !---------------------------------------------Normalize by AKL:
-                DO I = 1, currentDims%ITOT
-                    horzArr%ADS(I, N) = horzArr%ADS(I, N) * horzArr%AKLI(I)
+                DO I = 1, gCurrentDims%ITOT
+                    gHorzArr%ADS(I, N) = gHorzArr%ADS(I, N) * gHorzArr%AKLI(I)
                 END DO
             END DO
 
@@ -624,10 +621,10 @@ module ModelModule
                 DO K = 1, gModIntParams%KMAX2
                     R = BRN * REAL(K)
                     DO L = 1,  gModIntParams%LMAX2
-                        R1 = R * horzArr%AKLI(I)
+                        R1 = R * gHorzArr%AKLI(I)
                         DO N = 1, gModIntParams%NLEV
-                            horzArr%ADS(I, N) = horzArr%ADS(I, N) + R1 * horzArr%PS(I + 1, N)
-                            horzArr%ADS(I + 1, N) = horzArr%ADS(I + 1, N) - R1 * horzArr%PS(I, N)
+                            gHorzArr%ADS(I, N) = gHorzArr%ADS(I, N) + R1 * gHorzArr%PS(I + 1, N)
+                            gHorzArr%ADS(I + 1, N) = gHorzArr%ADS(I + 1, N) - R1 * gHorzArr%PS(I, N)
                         END DO
                     I = I + 2
                     END DO
@@ -641,8 +638,8 @@ module ModelModule
 
             !-----------------------------------Barotropic computation:
             IF(gModIntParams%NLEV .EQ. 1) THEN
-                DO I = 1, currentDims%ITOT
-                    horzArr%FS(I, 1) = horzArr%ADS(I, 1) + horzArr%ADO(I) + horzArr%S(I, 1)
+                DO I = 1, gCurrentDims%ITOT
+                    gHorzArr%FS(I, 1) = gHorzArr%ADS(I, 1) + gHorzArr%ADO(I) + gHorzArr%S(I, 1)
                 END DO
                 RETURN
             ENDIF
@@ -650,34 +647,34 @@ module ModelModule
             !---------------------------------------------Compute temperature advection:
             DO N = 1,  gModIntParams%NLEV - 1
                 !-----------------------------------Compute strm and temp at temperature level:
-                DO I = 1, currentDims%ITOT
-                    buffer(I) = (horzArr%PS(I, N) + horzArr%PS(I, N + 1)) / 2.
-                    horzArr%TH(I, N) = (horzArr%PS(I, N + 1) - horzArr%PS(I, N)) / 2.
+                DO I = 1, gCurrentDims%ITOT
+                    buffer(I) = (gHorzArr%PS(I, N) + gHorzArr%PS(I, N + 1)) / 2.
+                    gHorzArr%TH(I, N) = (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N)) / 2.
                 END DO
-                CALL NONLIN(horzArr%ADT(:, N), buffer, horzArr%TH(:, N))
+                CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
                 !CALL NONLIN(PS(:, N, 10), buffer, PS(:, N, 2), G1(:, 1), G1(:, 2), G1(:,3), RML, WRK, TRX, &
-                !            TRX(ITY), WRK(ITMP), I1M, INTC(:, 3), INTC(:, 4), currSettings, currentDims)
+                !            TRX(ITY), WRK(ITMP), I1M, INTC(:, 3), INTC(:, 4), currSettings, gCurrentDims)
                 !----------------------------------------Negate ADT to make warm adv pos:
-                DO I = 1, currentDims%ITOT
-                    horzArr%ADT(I, N) = -horzArr%ADT(I, N)
+                DO I = 1, gCurrentDims%ITOT
+                    gHorzArr%ADT(I, N) = -gHorzArr%ADT(I, N)
                 END DO
             END DO
             !----------------------------------------Compute diabatic temp terms:
             call TTERMS()
 
             !-----------------------------------------------Compute Omega for NLEV>1:
-            K = currentDims%ITOT
+            K = gCurrentDims%ITOT
 
             !------------------------------If modelType=ZONAL_MEAN_FLOW set all I-terms>LMAX2 to zero:
             IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW)THEN
                 K = gModIntParams%LMAX2
                 DO N = 1, gModIntParams%NLEV
-                    DO I = K + 1, currentDims%ITOT
-                        horzArr%WW(I, N) = 0.
-                        horzArr%FS(I, N) = 0.
-                        horzArr%WS(I, N) = 0.
-                        horzArr%FT(I, N) = 0.
-                        horzArr%WT(I, N) = 0.
+                    DO I = K + 1, gCurrentDims%ITOT
+                        gHorzArr%WW(I, N) = 0.
+                        gHorzArr%FS(I, N) = 0.
+                        gHorzArr%WS(I, N) = 0.
+                        gHorzArr%FT(I, N) = 0.
+                        gHorzArr%WT(I, N) = 0.
                    END DO
                 END DO
             ENDIF
@@ -701,49 +698,49 @@ module ModelModule
             !beta(n) = 1/(2*a**2 * P(n+1)) = gamma(n+1)
 
             DO I = 1, K
-                AX = horzArr%AKLI(I) / 2.   ! AKLI(i) is the invers
-                GMN1 = vertArr%DPI(1) * AX  ! DPI(maxLevels)=1./(PP(N-1)-PP(N)) is the inverse of the layer thickness
-                GMN = vertArr%DPI(2) * AX
-                R = GMN + GMN1 + vertArr%SIG(1)
-                C2 = horzArr%S(I, 2) + horzArr%ADS(I, 2)
+                AX = gHorzArr%AKLI(I) / 2.   ! AKLI(i) is the invers
+                GMN1 = gVertArr%DPI(1) * AX  ! DPI(maxLevels)=1./(PP(N-1)-PP(N)) is the inverse of the layer thickness
+                GMN = gVertArr%DPI(2) * AX
+                R = GMN + GMN1 + gVertArr%SIG(1)
+                C2 = gHorzArr%S(I, 2) + gHorzArr%ADS(I, 2)
                 !-----------------------------------------------Add orography at bottom level:
-                C1 = horzArr%S(I, 1) + horzArr%ADS(I, 1) + horzArr%ADO(I)
-                C = horzArr%ADT(I, 1) + horzArr%T(I, 1) + (C1 - C2) / 2.
-                vertArr%X(1)  = GMN / R
-                vertArr%Y(1) = -C / R
+                C1 = gHorzArr%S(I, 1) + gHorzArr%ADS(I, 1) + gHorzArr%ADO(I)
+                C = gHorzArr%ADT(I, 1) + gHorzArr%T(I, 1) + (C1 - C2) / 2.
+                gVertArr%X(1)  = GMN / R
+                gVertArr%Y(1) = -C / R
                 !-----------------------------------------------Iterative loop for NLEV>2
                 DO N = 2, gModIntParams%NLEV - 1
                     GMN1 = GMN
-                    GMN = vertArr%DPI(N + 1) * AX
-                    R = (GMN + GMN1 * (1. - vertArr%X(N - 1)) + vertArr%SIG(N))
+                    GMN = gVertArr%DPI(N + 1) * AX
+                    R = (GMN + GMN1 * (1. - gVertArr%X(N - 1)) + gVertArr%SIG(N))
                     C1 = C2
-                    C2 = horzArr%S(I, N + 1) + horzArr%ADS(I, N + 1)
-                    C = horzArr%ADT(I, N) + horzArr%T(I, N) + (C1 - C2) / 2.
-                    vertArr%X(N) = GMN / R
-                    vertArr%Y(N) = (GMN1 * vertArr%Y(N - 1) -C) / R
+                    C2 = gHorzArr%S(I, N + 1) + gHorzArr%ADS(I, N + 1)
+                    C = gHorzArr%ADT(I, N) + gHorzArr%T(I, N) + (C1 - C2) / 2.
+                    gVertArr%X(N) = GMN / R
+                    gVertArr%Y(N) = (GMN1 * gVertArr%Y(N - 1) -C) / R
                 END DO
                 !------------------------------------Upper boundary to compute WW(NLEV-1):
-                horzArr%WW(I, gModIntParams%NLEV - 1) = vertArr%Y(gModIntParams%NLEV - 1)
+                gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
                 !-------------------------------------Strm tendency due to omega:
-                horzArr%WS(I, gModIntParams%NLEV) = -horzArr%WW(I, gModIntParams%NLEV - 1) * horzArr%AKLI(I) * vertArr%DPI(gModIntParams%NLEV)
+                gHorzArr%WS(I, gModIntParams%NLEV) = -gHorzArr%WW(I, gModIntParams%NLEV - 1) * gHorzArr%AKLI(I) * gVertArr%DPI(gModIntParams%NLEV)
                 !------------------------------------Compute top level strm tendency:
-                horzArr%FS(I, gModIntParams%NLEV) = horzArr%ADS(I, gModIntParams%NLEV) + horzArr%WS(I, gModIntParams%NLEV) + horzArr%S(I, gModIntParams%NLEV)
+                gHorzArr%FS(I, gModIntParams%NLEV) = gHorzArr%ADS(I, gModIntParams%NLEV) + gHorzArr%WS(I, gModIntParams%NLEV) + gHorzArr%S(I, gModIntParams%NLEV)
                 !-----------------------------------------------Compute WW(N) for NLEV>2
                 DO NT = 2, gModIntParams%NLEV - 1
                     N = gModIntParams%NLEV - NT
                     NP = N + 1
-                    horzArr%WW(I, N) = vertArr%X(N) * horzArr%WW(I, NP) + vertArr%Y(N)
+                    gHorzArr%WW(I, N) = gVertArr%X(N) * gHorzArr%WW(I, NP) + gVertArr%Y(N)
                     !-----------------------------------------Intermediate ws, strm tendencies:
-                    horzArr%WS(I, NP) = -(horzArr%WW(I, N) - horzArr%WW(I, NP)) * vertArr%DPI(NP) * horzArr%AKLI(I)
-                    horzArr%FS(I, NP) = horzArr%ADS(I, NP) + horzArr%WS(I, NP) + horzArr%S(I, NP)
+                    gHorzArr%WS(I, NP) = -(gHorzArr%WW(I, N) - gHorzArr%WW(I, NP)) * gVertArr%DPI(NP) * gHorzArr%AKLI(I)
+                    gHorzArr%FS(I, NP) = gHorzArr%ADS(I, NP) + gHorzArr%WS(I, NP) + gHorzArr%S(I, NP)
                 END DO
                 !----------------------------------Lower level strm tendency (with orography):
-                horzArr%WS(I, 1) = horzArr%WW(I, 1) * vertArr%DPI(1) * horzArr%AKLI(I)
-                horzArr%FS(I, 1) = horzArr%ADS(I, 1) + horzArr%ADO(I) + horzArr%WS(I, 1) + horzArr%S(I,1)
+                gHorzArr%WS(I, 1) = gHorzArr%WW(I, 1) * gVertArr%DPI(1) * gHorzArr%AKLI(I)
+                gHorzArr%FS(I, 1) = gHorzArr%ADS(I, 1) + gHorzArr%ADO(I) + gHorzArr%WS(I, 1) + gHorzArr%S(I,1)
                 !-----------------------------------Load temperature arrays for diagnostics:
                 DO N = 1, gModIntParams%NLEV - 1
-                    horzArr%WT(I, N) = vertArr%SIG(N) * horzArr%WW(I, N)
-                    horzArr%FT(I, N) = horzArr%ADT(I, N) + horzArr%WT(I, N) + horzArr%T(I, N)
+                    gHorzArr%WT(I, N) = gVertArr%SIG(N) * gHorzArr%WW(I, N)
+                    gHorzArr%FT(I, N) = gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
                 END DO
             END DO
 
@@ -779,10 +776,10 @@ module ModelModule
         !  PS(:, N, 14) = ADO
         !  PS(:, N, 15) = TOP
 
-        !CALL NONLIN(PS(:,1,14), PS(:,1,1), PS(:,1,15),   G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, currentDims)
-        !CALL NONLIN(PS(:,N,6),  PS(:,N,1), DAT,          G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, currentDims)
-        !CALL NONLIN(PS(:,N,10), DAT,       PS(:,N,2),    G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, currentDims)
-  !SUBROUTINE NONLIN(FS,         A,         B,            G1,      G2,      G3,      RML, WRK, TRX, TRY,      TMP,       I1M, JIN,       KIN,       currSettings, currentDims)
+        !CALL NONLIN(PS(:,1,14), PS(:,1,1), PS(:,1,15),   G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
+        !CALL NONLIN(PS(:,N,6),  PS(:,N,1), DAT,          G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
+        !CALL NONLIN(PS(:,N,10), DAT,       PS(:,N,2),    G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
+  !SUBROUTINE NONLIN(FS,         A,         B,            G1,      G2,      G3,      RML, WRK, TRX, TRY,      TMP,       I1M, JIN,       KIN,       currSettings, gCurrentDims)
         
         !> Routine to compute the nonlinear Jacobian FS = J(A,B)
         !! @param FS The spectral form of the computed Jacobian
@@ -792,8 +789,8 @@ module ModelModule
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, FORWARD_TRANSFORM
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, SQRT2, SQRT22
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: horzArr, G1_pool
-            use InteractionCoefficientsModule, only: cintArr
+            use ModelFieldsModule, only: gHorzArr, G1_pool
+            use InteractionCoefficientsModule, only: gCintArr
             use NlevelQGModelGlobals, only: LogMessage
             !use FFT991Module, only: FFT991
 
@@ -847,29 +844,29 @@ module ModelModule
             !  ----------------------------------------In ModelParamsModule
             !  SQRT2, SQRT22=The square root of two and SQRT2/2.
             !  modRealParam%RN = The wavenumber
-            ! ----------------------------------------In currentDims of ArrayDimensionsModule we find
+            ! ----------------------------------------In gCurrentDims of ArrayDimensionsModule we find
             !  KX=The dimension of the grid point arrays in x:
             !  IXMAX=The number of grid points in x: IXMAX+2=KX
             !  IYMAX=The number of grid points in y: IYMAX+2=KY
             !  IFX(13),IFY(13)=The factors arrays for FFT991
 
             !-----------------------  Grid point arrays used in the transform integration
-            !REAL :: G1(currentDims%KX, currentDims%LY), G2(currentDims%KX, currentDims%LY), G3(currentDims%KX, currentDims%LY), TMP(currentDims%LY)
+            !REAL :: G1(gCurrentDims%KX, gCurrentDims%LY), G2(gCurrentDims%KX, gCurrentDims%LY), G3(gCurrentDims%KX, gCurrentDims%LY), TMP(gCurrentDims%LY)
 
             !  Arrays containing the spectral strmfunction and topographic components
-            !REAL:: A(currentDims%ITOT), B(currentDims%ITOT)
+            !REAL:: A(gCurrentDims%ITOT), B(gCurrentDims%ITOT)
 
             !  Arrays for the time integration scheme used here to store nonlinear terms
-            !REAL :: FS(currentDims%ITOT)
+            !REAL :: FS(gCurrentDims%ITOT)
 
             !  Arrays for the pre computation of the trig functions for FFT991
-            !REAL :: WRK(currentDims%KX * currentDims%LY), TRX(1), TRY(1)
+            !REAL :: WRK(gCurrentDims%KX * gCurrentDims%LY), TRX(1), TRY(1)
 
             !  Arrays for the analytical re-expression of the sinly to cosly components (needed in InverseTransform).
             !REAL :: RML(2 * maxMeridWaves + 1, maxMeridWaves)
 
             !-------------------------------------Interaction coefficient arrays:
-            !INTEGER*2 cintArr%I1M(1), cintArr%JIN(1), cintArr%KIN(1)
+            !INTEGER*2 gCintArr%I1M(1), gCintArr%JIN(1), gCintArr%KIN(1)
 
             !------------------------------------------------Other variables:
             INTEGER index
@@ -889,14 +886,14 @@ module ModelModule
                 !  JIN, KIN is the L, K index and C is the interaction coefficient
                 !
                 index = 1
-                DO I = 1, currentDims%ITOT
+                DO I = 1, gCurrentDims%ITOT
                     FS(I) = 0.
                     !----------------------------------- Advection terms:
-                    DO II = 1, cintArr%I1M(I)
-                        L = cintArr%JIN(index)
-                        K = cintArr%KIN(index)
-                        FS(I) = FS(I) + cintArr%CINT(index) * (B(K) * A(L) - B(L) * A(K))
-                        write(msg, '(A, I4, A, F9.6, 1X, A, I4, A, I4, 1x, I4)') 'I: ', I, ' coef: ', cintArr%CINT(INDEX), ' index: ', index, ' K, L: ', K, L
+                    DO II = 1, gCintArr%I1M(I)
+                        L = gCintArr%JIN(index)
+                        K = gCintArr%KIN(index)
+                        FS(I) = FS(I) + gCintArr%CINT(index) * (B(K) * A(L) - B(L) * A(K))
+                        write(msg, '(A, I4, A, F9.6, 1X, A, I4, A, I4, 1x, I4)') 'I: ', I, ' coef: ', gCintArr%CINT(INDEX), ' index: ', index, ' K, L: ', K, L
                         call LogMessage(msg)
                         index = index + 1
                     END DO
@@ -918,7 +915,7 @@ module ModelModule
         !! @param B The second term in the Jacobian
         SUBROUTINE ComputeJacobianByTransform(FS, A, B)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: horzArr
+            use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams
             use Fftw3HelpersModule
 
@@ -948,10 +945,10 @@ module ModelModule
             ! ================ dB/dy is now in G2
 
             ! 3. Multiply G2 * G1 pointwise. Store in G4. G4 now has dA/dx * dB/dy in grid point space.
-            horzArr%G4 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%G4(K, L) = horzArr%G1(K, L) * horzArr%G2(K, L)
+            gHorzArr%G4 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%G4(K, L) = gHorzArr%G1(K, L) * gHorzArr%G2(K, L)
                 end do
             end do
             ! ================================ G4 now has dA/dx * dB/dy in grid point space.
@@ -968,16 +965,16 @@ module ModelModule
             ! ================ dA/dy is now in G2
 
             ! 6. Multiply G1 * G2 pointwise. Store in G3. G3 now has dA/dy * dB/x in grid point space.
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%G3(K, L) = horzArr%G1(K, L) * horzArr%G2(K, L)
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%G3(K, L) = gHorzArr%G1(K, L) * gHorzArr%G2(K, L)
                 end do
             end do
 
             ! 7. Subtract G3 from G4 pointwise. Store in G4. G4 now has J(A,B) in grid point space.
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%G4(K, L) = horzArr%G4(K, L) - horzArr%G3(K, L)
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%G4(K, L) = gHorzArr%G4(K, L) - gHorzArr%G3(K, L)
                 end do
             end do
 
@@ -985,62 +982,62 @@ module ModelModule
             ! ========================== G4 now has the tendencies due to J(A,B) in grid point space.
             ! Next step is to transform the tendencies back to spectral space.
             ! Get the cosly components. We do this by first computing the zonal average of G4 and
-            ! placing it in horzArr%GZonal and taking the inverse transform with plan_y_FFTW_REDFT10
+            ! placing it in gHorzArr%GZonal and taking the inverse transform with plan_y_FFTW_REDFT10
             ! We also need to remove the zonal average from the grid point data before we do the wave transforms.
             FS = 0.0    ! Zero the output tendency array
             ! Compute the zonal average:
-            horzArr%GZonal = 0.0
-            inverseValue = 1.0 / REAL(currentDims%IXMAX)    ! Divisions are expensive so we create the inverse and muliply in the loop
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%GZonal(L) = horzArr%GZonal(L) + horzArr%G4(K, L)
+            gHorzArr%GZonal = 0.0
+            inverseValue = 1.0 / REAL(gCurrentDims%IXMAX)    ! Divisions are expensive so we create the inverse and muliply in the loop
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%GZonal(L) = gHorzArr%GZonal(L) + gHorzArr%G4(K, L)
                 end do
-                horzArr%GZonal(L) = horzArr%GZonal(L) * inverseValue
+                gHorzArr%GZonal(L) = gHorzArr%GZonal(L) * inverseValue
             end do
             ! Remove the zonal average from G4 while we still have it in GZonal
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%G4(K, L) = horzArr%G4(K, L) - horzArr%GZonal(L)
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%G4(K, L) = gHorzArr%G4(K, L) - gHorzArr%GZonal(L)
                 end do
             end do
             ! Now do the inverse transform of the zonal profile
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT10, horzArr%GZonal, horzArr%GZonal)
-            ! horzArr%GZonal[1] is the background average and we do not use it so the model spectral coeffs start at
-            ! horzArr%GZonal[2]. Thus we load FS[1 : currentDims%LMAX2] with horzArr%GZonal[2 : currentDims%LMAX2 + 1]
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gHorzArr%GZonal, gHorzArr%GZonal)
+            ! gHorzArr%GZonal[1] is the background average and we do not use it so the model spectral coeffs start at
+            ! gHorzArr%GZonal[2]. Thus we load FS[1 : gCurrentDims%LMAX2] with gHorzArr%GZonal[2 : gCurrentDims%LMAX2 + 1]
             ! By our grid point size definition IYMAX = 3*LMAX2 + 1 we will not step out of bounds. We normalize by norm_inv_cosly
             ! as we make the copy
-            FS(1 : gModIntParams%LMAX2) = horzArr%GZonal(2 : gModIntParams%LMAX2 + 1) * norm_inv_cosly
+            FS(1 : gModIntParams%LMAX2) = gHorzArr%GZonal(2 : gModIntParams%LMAX2 + 1) * norm_inv_cosly
 
             ! Now to tranform the wave parts back to spectral space. Part one is to transform the sinly part
-            DO K = 1, currentDims%IXMAX
+            DO K = 1, gCurrentDims%IXMAX
                 ! Do the sinly transform 
-                call fftwf_execute_r2r(plan_y_FFTW_RODFT10, horzArr%G4(K, :), horzArr%G4(K, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gHorzArr%G4(K, :), gHorzArr%G4(K, :))
             END DO
             ! Now transform the periodic x part. Again we use a complex one-d array for each transform
             I = gModIntParams%LMAX2 + 1 ! Skip the cosly tendencies which we have already loaded into FS
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                horzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                call fftwf_execute_dft_r2C(plan_x_r2c_1d, horzArr%G4(:, L), horzArr%Gc)
-                ! The output in horzArr%Gc now has the complex spectral coefficients coskx, isinkx for k=0 to k = KX/2 for the sinLy component
+                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                call fftwf_execute_dft_r2C(plan_x_r2c_1d, gHorzArr%G4(:, L), gHorzArr%Gc)
+                ! The output in gHorzArr%Gc now has the complex spectral coefficients coskx, isinkx for k=0 to k = KX/2 for the sinLy component
                 ! Since we are only interested in the k wavenumber to KMAX2, (IXMAX + 2)/2 > KMAX2 we can just copy over what we need
                 ! However, we need to normalize by 'norm_inv_wave'
                 DO K = 2, gModIntParams%KMAX2 + 1
-                    FS(I) = REAL(horzArr%Gc(K)) * norm_inv_wave    ! Load cosknxsinly components
+                    FS(I) = REAL(gHorzArr%Gc(K)) * norm_inv_wave    ! Load cosknxsinly components
                     I = I + 1
-                    FS(I) = AIMAG(horzArr%Gc(K)) * norm_inv_wave    ! Load sinknxsinly components
+                    FS(I) = AIMAG(gHorzArr%Gc(K)) * norm_inv_wave    ! Load sinknxsinly components
                     I = I + 1
                 END DO
             END DO
 
         end subroutine ComputeJacobianByTransform
 
-        !> Does the transform of the d/dx part of the Jacobian calculation. The result is placed in horzArr%G1.
+        !> Does the transform of the d/dx part of the Jacobian calculation. The result is placed in gHorzArr%G1.
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         !!          Since this is the d/dx part of the Jacobian calculation the az(l) derivative is 0.
         subroutine DoDADX(A)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: horzArr
+            use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModRealParams, gModIntParams
             use Fftw3HelpersModule
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
@@ -1058,36 +1055,36 @@ module ModelModule
             !                                                  and B(k,l) = 2*(bc(k,l)*cosknx + bs(k,l)*sinknx)sinly + sqrt(2)*bz(l)*cosly
 
             ! 1. Load -2*k*n*ac(k,l)sinknxsinly and 2*k*n*as(k,l)cosknxsinly into the imaginary and real parts of Gc for each L
-            horzArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
+            gHorzArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             temp_calc = 2. * gModRealParams%RN * norm_fwd ! Do the normalization first so we dont have to normalize after the transform
                                                          ! The FFT991 routine is such in two dimensions that to get the correct data
                                                          ! points for PS(K,L)*2*cos(kx)sin(ly) we have to divide by 2. So here we have
                                                          ! to multiply by 2.
             I = gModIntParams%LMAX2
             DO L = 1, gModIntParams%LMAX2
-                horzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
                 DO K = 1, gModIntParams%KMAX2
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    horzArr%Gc(K + 1) = CMPLX( temp_calc * REAL(K) * A(I + 1), & ! as(k,l) cosknxsinly part
+                    gHorzArr%Gc(K + 1) = CMPLX( temp_calc * REAL(K) * A(I + 1), & ! as(k,l) cosknxsinly part
                                              -temp_calc * REAL(K) * A(I), &     ! ac(k,l) sinknxsinly part
                                              kind=C_FLOAT_COMPLEX)
                     I = I + 2
                 END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, horzArr%Gc, horzArr%G1(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1(:, L))
             END DO
             ! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
-            DO I = 1, currentDims%IYMAX
+            DO I = 1, gCurrentDims%IYMAX
                 ! Pass the column slice directly
-                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, horzArr%G1(I, :), horzArr%G1(I, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G1(I, :), gHorzArr%G1(I, :))
             END DO
             ! dA/dx is now in G1
         end subroutine DoDADX
 
-        !> Does the transform of the d/dy part of the Jacobian calculation. The result is placed in horzArr%G2.
+        !> Does the transform of the d/dy part of the Jacobian calculation. The result is placed in gHorzArr%G2.
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         subroutine DODADY(A)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: horzArr
+            use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModRealParams, gModIntParams, SQRT2
             use Fftw3HelpersModule
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
@@ -1106,39 +1103,39 @@ module ModelModule
             !                                                  and B(k,l) = 2*(bc(k,l)*cosknx + bs(k,l)*sinknx)sinly + sqrt(2)*bz(l)*cosly
 
             ! 1. Load  2*l*ac(k,l)cosknxcosly and 2*l*as(k,l)sinknxcosly into the real and imaginary parts of Gc for each L
-            horzArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            gHorzArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
             I = gModIntParams%LMAX2
             DO L = 1, gModIntParams%LMAX2
-                horzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
                 temp_calc = 2. * REAL(L) * norm_fwd ! Do the normalization first so we dont have to normalize after the transform
                 DO K = 1, gModIntParams%KMAX2
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    horzArr%Gc(K + 1) = CMPLX( temp_calc * A(I), &     ! ac(k,l) cosknxcosly part
+                    gHorzArr%Gc(K + 1) = CMPLX( temp_calc * A(I), &     ! ac(k,l) cosknxcosly part
                                                temp_calc * A(I + 1), &  ! as(k,l) sinknxcosly part
                                              kind=C_FLOAT_COMPLEX)
                     I = I + 2
                 END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, horzArr%Gc, horzArr%G2(:, L + 1)) ! Need to ignore the cos(0)y part. We do not have it.
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G2(:, L + 1)) ! Need to ignore the cos(0)y part. We do not have it.
             END DO
             ! 2. Now transform the cosly part which is bounded and uses r2r transforms column by column
-            DO I = 1, currentDims%IYMAX
+            DO I = 1, gCurrentDims%IYMAX
                 ! Pass the column slice directly
-                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, horzArr%G2(I, :), horzArr%G2(I, :))
+                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G2(I, :), gHorzArr%G2(I, :))
             END DO
 
             ! 3. Zonal components: Load   -l*sqrt(2)*az(l)sinly into GZonal
-            horzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
             temp_calc = -SQRT2 * norm_sinly
             do L = 2, gModIntParams%LMAX2 + 1
-                horzArr%GZonal(L) = -REAL(L - 1) * temp_calc * A(L - 1)  ! A(l) contains az(l) for cosly
+                gHorzArr%GZonal(L) = -REAL(L - 1) * temp_calc * A(L - 1)  ! A(l) contains az(l) for cosly
             end do
             ! Do transform: 
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, horzArr%GZonal, horzArr%GZonal)
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%GZonal, gHorzArr%GZonal)
 
             ! 17. Add GZonal to G1 for every x. G1 now has dA/dy in gridpoint space.
-            do L = 1, currentDims%IYMAX
-                DO K = 1, currentDims%IXMAX
-                    horzArr%G2(K, L) = horzArr%G2(K, L) + horzArr%GZonal(L)
+            do L = 1, gCurrentDims%IYMAX
+                DO K = 1, gCurrentDims%IXMAX
+                    gHorzArr%G2(K, L) = gHorzArr%G2(K, L) + gHorzArr%GZonal(L)
                 end do
             end do
             ! ================ dA/dy is now in G2
@@ -1148,7 +1145,7 @@ module ModelModule
         ! CALL STERMS(PS,S,SF,DP,FK,FJ)
         SUBROUTINE STERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
-            use ModelFieldsModule, only: horzArr, vertArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr
             use ArrayDimensionsModule
             
             implicit none
@@ -1161,24 +1158,24 @@ module ModelModule
             INTEGER I, N
             !----------------------------------------Compute diabatic strm terms:
             DO N = 1, gModIntParams%NLEV
-                DO I = 1, currentDims%ITOT
+                DO I = 1, gCurrentDims%ITOT
                     !----------------------------------Weighted mixing scheme:
                     IF (N == 1) THEN
-                        R1 = 2.0 * vertArr%DP(2) / (vertArr%DP(1) + vertArr%DP(2))
-                        DPS = vertArr%FJ(1) * R1 * (horzArr%PS(I, 2) - horzArr%PS(I, 1))
+                        R1 = 2.0 * gVertArr%DP(2) / (gVertArr%DP(1) + gVertArr%DP(2))
+                        DPS = gVertArr%FJ(1) * R1 * (gHorzArr%PS(I, 2) - gHorzArr%PS(I, 1))
 
                     ELSE IF (N == gModIntParams%NLEV) THEN
-                        R1 = 2.0 * vertArr%DP(N - 1) / (vertArr%DP(N - 1) + vertArr%DP(N))
-                        DPS = vertArr%FJ(N - 1) * R1 * (horzArr%PS(I, N - 1) - horzArr%PS(I, N))
+                        R1 = 2.0 * gVertArr%DP(N - 1) / (gVertArr%DP(N - 1) + gVertArr%DP(N))
+                        DPS = gVertArr%FJ(N - 1) * R1 * (gHorzArr%PS(I, N - 1) - gHorzArr%PS(I, N))
 
                     ELSE
-                        R1 = 2.0 * vertArr%DP(N + 1) / (vertArr%DP(N + 1) + vertArr%DP(N))
-                        DPS = vertArr%FJ(N) * R1 * (horzArr%PS(I, N + 1) - horzArr%PS(I, N))
+                        R1 = 2.0 * gVertArr%DP(N + 1) / (gVertArr%DP(N + 1) + gVertArr%DP(N))
+                        DPS = gVertArr%FJ(N) * R1 * (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N))
 
-                        R1 = 2.0 * vertArr%DP(N - 1) / (vertArr%DP(N - 1) + vertArr%DP(N))
-                        DPS = DPS + vertArr%FJ(N - 1) * R1 * (horzArr%PS(I, N - 1) - horzArr%PS(I, N))
+                        R1 = 2.0 * gVertArr%DP(N - 1) / (gVertArr%DP(N - 1) + gVertArr%DP(N))
+                        DPS = DPS + gVertArr%FJ(N - 1) * R1 * (gHorzArr%PS(I, N - 1) - gHorzArr%PS(I, N))
                     END IF
-                    horzArr%S(I, N) = vertArr%FK(N) * (horzArr%SF(I, N) - horzArr%PS(I, N)) + DPS
+                    gHorzArr%S(I, N) = gVertArr%FK(N) * (gHorzArr%SF(I, N) - gHorzArr%PS(I, N)) + DPS
                 END DO
             END DO
         END subroutine STERMS
@@ -1187,7 +1184,7 @@ module ModelModule
         !SUBROUTINE TTERMS(TH, T, TF, PV, AU, H, G, currSettings)
         SUBROUTINE TTERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
-            use ModelFieldsModule, only: horzArr, vertArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr
             use ArrayDimensionsModule
 
             
@@ -1200,26 +1197,26 @@ module ModelModule
             
             DTH = 0.0
             DO N = 1, gModIntParams%NLEV - 1
-                DO I = 1, currentDims%ITOT
+                DO I = 1, gCurrentDims%ITOT
                     !-----------------------------------Weighted temperature mixing:
                     if (gModIntParams%NLEV > 2) Then
                         IF (N == 1) THEN
-                            R1 = 2.0 * (vertArr%PV(2) - vertArr%PV(3)) / (vertArr%PV(1) - vertArr%PV(3))
-                            DTH = vertArr%G(1) * R1 * (horzArr%TH(I, 2) * vertArr%AU(1) - horzArr%TH(I, 1))
+                            R1 = 2.0 * (gVertArr%PV(2) - gVertArr%PV(3)) / (gVertArr%PV(1) - gVertArr%PV(3))
+                            DTH = gVertArr%G(1) * R1 * (gHorzArr%TH(I, 2) * gVertArr%AU(1) - gHorzArr%TH(I, 1))
 
                         ELSE IF (N == gModIntParams%NLEV - 1) THEN
-                            R1 = 2.0 * (vertArr%PV(N - 1) - vertArr%PV(N)) / (vertArr%PV(N - 1) - vertArr%PV(N + 1))
-                            DTH = vertArr%G(N - 1) * R1 * (horzArr%TH(I, N - 1) / vertArr%AU(N - 1) - horzArr%TH(I, N))
+                            R1 = 2.0 * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
+                            DTH = gVertArr%G(N - 1) * R1 * (gHorzArr%TH(I, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(I, N))
 
                         ELSE
-                            R1 = 2.0 * (vertArr%PV(N + 1) - vertArr%PV(N + 2)) / (vertArr%PV(N) - vertArr%PV(N + 2))
-                            DTH = vertArr%G(N) * R1 * (vertArr%AU(N) * horzArr%TH(I,N+1) - horzArr%TH(I,N))
+                            R1 = 2.0 * (gVertArr%PV(N + 1) - gVertArr%PV(N + 2)) / (gVertArr%PV(N) - gVertArr%PV(N + 2))
+                            DTH = gVertArr%G(N) * R1 * (gVertArr%AU(N) * gHorzArr%TH(I,N+1) - gHorzArr%TH(I,N))
 
-                            R1 = 2.0 * (vertArr%PV(N - 1) - vertArr%PV(N)) / (vertArr%PV(N - 1) - vertArr%PV(N + 1))
-                            DTH = DTH + vertArr%G(N - 1) * R1 * (horzArr%TH(I, N - 1) / vertArr%AU(N - 1) - horzArr%TH(I, N))
+                            R1 = 2.0 * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
+                            DTH = DTH + gVertArr%G(N - 1) * R1 * (gHorzArr%TH(I, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(I, N))
                         END IF
                     ENDIF
-                    horzArr%T(I, N) = vertArr%H(N) * (horzArr%TF(I, N) - horzArr%TH(I, N)) + DTH
+                    gHorzArr%T(I, N) = gVertArr%H(N) * (gHorzArr%TF(I, N) - gHorzArr%TH(I, N)) + DTH
                 END DO
             END DO
         END subroutine TTERMS
@@ -1241,7 +1238,7 @@ module ModelModule
         ! SUBROUTINE InverseTransform(G3, WRK, TRY, TRX, IFX, IFY, KX, gModIntParams%KMAX2, gModIntParams%LMAX2, IXMAX, IYMAX, RML)
         SUBROUTINE InverseTransform()
             use ConstantsModule, only: INVERSE_TRANSFORM
-            use ModelFieldsModule, only: horzArr, G3_pool
+            use ModelFieldsModule, only: gHorzArr, G3_pool
             use ModelParamsModule, only: gModIntParams
             use ArrayDimensionsModule
             !use FFT991Module, only: FFT991
@@ -1255,23 +1252,23 @@ module ModelModule
 
             ! Zero the tails of G3
             ! Flatten the two d array. For G(K, L) with KX max x, flat = K + (L - 1) * KX
-            ! K in this case is (currentDims%IXMAX + 1) for cos part and (currentDims%IXMAX + 2) for sin part
-            DO L = 1, currentDims%IYMAX + 2
-                horzArr%G3(currentDims%IXMAX + 1, L) = 0.
-                horzArr%G3(currentDims%IXMAX + 2, L) = 0.
+            ! K in this case is (gCurrentDims%IXMAX + 1) for cos part and (gCurrentDims%IXMAX + 2) for sin part
+            DO L = 1, gCurrentDims%IYMAX + 2
+                gHorzArr%G3(gCurrentDims%IXMAX + 1, L) = 0.
+                gHorzArr%G3(gCurrentDims%IXMAX + 2, L) = 0.
             END DO
 
-            DO K = 1, currentDims%IXMAX + 2
-                horzArr%G3(K, currentDims%IYMAX + 1) = 0.
-                horzArr%G3(K, currentDims%IYMAX + 2) = 0.
+            DO K = 1, gCurrentDims%IXMAX + 2
+                gHorzArr%G3(K, gCurrentDims%IYMAX + 1) = 0.
+                gHorzArr%G3(K, gCurrentDims%IYMAX + 2) = 0.
             END DO
 
             ! Y-Transform for all x rows
-            !CALL FFT991(horzArr%G3_1d, currentDims%KXLYD, horzArr%WRK, horzArr%TRY, currentDims%IFY, currentDims%KX, 1, currentDims%IYMAX, currentDims%IXMAX, INVERSE_TRANSFORM)
+            !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, INVERSE_TRANSFORM)
 
             ! X-Transform for all y components
             L2MAXR = 4 * gModIntParams%LMAX2 + 2
-            !CALL FFT991(horzArr%G3_1d, currentDims%KXLYD, horzArr%WRK, horzArr%TRX, currentDims%IFX, 1, currentDims%KX, currentDims%IXMAX, L2MAXR, INVERSE_TRANSFORM)
+            !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRX, gCurrentDims%IFX, 1, gCurrentDims%KX, gCurrentDims%IXMAX, L2MAXR, INVERSE_TRANSFORM)
             
             !
             !  Currently, G3 has the following components after the FFT991 call: 
@@ -1308,8 +1305,8 @@ module ModelModule
             DO K = 1, gModIntParams%KMAX2
                 KCOS = KCOS + 2
                 KSIN = KCOS + 1
-                horzArr%G3(KCOS, 1) = horzArr%G3(KCOS, 1) / 2.
-                horzArr%G3(KSIN, 1) = horzArr%G3(KSIN, 1) / 2.
+                gHorzArr%G3(KCOS, 1) = gHorzArr%G3(KCOS, 1) / 2.
+                gHorzArr%G3(KSIN, 1) = gHorzArr%G3(KSIN, 1) / 2.
             END DO
 
             !--------------------- The reprojection routine:
@@ -1332,9 +1329,9 @@ module ModelModule
                     MCOS = MCOS + 2
                     M1 = MOD(M - 1, 2) + 1
                     !-----------------------------------------  Get coskx cosy components:
-                    AA = horzArr%G3(KCOS, MCOS)
+                    AA = gHorzArr%G3(KCOS, MCOS)
                     !-----------------------------------------  Get sinkx cosy components:
-                    BA = horzArr%G3(KSIN, MCOS)
+                    BA = gHorzArr%G3(KSIN, MCOS)
                     DO L = M1, gModIntParams%LMAX2, 2
                         LSIN = 2 * L + 2
                         RL = REAL(L)
@@ -1345,8 +1342,8 @@ module ModelModule
                         !  The components we are interested in also are off by a factor of two, but the
                         !  pure zonal wave components are not (reached when MCOS=1) which is why we
                         !  divided these components by two in the loop above.  Are you confused?)
-                        horzArr%G3(KCOS, LSIN) = horzArr%G3(KCOS, LSIN) + AA * RL * horzArr%RML(M, L)
-                        horzArr%G3(KSIN, LSIN) = horzArr%G3(KSIN, LSIN) + BA * RL * horzArr%RML(M, L)
+                        gHorzArr%G3(KCOS, LSIN) = gHorzArr%G3(KCOS, LSIN) + AA * RL * gHorzArr%RML(M, L)
+                        gHorzArr%G3(KSIN, LSIN) = gHorzArr%G3(KSIN, LSIN) + BA * RL * gHorzArr%RML(M, L)
                     END DO
                 END DO
             END DO
@@ -1369,14 +1366,14 @@ module ModelModule
                 M1 = MOD(M, 2) + 1
                 RM = M
                 !---------------------------------------------------  Get the sinly component:
-                BA = horzArr%G3(1, MSIN) * RM
+                BA = gHorzArr%G3(1, MSIN) * RM
                 DO L = M1, gModIntParams%LMAX2, 2
                     LCOS = 2 * L + 1
                     !  Here again the sinly is negative to be projected onto cosly which is
                     !  positive.  Thus the B term in the expression below is now negative.
                     !  (Originally it was positive.)
 
-                    horzArr%G3(1, LCOS) = horzArr%G3(1, LCOS) - BA * horzArr%RML(M + 1, L)
+                    gHorzArr%G3(1, LCOS) = gHorzArr%G3(1, LCOS) - BA * gHorzArr%RML(M + 1, L)
                 END DO
             END DO
 
@@ -1428,8 +1425,8 @@ module ModelModule
             IF (II .GT. 20) I = II - 20     ! Brings options 21-31 down to 1 - 11 (SENS_CHANNEL_LENGTH to SENS_OROGRAPHIC_HEIGHT)
             !-----------------------------------------------Do RN and BETA options
             !IF(I .EQ. 1) VAR(I) = PRF(1, 1) * PRF(1, 2) / (PRF(1, 2) + R * (PRF(1, 1) - PRF(1, 2))) original 2-d addressing
-            IF (I .EQ. 1) gModRealParams%RN = vertArr%PRF(1) * vertArr%PRF(addressToPRF1_2) / (vertArr%PRF(addressToPRF1_2) + R * (vertArr%PRF(1) - vertArr%PRF(addressToPRF1_2)))
-            IF (I .EQ. 2) gModRealParams%BETA = vertArr%PRF(1) + R * (vertArr%PRF(addressToPRF1_2) - vertArr%PRF(1))
+            IF (I .EQ. 1) gModRealParams%RN = gVertArr%PRF(1) * gVertArr%PRF(addressToPRF1_2) / (gVertArr%PRF(addressToPRF1_2) + R * (gVertArr%PRF(1) - gVertArr%PRF(addressToPRF1_2)))
+            IF (I .EQ. 2) gModRealParams%BETA = gVertArr%PRF(1) + R * (gVertArr%PRF(addressToPRF1_2) - gVertArr%PRF(1))
             !-----------------------------------------------Do  profiles:
             IF (I .GE. 3 .AND. I .LE. 11) THEN
                 J = gModIntParams%LMODE
@@ -1439,46 +1436,46 @@ module ModelModule
                 DO N = 1, M
                     !-----------------------------------------------Compute increment:
                     IF (I .GE. 4 .AND. I .LE. 7) THEN
-                        X = (vertArr%PRF(N + addressToPRF1_2) + R * (vertArr%PRF(N) - vertArr%PRF(N + addressToPRF1_2)))
-                        IF (X .NE. 0.) X = vertArr%PRF(N) * vertArr%PRF(N + addressToPRF1_2) / X
+                        X = (gVertArr%PRF(N + addressToPRF1_2) + R * (gVertArr%PRF(N) - gVertArr%PRF(N + addressToPRF1_2)))
+                        IF (X .NE. 0.) X = gVertArr%PRF(N) * gVertArr%PRF(N + addressToPRF1_2) / X
                         !-----------------------------------------------Load it in FK,FJ,H,G profile:
-                        IF (I .EQ. 4) vertArr%FK(N) = X  !PV(N, I+1) = X 
-                        IF (I .EQ. 5) vertArr%FJ(N) = X
-                        IF (I .EQ. 6) vertArr%H(N) = X   !PV(N, I+3) = X
-                        IF (I .EQ. 7) vertArr%G(N) = X
+                        IF (I .EQ. 4) gVertArr%FK(N) = X  !PV(N, I+1) = X 
+                        IF (I .EQ. 5) gVertArr%FJ(N) = X
+                        IF (I .EQ. 6) gVertArr%H(N) = X   !PV(N, I+3) = X
+                        IF (I .EQ. 7) gVertArr%G(N) = X
                     ELSE
-                        X = vertArr%PRF(N) + R * (vertArr%PRF(N + addressToPRF1_2) - PRF(N))
+                        X = gVertArr%PRF(N) + R * (gVertArr%PRF(N + addressToPRF1_2) - PRF(N))
                         !-----------------------------------------------Load it in THS profile:
-                        IF(I .EQ. 3) vertArr%PV(N + addressToPRF1_4) = X
+                        IF(I .EQ. 3) gVertArr%PV(N + addressToPRF1_4) = X
                         !-----------------------------------------------Load spectral profiles:
                         IF (I .GE. 8) THEN
                             !-----------------------------------------------Load it in PS
-                            IF (I .EQ. 8) horzArr%PS(J, N) = X    !K=1
+                            IF (I .EQ. 8) gHorzArr%PS(J, N) = X    !K=1
                             !-----------------------------------------------Load it in TF
-                            IF (I .EQ. 9) horzArr%TF(J, N) = X    !K=4
+                            IF (I .EQ. 9) gHorzArr%TF(J, N) = X    !K=4
                             !-----------------------------------------------Load it in SF
-                            IF (I .EQ. 10) horzArr%SF(J, N) = X   !K = 13
+                            IF (I .EQ. 10) gHorzArr%SF(J, N) = X   !K = 13
                             !-----------------------------------------------Load it in TOP
-                            IF (I .EQ. 11) horzArr%TOP(J) = X  !K = 15
+                            IF (I .EQ. 11) gHorzArr%TOP(J) = X  !K = 15
                                                           !PS(J, N, K) = X
                             !-----------------------------------------------Get phase:
                             IF (gModIntParams%KMODE .GE. 1) THEN
-                                Y = (vertArr%PRF(N + addressToPRF1_3) + R * (vertArr%PRF(N + addressToPRF1_4) - vertArr%PRF(N + addressToPRF1_3))) / RAD_TO_DEGREES
+                                Y = (gVertArr%PRF(N + addressToPRF1_3) + R * (gVertArr%PRF(N + addressToPRF1_4) - gVertArr%PRF(N + addressToPRF1_3))) / RAD_TO_DEGREES
                                 IF (I .EQ. 8) Then
-                                    horzArr%PS(J - 1, N) = X * COS(Y)
-                                    horzArr%PS(J, N) = X * SIN(Y)
+                                    gHorzArr%PS(J - 1, N) = X * COS(Y)
+                                    gHorzArr%PS(J, N) = X * SIN(Y)
                                 end IF
                                 IF (I .EQ. 8) Then
-                                    horzArr%TF(J - 1, N) = X * COS(Y)
-                                    horzArr%TF(J, N) = X * SIN(Y)
+                                    gHorzArr%TF(J - 1, N) = X * COS(Y)
+                                    gHorzArr%TF(J, N) = X * SIN(Y)
                                 end IF
                                 IF (I .EQ. 8) Then
-                                    horzArr%SF(J - 1, N) = X * COS(Y)
-                                    horzArr%SF(J, N) = X * SIN(Y)
+                                    gHorzArr%SF(J - 1, N) = X * COS(Y)
+                                    gHorzArr%SF(J, N) = X * SIN(Y)
                                 end IF
                                 IF (I .EQ. 8) Then
-                                    horzArr%TOP(J - 1) = X * COS(Y)
-                                    horzArr%TOP(J) = X * SIN(Y)
+                                    gHorzArr%TOP(J - 1) = X * COS(Y)
+                                    gHorzArr%TOP(J) = X * SIN(Y)
                                 end IF
                             ENDIF
                         ENDIF
@@ -1506,11 +1503,11 @@ module ModelModule
             !----------------------------------Special case for vorticity:
             IF(IP .EQ. 1) THEN
                 K = N
-                DO I = 1, currentDims%ITOT
-                    DAT(I) = -PS(I, K) * DAT(I + currentDims%ITOTA)
+                DO I = 1, gCurrentDims%ITOT
+                    DAT(I) = -PS(I, K) * DAT(I + gCurrentDims%ITOTA)
                 END DO
             ELSE
-                DO I = 1, currentDims%ITOT
+                DO I = 1, gCurrentDims%ITOT
                    DAT(I) = PS(I, K)
                 END DO
             ENDIF
@@ -1536,9 +1533,9 @@ module ModelModule
 
             !-------------------------------------Convert resolution to INTEGER*4:
 
-            ITY = currentDims%ITRXD + 1
-            G = 0.0     ! CALL RZERO(G, currentDims%KX * currentDims%LY)
-            TM = 0.0    ! CALL RZERO(TM, currentDims%LY)
+            ITY = gCurrentDims%ITRXD + 1
+            G = 0.0     ! CALL RZERO(G, gCurrentDims%KX * gCurrentDims%LY)
+            TM = 0.0    ! CALL RZERO(TM, gCurrentDims%LY)
             !------------------------------------ Load the spectral components into GRID1:
             L21 = 1
             DO L = 1, gModIntParams%LMAX2
@@ -1547,7 +1544,7 @@ module ModelModule
             END DO
             I = gModIntParams%LMAX2
             !---------------------------------------Start data in 4th row:
-            K21 = 3 * currentDims%KX + 1
+            K21 = 3 * gCurrentDims%KX + 1
             DO K = 1, gModIntParams%KMAX2
                 K21 = K21 + 2
                 L22 = K21
@@ -1557,7 +1554,7 @@ module ModelModule
                     G(L22)= -DT(I) / 2.
                     I = I + 1
                     G(L22 + 1) = DT(I) / 2.
-                    L22 = L22 + 2 * currentDims%KX
+                    L22 = L22 + 2 * gCurrentDims%KX
                 END DO
             !----------------------------------------Skip 1 row (the cosy row)
             END DO
@@ -1565,26 +1562,26 @@ module ModelModule
             !  Transform the eigenfunctions into grid point space; The x-transforms first:
             !  knowing that all the cosy components are zero
 
-            !CALL FFT991(G((3 * currentDims%KX + 1) :), WK, TX, currentDims%IFX, 1, 2 * currentDims%KX, currentDims%IXMAX, gModIntParams%LMAX2, FORWARD_TRANSFORM)
-            !CALL FFT991(G, WK, TX(ITY :), currentDims%IFY, currentDims%KX, 1, currentDims%IYMAX, currentDims%IXMAX, FORWARD_TRANSFORM)
+            !CALL FFT991(G((3 * gCurrentDims%KX + 1) :), WK, TX, gCurrentDims%IFX, 1, 2 * gCurrentDims%KX, gCurrentDims%IXMAX, gModIntParams%LMAX2, FORWARD_TRANSFORM)
+            !CALL FFT991(G, WK, TX(ITY :), gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, FORWARD_TRANSFORM)
             !-----------------------------------------------  Now do the zonal components:
-            !CALL FFT991(TM, WK, TX(ITY:), currentDims%IFY, 1, currentDims%LY, currentDims%IYMAX, 1, FORWARD_TRANSFORM)
+            !CALL FFT991(TM, WK, TX(ITY:), gCurrentDims%IFY, 1, gCurrentDims%LY, gCurrentDims%IYMAX, 1, FORWARD_TRANSFORM)
             !--------------------  Add the results to G: (Only half for plotting, however)
             I1 = 0
-            DO L = 1, currentDims%IYH
-                DO K = 1, currentDims%IXMAX
+            DO L = 1, gCurrentDims%IYH
+                DO K = 1, gCurrentDims%IXMAX
                     G(K + I1) = G(K + I1) + TM(L)
                 END DO
-                G(currentDims%IXMAX1 + I1) = G(I1 + 1)
+                G(gCurrentDims%IXMAX1 + I1) = G(I1 + 1)
                 !--------------------------------------------Move to next row:
-                I1 = I1 + currentDims%KX
+                I1 = I1 + gCurrentDims%KX
             END DO
         END
 
         !******************************************** Subroutine QG for Amp-G values:
         SUBROUTINE ComputeGQ()      !(DAT,PS,DPI,GQ,GQA,PSA,PSS)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only : horzArr, vertArr, statsArr
+            use ModelFieldsModule, only : gHorzArr, gVertArr, gStatsArr
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings
             
             implicit none
@@ -1610,32 +1607,32 @@ module ModelModule
             !-----------------------------------------Skip GQ if MODEL=2 Option on:
             IF(gModIntParams%modelType .NE. 2) THEN
                 !-----------------------------------------Compute barotropic flow:
-                horzArr%DAT = 0.0       ! Set entire DAT array to zero
+                gHorzArr%DAT = 0.0       ! Set entire DAT array to zero
                 DO N = 1, gModIntParams%NLEV
-                    ! Address an array linearly: J = K + (N - 1) * currentDims%ITOTD for PS(K, N, 1) to PS(J, 1)
+                    ! Address an array linearly: J = K + (N - 1) * gCurrentDims%ITOTD for PS(K, N, 1) to PS(J, 1)
                     ! But we dont need to do this. Not sure why the original code did it as a 3-D array.
-                    DO K = 1, currentDims%ITOT
-                        horzArr%DAT(K) = horzArr%DAT(K) + horzArr%PS(K, N) / vertArr%DPI(N)
+                    DO K = 1, gCurrentDims%ITOT
+                        gHorzArr%DAT(K) = gHorzArr%DAT(K) + gHorzArr%PS(K, N) / gVertArr%DPI(N)
                     END DO
                 END DO
                 !----------------------Compute the Amp*Th*cosG quantities:
                 DO N = 1, gModIntParams%NLEV
                     DO K = 1, gModIntParams%LMAX2
-                        horzArr%GQ(K, N) = horzArr%GQ(K, N) + horzArr%PS(K, N) - horzArr%DAT(K)
+                        gHorzArr%GQ(K, N) = gHorzArr%GQ(K, N) + gHorzArr%PS(K, N) - gHorzArr%DAT(K)
                     END DO
-                    DO K = gModIntParams%LMAX2 + 1, currentDims%ITOT, 2
-                        THR = horzArr%PS(K, N) - horzArr%DAT(K)
-                        THI = horzArr%PS(K + 1, N) - horzArr%DAT(K + 1)
-                        horzArr%GQ(K, N) = horzArr%GQ(K, N) + horzArr%DAT(K) * THR + horzArr%DAT(K + 1) * THI
-                        horzArr%GQ(K + 1, N) = horzArr%GQ(K + 1, N) + horzArr%DAT(K + 1) * THR - horzArr%DAT(K) * THI
+                    DO K = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT, 2
+                        THR = gHorzArr%PS(K, N) - gHorzArr%DAT(K)
+                        THI = gHorzArr%PS(K + 1, N) - gHorzArr%DAT(K + 1)
+                        gHorzArr%GQ(K, N) = gHorzArr%GQ(K, N) + gHorzArr%DAT(K) * THR + gHorzArr%DAT(K + 1) * THI
+                        gHorzArr%GQ(K + 1, N) = gHorzArr%GQ(K + 1, N) + gHorzArr%DAT(K + 1) * THR - gHorzArr%DAT(K) * THI
                     END DO
                 END DO
                 !-------------------------------------Compute amplitudes of barotropic flow:
                 DO K = 1, gModIntParams%LMAX2
-                    horzArr%BTA(K) = horzArr%BTA(K) + horzArr%DAT(K)
+                    gHorzArr%BTA(K) = gHorzArr%BTA(K) + gHorzArr%DAT(K)
                 END DO
-                DO K = gModIntParams%LMAX2 + 1, currentDims%ITOT, 2
-                    horzArr%BTA(K) = horzArr%BTA(K) + SQRT(horzArr%DAT(K + 1) * horzArr%DAT(K + 1) + horzArr%DAT(K) * horzArr%DAT(K))
+                DO K = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT, 2
+                    gHorzArr%BTA(K) = gHorzArr%BTA(K) + SQRT(gHorzArr%DAT(K + 1) * gHorzArr%DAT(K + 1) + gHorzArr%DAT(K) * gHorzArr%DAT(K))
                 END do
             end IF
             !=====================================Computing structures of all qnt:
@@ -1669,19 +1666,19 @@ module ModelModule
             !L(7) = 14
             DO M = 1, 7
                 ! The => operator allows us to point to the PS array
-                if (M .EQ. 1) call DoubleLoops(horzArr%PS, M)  ! 1 is PS
-                if (M .EQ. 2) call DoubleLoops(horzArr%WW, M)  ! 2 is WW
-                if (M .EQ. 3) call DoubleLoops(horzArr%FS, M)  ! 3 is FS
-                if (M .EQ. 4) call DoubleLoops(horzArr%ADS, M) ! 4 is ADS
-                if (M .EQ. 5) call DoubleLoops(horzArr%FT, M)  ! 5 is FT
-                if (M .EQ. 6) call DoubleLoops(horzArr%ADT, M) ! 6 is ADT
-                !if (M .EQ. 7) call DoubleLoops(horzArr%ADO) ! 7 is ADO
+                if (M .EQ. 1) call DoubleLoops(gHorzArr%PS, M)  ! 1 is PS
+                if (M .EQ. 2) call DoubleLoops(gHorzArr%WW, M)  ! 2 is WW
+                if (M .EQ. 3) call DoubleLoops(gHorzArr%FS, M)  ! 3 is FS
+                if (M .EQ. 4) call DoubleLoops(gHorzArr%ADS, M) ! 4 is ADS
+                if (M .EQ. 5) call DoubleLoops(gHorzArr%FT, M)  ! 5 is FT
+                if (M .EQ. 6) call DoubleLoops(gHorzArr%ADT, M) ! 6 is ADT
+                !if (M .EQ. 7) call DoubleLoops(gHorzArr%ADO) ! 7 is ADO
             END DO
         END subroutine ComputeGQ
         
         subroutine DoubleLoops(field, M)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only : horzArr, statsArr
+            use ModelFieldsModule, only : gHorzArr, gStatsArr
             use ModelParamsModule, only: gModIntParams
             
             implicit none
@@ -1694,21 +1691,21 @@ module ModelModule
             integer :: N, K
             DO N = 1, gModIntParams%NLEV
                 DO K = 1, gModIntParams%LMAX2
-                    statsArr%PSA(K, N, M) = statsArr%PSA(K, N, M) + field(K, N)
-                    statsArr%PSS(K, N, M) = statsArr%PSS(K, N, M) + field(K, N)
+                    gStatsArr%PSA(K, N, M) = gStatsArr%PSA(K, N, M) + field(K, N)
+                    gStatsArr%PSS(K, N, M) = gStatsArr%PSS(K, N, M) + field(K, N)
                 END DO
-                DO K = gModIntParams%LMAX2 + 1, currentDims%ITOT, 2
+                DO K = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT, 2
                     !--------------------------------Get the real & imag part of srfc strm:
-                    THR1 = horzArr%PS(K, 1)
-                    THI1 = horzArr%PS(K + 1, 1)
+                    THR1 = gHorzArr%PS(K, 1)
+                    THI1 = gHorzArr%PS(K + 1, 1)
                     !--------------------------------Get the correct real & imag part for STRUC:
                     THR = field(K, N)
                     THI = field(K + 1, N)
-                    statsArr%PSS(K, N, M) = statsArr%PSS(K, N, M) + THR * THR1 + THI * THI1
-                    statsArr%PSS(K + 1, N, M) = statsArr%PSS(K + 1, N, M) + THI * THR1 - THR * THI1
+                    gStatsArr%PSS(K, N, M) = gStatsArr%PSS(K, N, M) + THR * THR1 + THI * THI1
+                    gStatsArr%PSS(K + 1, N, M) = gStatsArr%PSS(K + 1, N, M) + THI * THR1 - THR * THI1
                     !------------------------------------------------Normal averges:
-                    statsArr%PSA(K, N, M) = statsArr%PSA(K, N, M) + field(K, N)
-                    statsArr%PSA(K + 1, N, M) = statsArr%PSA(K + 1, N, M) + field(K + 1, N)
+                    gStatsArr%PSA(K, N, M) = gStatsArr%PSA(K, N, M) + field(K, N)
+                    gStatsArr%PSA(K + 1, N, M) = gStatsArr%PSA(K + 1, N, M) + field(K + 1, N)
                 END DO
             END DO
         end subroutine DoubleLoops

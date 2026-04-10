@@ -29,10 +29,11 @@ module VerticalParamsDialogModule
             use NlevelQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
-            use DialogHelpersModule, only: GetComboIndex, moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems
+            use DialogHelpersModule, only: GetComboIndex, moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
+                                           updateListViewValue, HideMyEdit
             use ModelParamsModule, only: gUserSettings
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
-            use ModelFieldsModule, only: vertArr
+            use ModelFieldsModule, only: gVertArr
 
 
 
@@ -57,29 +58,35 @@ module VerticalParamsDialogModule
             type(T_POINT) :: pt
 
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton
-            integer :: rowClicked
-            save rowClicked
+            integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton, hFocus
+            integer, save :: pvRowClicked, thsRowClicked, fkRowClicked
+            integer :: id
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
 
             select case (dlgMsg)
+            CASE (WM_APP + 100)
+                    ! hide edit box
+                    ID = getListControlId()
+                    if (id /= -1) then
+                        call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_VERTICAL))
+                        hFocus = GetDlgItem(ghVerticalParamsDlg, id)
+                        bret = SetFocus(hFocus)
+                    endif
+                    bret = SetFocus(hFocus)
+                    RETURN
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
-                    rowClicked = -1
+                    pvRowClicked = -1
+                    thsRowClicked = -1
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgVerticalParamsProc), NULL, GetCurrentThreadId())
                     ghVerticalParamsDlg = hDlg
-                    !hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
-                    !bret = SendMessage(hEdit, WM_SETFONT, gFont, .TRUE.)
-                    !hStaticEdit = GetDlgItem(hDlg, IDC_STATIC_EDIT_SETTINGS)
-                    !bret = SendMessage(hStaticEdit, WM_SETFONT, gFont, .TRUE.)
 
-                    ! Combo boxes require manual editing of their height if you want the list of options
-                    ! to be exposed on click only.
+                    !! ===> Combo boxes require manual editing of their height if you want the list of options <== !!
+                    !       to be exposed on click only.
                     ! Integration Method
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
-                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
                     ! Initialize the combo box
@@ -87,20 +94,19 @@ module VerticalParamsDialogModule
                     if (gUserSettings%integrationMethodTransform) iret = 1
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
                     hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
-                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
 
                     ! Statistics Options
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
-                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
                     ! Initialize the combo box
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
                     hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
-                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
-                    
-                    call handleIntListControl(hDlg)
+
+                    call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Levels", "Pressure"], gVertArr%PV)
+                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Levels", "Temperature"], gVertArr%THS)
+                    call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Levels", "Ekman Friction"], gVertArr%FK)
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -114,14 +120,16 @@ module VerticalParamsDialogModule
                         type(T_NM_LISTVIEW), pointer :: pnmv
                         integer(kind=4) :: i, j, prevRowClicked
                         integer(kind=8) :: lp
-                        integer :: ios
+                        integer :: ios, rowClicked
                         character(len=16) :: str
+                        real, pointer :: ptr(:)
                         ! Step 1: cast lParam to a C_PTR
                         lp = lParam
                         p_raw = transfer(lp, p_raw)
                         ! Step 2: cast to a Fortran structure pointer
                         call c_f_pointer(p_raw, pnmv)
-                        if (pnmv%hdr%idFrom == IDC_LIST_LEVELS) then
+                        if (pnmv%hdr%idFrom == IDC_LIST_LEVELS .OR. pnmv%hdr%idFrom == IDC_LIST_TEMPERATURES &
+                            .OR. pnmv%hdr%idFrom == IDC_LIST_EKMAN_FRICTION) then
                             select case (pnmv%hdr%code)
                                 case (NM_CLICK)
                                     i = pnmv%isubItem
@@ -129,11 +137,19 @@ module VerticalParamsDialogModule
                                     WRITE(buffer, '(I0, 2X, I0)') i, j
                                     call LogMessage("Real: pnmv%isubItem (i) and pnmv%iitem (j) have values " //TRIM(buffer)//CHAR(0))
                                     if (j >= 0) then
-                                        !intRowClicked = -1 ! Reset integer row clicked
-                                        hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
+                                        ! Gets the xxRowClicked variable that corresponds to the list view that was clicked and resets the other two to -1.
+                                        ! This is used to keep track of which list view was clicked when the callback returns to the EN_CHANGE event of the edit box
+                                        ios = getRowClickedInCorrectListView(pnmv%hdr%idFrom)
+                                        hList = GetDlgItem(hDlg, INT(pnmv%hdr%idFrom))
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_VERTICAL)
-                                        ios = rowClicked
                                         rowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
+                                        if (pnmv%hdr%idfrom == idc_list_levels) then
+                                            pvrowclicked = rowclicked
+                                        else if (pnmv%hdr%idfrom == idc_list_temperatures) then
+                                            thsrowclicked = rowclicked
+                                        else if (pnmv%hdr%idfrom == idc_list_ekman_friction) then
+                                            fkrowclicked = rowclicked
+                                        end if
                                         if (ios .EQ. rowClicked) then
                                             bret = SetFocus(hEdit)
                                             bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
@@ -144,8 +160,11 @@ module VerticalParamsDialogModule
                                         ! Moves the edit box over the value and focuses it
                                         call moveEditBox(hDlg, hList, hEdit, rowClicked)
 
+                                        ptr => gVertArr%PV
+                                        if (pnmv%hdr%idFrom == IDC_LIST_TEMPERATURES) ptr => gVertArr%THS
+                                        if (pnmv%hdr%idFrom == IDC_LIST_EKMAN_FRICTION) ptr => gVertArr%FK
                                         ! Method picks the correct real parameter to convert to string for edit box
-                                        str = getStringFromRealForEditBox(j)
+                                        str = getStringFromRealForEditBox(j, ptr)
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
@@ -193,7 +212,8 @@ module VerticalParamsDialogModule
                                 CASE (EN_CHANGE)
                                     EN: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
-                                        integer :: ios
+                                        integer :: ios, rowClicked
+                                        real, pointer :: ptr(:)
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
                                         call LogMessage("EN_CHANGE signaled from edit real control ")
 
@@ -201,17 +221,28 @@ module VerticalParamsDialogModule
                                         newValue = GetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC, LEN(strC))
                                         str = strC(1 : newValue) ! Clean out the junk
                                         if (ADJUSTL(TRIM(str)) == '') exit EN ! User typed enter
-                                        hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
+                                        if (pvRowClicked >= 0) then
+                                            hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
+                                            ptr => gVertArr%PV
+                                        else if (thsRowClicked >= 0) then 
+                                            hList = GetDlgItem(hDlg, IDC_LIST_TEMPERATURES)
+                                            ptr => gVertArr%THS
+                                        else if (fkRowClicked >= 0) then 
+                                            hList = GetDlgItem(hDlg, IDC_LIST_EKMAN_FRICTION)
+                                            ptr => gVertArr%FK
+                                        endif
+
                                         ! This should be the row that was hilighted when we clicked on it. Of
                                         ! course the original value of 'realRowClicked' is lost when callback returned
                                         rowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
                                         ios = 0
-                                        ! Load the new value into the correct modRealParam field
-                                        ios = readRealDataFromEditBox(str, rowClicked)
+                                        
+                                        ! Load the new value into the correct array index field
+                                        ios = readRealDataFromEditBox(str, rowClicked, ptr)
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
-                                            strC = getStringFromRealForEditBox(rowClicked)
+                                            strC = getStringFromRealForEditBox(rowClicked, ptr)
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC)
                                             exit EN
                                         end if
@@ -230,10 +261,50 @@ module VerticalParamsDialogModule
                     ghVerticalParamsDlg = 0
             end select
             VerticalParamsDlgProc = 0 ! Didn't process the dialog message dlgMsg
-        end function VerticalParamsDlgProc
-        
+            
+            contains
 
-        subroutine handleIntListControl(hDlg)
+            function getListControlId() result(id)
+                implicit none
+
+                integer :: id
+
+                id = -1
+                if (pvRowClicked >= 0) then
+                    id = IDC_LIST_LEVELS
+                else if (thsRowClicked >= 0) then
+                    id = IDC_LIST_TEMPERATURES
+                else if (fkRowClicked >= 0) then
+                    id = IDC_LIST_EKMAN_FRICTION
+                endif
+            end function getListControlId
+            
+            function getRowClickedInCorrectListView(id) result(rowClicked)
+                implicit none
+
+                integer, intent(in) :: id
+
+                integer :: rowClicked
+
+                if (id == IDC_LIST_LEVELS) then
+                    rowClicked = pvRowClicked
+                    thsRowClicked = -1
+                    fkRowClicked = -1
+                else if (id == IDC_LIST_TEMPERATURES) then
+                    rowClicked = thsRowClicked
+                    pvRowClicked = -1
+                    fkRowClicked = -1
+                else if (id == IDC_LIST_EKMAN_FRICTION) then
+                    rowClicked = fkRowClicked
+                    pvRowClicked = -1
+                    thsRowClicked = -1
+                end if
+            end function getRowClickedInCorrectListView
+
+        end function VerticalParamsDlgProc
+
+
+        subroutine handleIntListControl(hDlg, id, labels, vertArr)
             use ifwinty
             use ifwin
             use DialogHelpersModule, only: EnsureListViewColumns, ResizeListViewToFitItems
@@ -242,21 +313,24 @@ module VerticalParamsDialogModule
             include '../resource.fd'
 
             integer(HANDLE), intent(in) :: hDlg
+            integer, intent(in) :: id
+            character(len=*), intent(in) :: labels(:)
+            REAL, intent(in) :: vertArr(:)
 
-            integer(HANDLE) :: hList            
+            integer(HANDLE) :: hList 
             integer(bool) :: bret
             integer :: widths(2)
             type(T_RECT) :: rc
             type(T_POINT) :: pt
             
-            hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
+            hList = GetDlgItem(hDlg, id)
             bret = SendMessage(hList, LVM_DELETEALLITEMS, 0, 0) ! Clear first
             ! Load everything into the int list view
             bret = GetClientRect(hList, rc)
-            widths(1) = 132  ! This is a hard coded width for the first column. It will only contain 'Level n'.
+            widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
-            call EnsureListViewColumns(hList, ["Levels", "Pressure"], widths)
-            call loadLevelsIntItemsIntoListView(hList)
+            call EnsureListViewColumns(hList, labels, widths)
+            call loadLevelsIntItemsIntoListView(hList, vertArr)
             bret = UpdateWindow(hList)
 
             ! Getting the current position and width of the ListView control in the dialog
@@ -267,43 +341,24 @@ module VerticalParamsDialogModule
             ! The makes the height sized to encompass the actual number of rows added
             call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
         end subroutine handleIntListControl
-        
-        subroutine updateListViewValue(hEdit, hList, rowClicked, strC)
-            use ifwinty
-            use user32, only: SendMessage, SetWindowPos
-            
-            integer, intent(in) :: rowClicked
-            integer(HANDLE), intent(in) :: hList, hEdit
-            character(*), intent(in) :: strC
 
-            type(T_LVITEM) :: lvItem
-            integer(BOOL) ::  bret
-
-            lvItem%mask = LVIF_TEXT
-            lvItem%iItem = rowClicked
-            lvItem%iSubItem = 1 ! Our list view has two columns, 0 and 1. The value is in column 1.
-            lvItem%pszText = loc(strC)
-            ! LVM_SETITEMTEXT should work here but it does not. It causes row 0 to get updated regardless
-            ! LVM_SETITEM does work. Don't ask me why. Many days of frustration
-            bret = SendMessage(hList, LVM_SETITEM, 0, loc(lvItem))
-
-            ! This line redrawns the edit box borders which otherwise vanish.
-            bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
-        end subroutine updateListViewValue
-        
-        subroutine loadLevelsIntItemsIntoListView(hList)
+        subroutine loadLevelsIntItemsIntoListView(hList, vertArr)
             use ModelParamsModule, only: gModIntParams
-            use ModelFieldsModule, only: vertArr
+            use ModelFieldsModule, only: gVertArr
             use DialogHelpersModule, only : AddListViewRowReal
             use ifwinty, only: HANDLE
+            
+            implicit none
         
             integer(HANDLE), intent(in) :: hList
+            REAL, intent(in) :: vertArr(:)
+
             integer :: i
             character(len=16) :: levels
         
-            do i = 1, gModIntParams%nlev
+            do i = 1, SIZE(vertArr)
                 write(levels, '(A, I0)') "Level ", i
-                call AddListViewRowReal(hList, levels, [vertArr%PV(I)], '(F6.2)') ! The 'trim' is done in the called subroutine
+                call AddListViewRowReal(hList, levels, [vertArr(i)], '(F6.2)') ! The 'trim' is done in the called subroutine
             end do
         end subroutine loadLevelsIntItemsIntoListView
         
@@ -311,33 +366,38 @@ module VerticalParamsDialogModule
         ! one of the real parameters and this method gets the real value and converts it
         ! to a string to load into the edit box. The routine that actually does the work
         ! is RealToAsciiToReal. All this does is pick the correct real parameter to convert.
-        function getStringFromRealForEditBox(caseSelect) result(str)
+        function getStringFromRealForEditBox(caseSelect, vertArr) result(str)
             use ModelParamsModule, only: gModRealParams
             use ConstantsModule, only: REAL_TO_ASCII
             use UtilitiesModule, only: LENGTH, RealToAsciiToReal
-            use ModelFieldsModule, only: vertArr
             
+            implicit none
+
             integer, intent(in) :: caseSelect
+            real, intent(inout) :: vertArr(:)
 
             character(len=LENGTH) :: str
             integer :: ios
 
-            ios = RealToAsciiToReal(REAL_TO_ASCII, vertArr%PV(caseSelect + 1), str)
+            ios = RealToAsciiToReal(REAL_TO_ASCII, vertArr(caseSelect + 1), str)
 
         end function getStringFromRealForEditBox
-        
+
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
-        function readRealDataFromEditBox(str, rowClicked) result(ios)
-            use ModelFieldsModule, only: vertArr
+        function readRealDataFromEditBox(str, rowClicked, vertArr) result(ios)
+            use ModelFieldsModule, only: gVertArr
+            
+            implicit none
             
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
             integer, intent(in) :: rowClicked
+            REAL, intent(inout) :: vertArr(:)
 
             integer :: ios
 
             ios = 0
-            read(str, *, iostat = ios) vertArr%PV(rowClicked + 1)
+            read(str, *, iostat = ios) vertArr(rowClicked + 1)
         end function readRealDataFromEditBox
 
 end module VerticalParamsDialogModule

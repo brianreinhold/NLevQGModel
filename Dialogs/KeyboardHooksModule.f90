@@ -372,9 +372,7 @@ module KeyboardHooksModule
                         hFocus = GetFocus() ! currently focused control
                         hLB_User = GetDlgItem(ghVerticalParamsDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
                         IF (hFocus == hLB_User) THEN
-                            ! If the edit box is focused, set the focus on the correct list box row
-                            hFocus = GetDlgItem(ghVerticalParamsDlg, IDC_LIST_LEVELS)
-                            bret = SetFocus(hFocus)
+                            bret = PostMessage(ghVerticalParamsDlg, WM_APP + 100, 0, 0) ! Hides edit box if it is in focus
                         END IF
                         KeyboardForDlgVerticalParamsProc = 1  ! Swallow the key
                         RETURN

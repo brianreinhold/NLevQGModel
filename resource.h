@@ -46,9 +46,14 @@
 #define IDC_EDIT1                       1046
 #define IDC_EDIT_VERTICAL               1046
 #define IDC_BUTTON_VIEW_STATISTICS2     1047
+#define IDC_LIST_TEMPERATURES           1047
 #define IDC_BUTTON_RUN_SEQUENTIALLY     1048
+#define IDC_STATIC_TEMPERATURES         1048
 #define IDC_BUTTON_SETUP_BOMB           1049
+#define IDC_LIST_TEMPERATURES2          1049
+#define IDC_LIST_EKMAN_FRICTION         1049
 #define IDC_BUTTON_RETURN_TO_MAIN       1050
+#define IDC_STATIC_EKMAN_FRICTION       1050
 #define IDC_BUTTON_EXIT_SETTINGS        1051
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016

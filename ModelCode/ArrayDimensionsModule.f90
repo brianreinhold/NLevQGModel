@@ -2,7 +2,7 @@ module ArrayDimensionsModule
     implicit none
     
     public ZeroArrayDims
-    public arrayDims, currentDims, Dims
+    public gArrayDims, gCurrentDims, Dims
     
     !  These dimensions are calulated in the method SetDimensions from the Settings type
     
@@ -92,8 +92,8 @@ module ArrayDimensionsModule
         integer :: IXIYL
     end type Dims
 
-    type(Dims) :: arrayDims
-    type(Dims) :: currentDims
+    type(Dims) :: gArrayDims
+    type(Dims) :: gCurrentDims
 
     contains
         subroutine ZeroArrayDims(arraySizes)
