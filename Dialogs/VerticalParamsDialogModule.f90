@@ -34,6 +34,7 @@ module VerticalParamsDialogModule
             use ModelParamsModule, only: gUserSettings
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
             use ModelFieldsModule, only: gVertArr
+            use SetUpModule, only: DimensionalizeVerticalParams, NonDimensionalizeVerticalParams
 
 
 
@@ -59,7 +60,7 @@ module VerticalParamsDialogModule
 
             ! For the list view report rows
             integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton, hFocus
-            integer, save :: pvRowClicked, thsRowClicked, fkRowClicked
+            integer, save :: pvRowClicked, thsRowClicked, fkRowClicked, fjRowClicked
             integer :: id
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
@@ -68,7 +69,7 @@ module VerticalParamsDialogModule
             select case (dlgMsg)
             CASE (WM_APP + 100)
                     ! hide edit box
-                    ID = getListControlId()
+                    ID = getListControlIdFromRowClicked()
                     if (id /= -1) then
                         call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_VERTICAL))
                         hFocus = GetDlgItem(ghVerticalParamsDlg, id)
@@ -79,6 +80,8 @@ module VerticalParamsDialogModule
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
                     pvRowClicked = -1
                     thsRowClicked = -1
+                    fkRowClicked = -1
+                    call DimensionalizeVerticalParams()
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgVerticalParamsProc), NULL, GetCurrentThreadId())
                     ghVerticalParamsDlg = hDlg
@@ -91,7 +94,7 @@ module VerticalParamsDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
                     ! Initialize the combo box
                     iret = 0
-                    if (gUserSettings%integrationMethodTransform) iret = 1
+                    if (gUserSettings%useTransformMethod) iret = 1
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
                     hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
 
@@ -104,9 +107,10 @@ module VerticalParamsDialogModule
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
                     hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
 
-                    call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Levels", "Pressure"], gVertArr%PV)
-                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Levels", "Temperature"], gVertArr%THS)
-                    call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Levels", "Ekman Friction"], gVertArr%FK)
+                    call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer")
+                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Interfaces", ACHAR(176)//"K"], gVertArr%THS, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer")
+                    call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Interfaces", "1/days"], gVertArr%FJ, "Interface")
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -128,41 +132,30 @@ module VerticalParamsDialogModule
                         p_raw = transfer(lp, p_raw)
                         ! Step 2: cast to a Fortran structure pointer
                         call c_f_pointer(p_raw, pnmv)
-                        if (pnmv%hdr%idFrom == IDC_LIST_LEVELS .OR. pnmv%hdr%idFrom == IDC_LIST_TEMPERATURES &
-                            .OR. pnmv%hdr%idFrom == IDC_LIST_EKMAN_FRICTION) then
+                        if (isListControlId(INT(pnmv%hdr%idFrom))) then
                             select case (pnmv%hdr%code)
                                 case (NM_CLICK)
                                     i = pnmv%isubItem
                                     j = pnmv%iitem
                                     WRITE(buffer, '(I0, 2X, I0)') i, j
-                                    call LogMessage("Real: pnmv%isubItem (i) and pnmv%iitem (j) have values " //TRIM(buffer)//CHAR(0))
+                                    !call LogMessage("Real: pnmv%isubItem (i) and pnmv%iitem (j) have values " //TRIM(buffer)//CHAR(0))
                                     if (j >= 0) then
-                                        ! Gets the xxRowClicked variable that corresponds to the list view that was clicked and resets the other two to -1.
+                                        ! Gets the rowClicked variable that corresponds to the list view that was clicked and resets the others to -1.
                                         ! This is used to keep track of which list view was clicked when the callback returns to the EN_CHANGE event of the edit box
-                                        ios = getRowClickedInCorrectListView(pnmv%hdr%idFrom)
+                                        ios = getRowClickedFromId(INT(pnmv%hdr%idFrom))
                                         hList = GetDlgItem(hDlg, INT(pnmv%hdr%idFrom))
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_VERTICAL)
                                         rowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
-                                        if (pnmv%hdr%idfrom == idc_list_levels) then
-                                            pvrowclicked = rowclicked
-                                        else if (pnmv%hdr%idfrom == idc_list_temperatures) then
-                                            thsrowclicked = rowclicked
-                                        else if (pnmv%hdr%idfrom == idc_list_ekman_friction) then
-                                            fkrowclicked = rowclicked
-                                        end if
+                                        call setRowClickedForCorrectListControl(rowclicked, INT(pnmv%hdr%idFrom))
                                         if (ios .EQ. rowClicked) then
                                             bret = SetFocus(hEdit)
                                             bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                             return
                                         end if
-                                        ! Hides the integer edit box if it is visible
-                                        !bret = ShowWindow(GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES), SW_HIDE)
                                         ! Moves the edit box over the value and focuses it
                                         call moveEditBox(hDlg, hList, hEdit, rowClicked)
-
-                                        ptr => gVertArr%PV
-                                        if (pnmv%hdr%idFrom == IDC_LIST_TEMPERATURES) ptr => gVertArr%THS
-                                        if (pnmv%hdr%idFrom == IDC_LIST_EKMAN_FRICTION) ptr => gVertArr%FK
+                                        ! Function returns pointer to the correct array based on which list view was clicked
+                                        ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
                                         ! Method picks the correct real parameter to convert to string for edit box
                                         str = getStringFromRealForEditBox(j, ptr)
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
@@ -182,7 +175,7 @@ module VerticalParamsDialogModule
                     if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
                         select case(IAND(wParam, Z'FFFF'))
                             case (IDC_COMBO_USERSETTINGS1)
-                                gUserSettings%integrationMethodTransform = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
+                                gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
                             case (IDC_COMBO_USERSETTINGS2)
                                 gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
                         end select
@@ -221,16 +214,8 @@ module VerticalParamsDialogModule
                                         newValue = GetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC, LEN(strC))
                                         str = strC(1 : newValue) ! Clean out the junk
                                         if (ADJUSTL(TRIM(str)) == '') exit EN ! User typed enter
-                                        if (pvRowClicked >= 0) then
-                                            hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
-                                            ptr => gVertArr%PV
-                                        else if (thsRowClicked >= 0) then 
-                                            hList = GetDlgItem(hDlg, IDC_LIST_TEMPERATURES)
-                                            ptr => gVertArr%THS
-                                        else if (fkRowClicked >= 0) then 
-                                            hList = GetDlgItem(hDlg, IDC_LIST_EKMAN_FRICTION)
-                                            ptr => gVertArr%FK
-                                        endif
+                                        hList = getListControlHandleFromRowClicked()
+                                        ptr => getArrayFromRowClicked()
 
                                         ! This should be the row that was hilighted when we clicked on it. Of
                                         ! course the original value of 'realRowClicked' is lost when callback returned
@@ -258,53 +243,164 @@ module VerticalParamsDialogModule
                 case (WM_DESTROY)
                     !bret = WriteCurrentStateToFile(hDlg, gModelSaveFile, gModelWelford, .true.)
                     bret = UnhookWindowsHookEx(hHook)
+                    call NonDimensionalizeVerticalParams()
                     ghVerticalParamsDlg = 0
             end select
             VerticalParamsDlgProc = 0 ! Didn't process the dialog message dlgMsg
-            
-            contains
 
-            function getListControlId() result(id)
-                implicit none
+        contains
 
-                integer :: id
+                ! Set of 'contained' subroutine and function to link list control rows to the corresponding arrays
+                ! Contained methods have access to all declared variables in the parent function so one does not 
+                ! need to pass in many variables and re-type 'use' statements.
+                ! WM_CLICK handler functions:
+                ! isListControlId: Function to check if we have clicked on one of the list controls.
+                ! getRowClickedFromId: Gets the row clicked variable for the list control that was clicked and resets the others to -1.
+                ! setRowClickedForCorrectListControl: Sets the value of the row clicked variable for the clicked list control.
+                ! getArrayFromId: Gets the correct array to be editied based on which list control was clicked.
+                ! EN_CHANGE handler for Edit box functions:
+                ! getListControlHandleFromRowClicked(): Gets the handle of the corresponding List Control having the value being
+                !                                       edited based on the specific row clicked variable that is >= 0.
+                ! getArrayFromRowClicked(): Gets the correct array that is being edited based on the specific row clicked variable that is >= 0.
+                ! ENTER key handler for Edit box functions:
+                ! getListControlIdFromRowClicked(): Gets list control id based on the specific row clicked variable that is >= 0. 
+                !                                   This is used to hide the edit box and return focus to the correct list control.
 
-                id = -1
-                if (pvRowClicked >= 0) then
-                    id = IDC_LIST_LEVELS
-                else if (thsRowClicked >= 0) then
-                    id = IDC_LIST_TEMPERATURES
-                else if (fkRowClicked >= 0) then
-                    id = IDC_LIST_EKMAN_FRICTION
-                endif
-            end function getListControlId
-            
-            function getRowClickedInCorrectListView(id) result(rowClicked)
-                implicit none
+! ------ isListControlId()
+                function isListControlId(id) result(isClicked)
+                    implicit none
 
-                integer, intent(in) :: id
+                    integer, intent(in) :: id
 
-                integer :: rowClicked
+                    logical :: isClicked
+                    isClicked = .false.
 
-                if (id == IDC_LIST_LEVELS) then
-                    rowClicked = pvRowClicked
+                    if (id == IDC_LIST_LEVELS .OR. &
+                        id == IDC_LIST_TEMPERATURES .OR. &
+                        id == IDC_LIST_EKMAN_FRICTION .OR. &
+                        id == IDC_LIST_TURB_MIXING) isClicked = .true.
+                end function isListControlId
+        
+! ------ getListControlIdFromRowClicked()
+
+                function getListControlIdFromRowClicked() result(id)
+                    implicit none
+
+                    integer :: id
+
+                    id = -1
+                    if (pvRowClicked >= 0) then
+                        id = IDC_LIST_LEVELS
+                    else if (thsRowClicked >= 0) then
+                        id = IDC_LIST_TEMPERATURES
+                    else if (fkRowClicked >= 0) then
+                        id = IDC_LIST_EKMAN_FRICTION
+                    else if (fjRowClicked >= 0) then
+                        id = IDC_LIST_TURB_MIXING
+                    endif
+                end function getListControlIdFromRowClicked
+
+! ------ getListControlHandleFromRowClicked()
+
+                function getListControlHandleFromRowClicked() result(hList)
+                    implicit none
+
+                    integer(HANDLE) :: hList
+
+                    if (pvRowClicked >= 0) then
+                        hList = GetDlgItem(hDlg, IDC_LIST_LEVELS)
+                    else if (thsRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_TEMPERATURES)
+                    else if (fkRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_EKMAN_FRICTION)
+                    else if (fjRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_TURB_MIXING)
+                    endif
+                end function getListControlHandleFromRowClicked
+
+! ------ getArrayFromRowClicked()
+
+                function getArrayFromRowClicked() result(ptr)
+                    implicit none
+
+                    REAL, pointer :: ptr(:)
+
+                    if (pvRowClicked >= 0) then
+                        ptr => gVertArr%PV
+                    else if (thsRowClicked >= 0) then 
+                        ptr => gVertArr%THS
+                    else if (fkRowClicked >= 0) then 
+                        ptr => gVertArr%FK
+                    else if (fjRowClicked >= 0) then 
+                        ptr => gVertArr%FJ
+                    endif
+                end function getArrayFromRowClicked
+
+! ------ setRowClickedForCorrectListControl(rowclicked, id)
+
+                subroutine setRowClickedForCorrectListControl(rowclicked, id)
+                    implicit none
+
+                    integer, intent(in) :: rowclicked
+                    integer, intent(in) :: id
+
+                    if (id == IDC_LIST_LEVELS) then
+                        pvrowclicked = rowclicked
+                    else if (id == IDC_LIST_TEMPERATURES) then
+                        thsrowclicked = rowclicked
+                    else if (id == IDC_LIST_EKMAN_FRICTION) then
+                        fkrowclicked = rowclicked
+                    else if (id == IDC_LIST_TURB_MIXING) then
+                        fjrowclicked = rowclicked
+                    end if
+                end subroutine setRowClickedForCorrectListControl
+
+! ------ getArrayFromId()
+
+                function getArrayFromId(id) result(ptr)
+                    implicit none
+
+                    integer, intent(in) :: id
+                    REAL, pointer :: ptr(:)
+
+                    ptr => gVertArr%PV
+                    if  (id == IDC_LIST_TEMPERATURES) then
+                        ptr => gVertArr%THS
+                    elseif  (id == IDC_LIST_EKMAN_FRICTION) then
+                        ptr => gVertArr%FK
+                    else if (id == IDC_LIST_TURB_MIXING) then
+                        ptr => gVertArr%FJ
+                    endif
+                end function getArrayFromId
+
+! ------ getRowClickedFromId(id)
+
+                function getRowClickedFromId(id) result(rowClicked)
+                    implicit none
+
+                    integer, intent(in) :: id
+
+                    integer :: rowClicked
+
+                    pvRowClicked = -1
                     thsRowClicked = -1
                     fkRowClicked = -1
-                else if (id == IDC_LIST_TEMPERATURES) then
-                    rowClicked = thsRowClicked
-                    pvRowClicked = -1
-                    fkRowClicked = -1
-                else if (id == IDC_LIST_EKMAN_FRICTION) then
-                    rowClicked = fkRowClicked
-                    pvRowClicked = -1
-                    thsRowClicked = -1
-                end if
-            end function getRowClickedInCorrectListView
+                    fjrowclicked = -1
+                    if (id == IDC_LIST_LEVELS) then
+                        rowClicked = pvRowClicked
+                    else if (id == IDC_LIST_TEMPERATURES) then
+                        rowClicked = thsRowClicked
+                    else if (id == IDC_LIST_EKMAN_FRICTION) then
+                        rowClicked = fkRowClicked
+                    else if (id == IDC_LIST_TURB_MIXING) then
+                        rowClicked = fjRowClicked
+                    end if
+                end function getRowClickedFromId
 
         end function VerticalParamsDlgProc
 
 
-        subroutine handleIntListControl(hDlg, id, labels, vertArr)
+        subroutine handleIntListControl(hDlg, id, labels, vertArr, description)
             use ifwinty
             use ifwin
             use DialogHelpersModule, only: EnsureListViewColumns, ResizeListViewToFitItems
@@ -316,6 +412,7 @@ module VerticalParamsDialogModule
             integer, intent(in) :: id
             character(len=*), intent(in) :: labels(:)
             REAL, intent(in) :: vertArr(:)
+            character(len=*), intent(in) :: description
 
             integer(HANDLE) :: hList 
             integer(bool) :: bret
@@ -330,7 +427,7 @@ module VerticalParamsDialogModule
             widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsIntItemsIntoListView(hList, vertArr)
+            call loadLevelsIntItemsIntoListView(hList, vertArr, description)
             bret = UpdateWindow(hList)
 
             ! Getting the current position and width of the ListView control in the dialog
@@ -342,7 +439,7 @@ module VerticalParamsDialogModule
             call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
         end subroutine handleIntListControl
 
-        subroutine loadLevelsIntItemsIntoListView(hList, vertArr)
+        subroutine loadLevelsIntItemsIntoListView(hList, vertArr, description)
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gVertArr
             use DialogHelpersModule, only : AddListViewRowReal
@@ -352,12 +449,13 @@ module VerticalParamsDialogModule
         
             integer(HANDLE), intent(in) :: hList
             REAL, intent(in) :: vertArr(:)
+            character(len=*), intent(in) :: description
 
             integer :: i
             character(len=16) :: levels
         
             do i = 1, SIZE(vertArr)
-                write(levels, '(A, I0)') "Level ", i
+                write(levels, '(A, I0)') trim(description)//" ", i
                 call AddListViewRowReal(hList, levels, [vertArr(i)], '(F6.2)') ! The 'trim' is done in the called subroutine
             end do
         end subroutine loadLevelsIntItemsIntoListView

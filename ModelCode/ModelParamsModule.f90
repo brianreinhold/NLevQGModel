@@ -41,7 +41,7 @@ module ModelParamsModule
         integer :: maxZonalWaves        ! Maximum number of zonal waves
         integer :: maxMeridWaves        ! Maximum number of meridional waves
         integer :: maxLevels            ! Maximum number of levels
-        logical :: integrationMethodTransform    ! Integration method One of:
+        logical :: useTransformMethod    ! Integration method One of:
                                         !    USE_INTERACTION_COEFFICIENTS = .false. 
                                         !    USE_TRANSFORM = .true. (Spectral transform method)
         integer :: statsOption         ! Statistics options One of:

@@ -388,12 +388,12 @@ module InteractionCoefficientsModule
             ! given the number of zonal and meridional waves. If there are too many, (return value -1)
             ! then we switch to the transform method and do not allocate the interaction coefficients arrays.
 
-            IF(.not. gUserSettings%integrationMethodTransform) then ! False means USE_INTERACTION_COEFFICIENTS
+            IF(.not. gUserSettings%useTransformMethod) then ! False means USE_INTERACTION_COEFFICIENTS
                 !----------------------------------Switch to transform method when gArrayDims%NINTD = -1 (too many interaction coefficients)
                 gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, &
                                                 gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, 0)
                 IF(gCintArr%numOfInteractionCoeffs .EQ. -1) THEN
-                    gUserSettings%integrationMethodTransform = .TRUE.
+                    gUserSettings%useTransformMethod = .TRUE.
                     status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                     return
                 end if
@@ -404,7 +404,7 @@ module InteractionCoefficientsModule
 
             ALLOCATE(BI(gCintArr%numOfInteractionCoeffs), STAT = status) ! Single contiguous memory block for real arrays (there is only one now)
             if (status /= 0) THEN
-                gUserSettings%integrationMethodTransform = .TRUE.
+                gUserSettings%useTransformMethod = .TRUE.
                 gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used
                 RETURN
@@ -413,7 +413,7 @@ module InteractionCoefficientsModule
             totalSize = 2 * gCintArr%numOfInteractionCoeffs + ITOT
             ALLOCATE(IBI(totalSize), STAT = status) ! Single contiguous memory block for integer arrays
             if (status /= 0) THEN
-                gUserSettings%integrationMethodTransform = .TRUE.
+                gUserSettings%useTransformMethod = .TRUE.
                 deallocate(BI, STAT = status)
                 gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used
@@ -430,7 +430,7 @@ module InteractionCoefficientsModule
 
             status = createCintArr(gModIntParams%KMAX2, gModIntParams%LMAX2, currentNoOfInteractions)
             if (status /= 0) THEN
-                gUserSettings%integrationMethodTransform = .TRUE.
+                gUserSettings%useTransformMethod = .TRUE.
                 status = DeallocateCintArrays()
                 gCintArr%numOfInteractionCoeffs = -1
                 status = -1 ! Signal that interaction coefficients are not used and transform method is being used

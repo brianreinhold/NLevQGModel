@@ -5,7 +5,6 @@
       integer, parameter :: IDC_BUTTON_LOAD_SAVED_FLOW = 1045
       integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
       integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
-      integer, parameter :: IDC_LIST_TEMPERATURES2 = 1049
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
@@ -18,6 +17,7 @@
       integer, parameter :: IDC_EDIT1 = 1046
       integer, parameter :: IDC_COMBO_USERSETTINGS2 = 1015
       integer, parameter :: IDD_MODEL_CONTROL = 106
+      integer, parameter :: IDC_STATIC_TURB_MIXING = 1052
       integer, parameter :: IDC_BUTTON_GENERAL_INFO = 1022
       integer, parameter :: IDD_SETTINGS_DLG = 107
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
@@ -33,6 +33,7 @@
       integer, parameter :: ID_CONFIGURATION_SETTINGS = 30016
       integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
       integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
+      integer, parameter :: IDC_LIST_TURB_MIXING = 1051
       integer, parameter :: IDC_LIST_EKMAN_FRICTION = 1049
       integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
       integer, parameter :: IDM_ABOUT = 30015
@@ -55,5 +56,6 @@
       integer, parameter :: IDC_LIST_LEVELS = 1043
       integer, parameter :: IDC_BUTTON_INIT_FLOW_VARIABLES = 1043
       integer, parameter :: IDC_BUTTON_SETUP_BOMB = 1049
+      integer, parameter :: IDC_STATIC_EKMAN_FRICTION2 = 1052
       integer, parameter :: IDC_STATIC_COMBO_SETTINGS1 = 1014
       integer, parameter :: IDC_STATIC_COMBO_SETTINGS2 = 1016

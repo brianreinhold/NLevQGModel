@@ -85,7 +85,7 @@ module SettingsDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
                     ! Initialize the combo box
                     iret = 0
-                    if (gUserSettings%integrationMethodTransform) iret = 1
+                    if (gUserSettings%useTransformMethod) iret = 1
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
                     hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
                     !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
@@ -168,7 +168,7 @@ module SettingsDialogModule
                     if (ISHFT(iData, -16) == CBN_SELCHANGE) then
                         select case(IAND(iData, Z'FFFF'))
                             case (IDC_COMBO_USERSETTINGS1)
-                                gUserSettings%integrationMethodTransform = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
+                                gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
                             case (IDC_COMBO_USERSETTINGS2)
                                 gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
                         end select

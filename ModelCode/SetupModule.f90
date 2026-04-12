@@ -17,9 +17,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     public :: CheckModelResolutions     ! Function to sanity check and correct model resolution parameters in gModIntParams
     public :: CheckModelControlChanges
     public :: SetDimensions     ! SetDimensions which gets the dimensions for array sizes for allocation
-    public :: DIMENSIONALIZE    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
-    public :: NONDIMENSIONALIZE ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
-    public :: DEFAULTS  ! This creates the default values for all the fields in the ModelParamsModule
+    public :: DimensionalizeModRealValues    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
+    public :: NonDimensionalizeModRealValues ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
+    public :: SetDefaults  ! This creates the default values for all the fields in the ModelParamsModule
     public :: DFDIAB    ! Computes default diabatic vertical profiles
     public :: PERTB     ! Introduces a perturbation into the flow:
     public :: ComputeVerticalProfiles     ! Computes outside-loop Vertical arrays
@@ -94,14 +94,14 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 end if
 
                 ! Since data were not loaded from a save file for whatever reason,
-                ! we initialize the model with default values. The DEFAULTS() function
+                ! we initialize the model with default values. The SetDefaults() function
                 ! returns the value IXIYL which is the number of levels. It is used to
                 ! allocate space for the IXL and IYL arrays which are used for storing
                 ! a wavenumber (K and L, respectively) at all levels for plotting a time
                 ! series of the vertical structure of a wave. It is equal to the number
                 ! of current levels. We set it here just to handle the return value as
                 ! required by FORTRAN.
-                call DEFAULTS()   ! Subroutine 1ocated in this file
+                call SetDefaults()   ! Subroutine 1ocated in this file
                 !-----------------Get and set array dim, Allocate, SET default profiles:
 
                 !---------------------------------Set array dimensions for allocation:
@@ -150,7 +150,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! TODO fix to be consistent with the others
             error = AllocateStatsArrays()
             if (error .NE. 0) return
-            if (gUserSettings%integrationMethodTransform .EQV. .FALSE.) then
+            if (gUserSettings%useTransformMethod .EQV. .FALSE.) then
                 ! Using interaction coefficients
                 error = AllocateCintArrays()
                 if (error .EQ. -1) then
@@ -511,7 +511,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF((gUserSettings%maxZonalWaves .NE. gUserSettingsPrev%maxZonalWaves) .OR. &
                (gUserSettings%maxMeridWaves .NE. gUserSettingsPrev%maxMeridWaves)) boolHorzResult = .true.
             if(gUserSettings%maxLevels .NE. gUserSettingsPrev%maxLevels) boolVertResult = .true.
-            if(gUserSettings%integrationMethodTransform .NEQV. gUserSettingsPrev%integrationMethodTransform) boolCoeffResult = .true.
+            if(gUserSettings%useTransformMethod .NEQV. gUserSettingsPrev%useTransformMethod) boolCoeffResult = .true.
             IF(gUserSettings%statsOption .NE. gUserSettingsPrev%statsOption) boolStatsResult = .true.
             
             if (boolHorzResult .OR. boolVertResult) then
@@ -528,7 +528,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             end if
 
 
-            if ((gUserSettings%integrationMethodTransform .EQV. .FALSE.) .AND. & ! If we are using interaction coefficients and
+            if ((gUserSettings%useTransformMethod .EQV. .FALSE.) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
                                                      boolHorzResult)) then      ! the horizontal array dimensions have changed
                 ! Handle interaction coefficient array changes:
@@ -827,7 +827,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !    gUserSettingsPrev%maxZonalWaves = gUserSettings%maxZonalWaves
         !    gUserSettingsPrev%maxMeridWaves = gUserSettings%maxMeridWaves
         !    gUserSettingsPrev%maxLevels = gUserSettings%maxLevels
-        !    gUserSettingsPrev%integrationMethodTransform = gUserSettings%integrationMethodTransform
+        !    gUserSettingsPrev%useTransformMethod = gUserSettings%useTransformMethod
         !    gUserSettingsPrev%statsOption = gUserSettings%statsOption
         !END function ALLOC
 
@@ -866,7 +866,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             errorCode = CheckModParams()  ! Check all the other possible values the user may have changed.
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
 
-            call NONDIMENSIONALIZE()    ! call DIMENSIONALIZE() was done in the WM_INITIDIALOG method in the ModelControl Dialog
+            call NonDimensionalizeModRealValues()    ! call DimensionalizeModRealValues() was done in the WM_INITIDIALOG method in the ModelControl Dialog
 
             if (prevZonalWaves .NE. gModIntParams%KMAX2 .OR. prevMeridWaves .NE. gModIntParams%LMAX2) boolHorzChange = .true.
             if (prevLevels .NE. gModIntParams%NLEV) boolVertChange = .true.
@@ -880,7 +880,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ALLOCATE(DAT(itot_new, gModIntParams%NLEV)) ! Temporary array for reshuffling
 
                 ! Signal that we need to update the interaction coefficents if using interaction coefficients and the horizontal resolution has changed
-                if (gUserSettings%integrationMethodTransform .EQV. .false. .AND. boolHorzChange) boolUpdateCint = .true.
+                if (gUserSettings%useTransformMethod .EQV. .false. .AND. boolHorzChange) boolUpdateCint = .true.
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
@@ -1207,16 +1207,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !========================Thermal mixing exp decay (Convective mixing of temperature):
             EX = 6.
             DO N = 1, gModIntParams%NLEV - 1
-                R = EX * (1. - gVertArr%PV(N) / gVertArr%PV(1))
+                R = EXP(EX * 0.5 * (1. - gVertArr%PV(N) / gVertArr%PV(1)))
         !------------------------------Stop convection at Tropopause
                 IF(gVertArr%PV(N + 1) .GT. TROP) THEN
-                    gVertArr%G(N) = gScaleFactors%dissipation / EXP(R / 2.)
+                    gVertArr%G(N) = gScaleFactors%dissipation / R
                 ELSE
-                    gVertArr%G(N) = gScaleFactors%dissipation / 20.
+                    gVertArr%G(N) = gScaleFactors%dissipation / 20. ! @0 day time scale
                 ENDIF
             END DO
             !  Vort mix=Constant=20 days:
-            gVertArr%FJ(1:gModIntParams%NLEV - 1) = gScaleFactors%dissipation / 20.  ! This gives the same value for all N
+            gVertArr%FJ(1:gModIntParams%NLEV - 1) = gScaleFactors%dissipation / 11.0  ! This gives the same value for all N of 11 days
             gVertArr%FJ(gModIntParams%NLEV) = 0.
         !====================================================Compute PP,DPI,A,AU,SIG
             CALL ComputeVerticalProfiles()
@@ -1224,14 +1224,14 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             CALL RaisanenRadiationProfile()
             IF(gModIntParams%NLEV .NE. 1) gVertArr%G(gModIntParams%NLEV - 1) = 0.
         !==========================================Set surface heating and Ekman fric:
-            gVertArr%H(1) = gScaleFactors%dissipation / 8.  
+            gVertArr%H(1) = gScaleFactors%dissipation / 2.5     ! 2.5 day time scale  
             ! This was set in the RaisanenRadiationProfile method. The conversion between a dimensional dissipation value in 1/days
             ! is dimensional_FK = 1.0_wp / (secondsPerDay * nondimensional_FK * scaleCoriolis)
             ! gScaleFactors%dissipation = 1.0_wp / (secondsPerDay * scaleCoriolis)
             ! to increase the damping. Not sure why it is divided by 8. Probably because
-            ! the scale factor gives 0.11 / day or about 2.7 hr damping.
+            ! the scale factor gives 0.1157 / day or about 2.7 hr damping.
             
-            gVertArr%FK(1) = gScaleFactors%dissipation * 1000. / (gVertArr%PP(1) - gVertArr%PP(2))
+            gVertArr%FK(1) = gScaleFactors%dissipation / 2.5   ! Gives a 2.5 day dissipation 
         END subroutine DFDIAB
 
         !*****************************************Place perturbation in flow:
@@ -1251,11 +1251,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
         END SUBROUTINE PERTB
 
-        !***************************************************** DEFAULTS:
+        !***************************************************** SetDefaults:
         !> THis function sets default values to gModRealParams, gModIntParams, gModScalingParams,
         !> gModPlotParams, and gModSensParams when there is no save file already containing these
         !> fields.
-        SUBROUTINE DEFAULTS()
+        SUBROUTINE SetDefaults()
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
                 OROG_HGT_TEND, HGT_FORCING, PLOT_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
@@ -1268,7 +1268,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gUserSettings%maxZonalWaves = 10
             gUserSettings%maxMeridWaves = 5
             gUserSettings%maxLevels = 10
-            gUserSettings%integrationMethodTransform = .false.
+            gUserSettings%useTransformMethod = .false.
             gUserSettings%statsOption = STATS_OPT_NONE
 
             gUserSettingsPrev = gUserSettings
@@ -1339,8 +1339,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModScalingParams%VR(VERTICAL_WIND) = 5.0 / gPlotScales(VERTICAL_WIND)
             gModScalingParams%VR(TEMP_FORCING) = gModScalingParams%VR(TEMPERATURE)
             DO I = 1, 4
-               gModScalingParams%VR(I + 5) = 60.0 / gPlotScales(I+5)
-               gModScalingParams%VR(I + 9) = 5.0 / gPlotScales(I+9)
+               gModScalingParams%VR(I + 5) = 60.0 / gPlotScales(I + 5)
+               gModScalingParams%VR(I + 9) = 5.0 / gPlotScales(I + 9)
             END DO
             gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / gPlotScales(OROG_HGT_TEND)
             gModScalingParams%VR(OROGRAPHY) = 100.0 / (90.0 * 11.0)
@@ -1377,7 +1377,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  maxZonalWaves,maxMeridWaves: are the 'frame' maximum horizontal resolutions
         !  maxLevels: is the maximum vertical resolution
         !  statsOption: is the statistics option
-        !  integrationMethodTransform: indicates interaction/transform model
+        !  useTransformMethod: indicates interaction/transform model
         !  videoMode is the video resolution
         !----------------------------------------------------JCN values
         !  ISTRM is the type of streamline/contour plot to make
@@ -1472,11 +1472,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gModIntParams%MP(I + 9) = gModIntParams%IPLT2
                 gModIntParams%MP(I + 14) = gModIntParams%IPLT3
             END DO
-        END SUBROUTINE Defaults
+        END SUBROUTINE SetDefaults
 
         !> Subroutine to dimensionalize the gModRealParams before displaying to the user
-        !> Only five of the parameters are affected.
-        subroutine DIMENSIONALIZE()
+        !> Only three of the parameters are affected. DELT, BETA, RN
+        !> Two others XPOS, YPOS go to degrees in 'dimensional' form, otherwise they are in radians.
+        subroutine DimensionalizeModRealValues()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
             
@@ -1486,14 +1487,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
             gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeStep
             gModRealParams%BETA = 4. * gModRealParams%BETA
-            gModRealParams%XPOS = gModRealParams%XPOS * RAD_TO_DEGREES
-            gModRealParams%YPOS = gModRealParams%YPOS * RAD_TO_DEGREES
+            gModRealParams%XPOS = gModRealParams%XPOS * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%YPOS = gModRealParams%YPOS * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
-        end subroutine DIMENSIONALIZE
+        end subroutine DimensionalizeModRealValues
 
         !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
-        !> user has examined and or changed them. Only five of the parameters are affected.
-        subroutine NONDIMENSIONALIZE()
+        !> user has examined and or changed them. Only three of the parameters are affected. DELT, BETA, RN.
+        !> Two others XPOS, YPOS go to radians 'nondimensional' form, otherwise they are in degrees.
+        subroutine NonDimensionalizeModRealValues()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
 
@@ -1505,10 +1507,54 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
             gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeStep
             gModRealParams%BETA = gModRealParams%BETA / 4.
-            gModRealParams%XPOS = gModRealParams%XPOS / RAD_TO_DEGREES
-            gModRealParams%YPOS = gModRealParams%YPOS / RAD_TO_DEGREES
+            gModRealParams%XPOS = gModRealParams%XPOS / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%YPOS = gModRealParams%YPOS / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
-        end subroutine NONDIMENSIONALIZE
+        end subroutine NonDimensionalizeModRealValues
+        
+        subroutine DimensionalizeVerticalParams()
+            use ModelFieldsModule, only: gVertArr
+            use ModelParamsModule, only: gModIntParams, gScaleFactors
+
+            implicit none
+
+            integer :: N
+
+            if (gVertArr%isDimensionalized) return
+            ! Dimensionalize the vertical parameters in gVertArr
+            do N = 1, gModIntParams%NLEV
+                if (gVertArr%FK(N) > 0.0) gVertArr%FK(N) = gScaleFactors%dissipation / gVertArr%FK(N) ! Convert to dimensional FK 1/days
+                if (gVertArr%FJ(N) > 0.0) gVertArr%FJ(N) = gScaleFactors%dissipation / gVertArr%FJ(N) ! Convert to dimensional FJ
+                if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to dimensional G
+                if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to dimensional H
+                ! Non dimensional form was computed from K/mb. For display we make it per 100 mb
+                gVertArr%SIG(N) = 100. * gVertArr%SIG(N) * gScaleFactors%temperatureScale /(gVertArr%A(N) * gVertArr%PP(1)) ! Convert to dimensional SIG K/100 mb
+            end do
+            gVertArr%isDimensionalized = .true. ! Indicate dimensionalized
+
+        end subroutine DimensionalizeVerticalParams
+        
+        subroutine NonDimensionalizeVerticalParams()
+            use ModelFieldsModule, only: gVertArr
+            use ModelParamsModule, only: gModIntParams, gScaleFactors
+
+            implicit none
+
+            integer :: N
+
+            if (.NOT. gVertArr%isDimensionalized) return
+            ! Dimensionalize the vertical parameters in gVertArr
+            do N = 1, gModIntParams%NLEV
+                if (gVertArr%FK(N) > 0.0) gVertArr%FK(N) = gScaleFactors%dissipation / gVertArr%FK(N) ! Convert to non dimensional FK
+                if (gVertArr%FJ(N) > 0.0) gVertArr%FJ(N) = gScaleFactors%dissipation / gVertArr%FJ(N) ! Convert to non dimensional FJ
+                if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to non dimensional G
+                if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to non dimensional H
+                ! Originally calculated from K/mb and made non dimensional, but we display it as K /100mb so we need to divide by 100.
+                gVertArr%SIG(N) = gVertArr%SIG(N) * gVertArr%A(N) * gVertArr%PP(1) / (100.0 * gScaleFactors%temperatureScale) ! Convert to non dimensional SIG
+            end do
+            gVertArr%isDimensionalized = .false. ! Indicate nondimensionalized
+
+        end subroutine NonDimensionalizeVerticalParams
 
         !***************************SUBROUTINE FOR PRECOMPUTABLE VERTICAL ARRAYS:
         !>  This routine computes all the vertical profiles given the user input

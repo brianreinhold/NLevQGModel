@@ -64,6 +64,7 @@ MODULE ModelFieldsModule
     TYPE :: VertArrays
         LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
         LOGICAL :: defined = .FALSE.   ! Flag to indicate if arrays are defined with proper sizes
+        LOGICAL :: isDimensionalized = .FALSE. ! Flag to indicate if arrays have been dimensionalized with physical units (e.g., mb, K, m/s)
         REAL, POINTER :: PV(:) => null()    !  PV(maxLevels) is the user specified levels of the streamfunction. IN a two-layer
                                             !                model this would be at 750 and 250 mb. The interfaces (PP)
                                             !                would be 1000, 500, and 0 (top) mb.

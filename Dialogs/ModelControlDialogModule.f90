@@ -25,7 +25,7 @@ module ModelControlDialogModule
             use iso_c_binding
 
             use ModelParamsModule, only: gModIntParams, gModRealParams
-            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalize, Dimensionalize
+            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealValues, DimensionalizeModRealValues
             use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, LAT_PRES_CROSS_SEC, PLOT_OFF, TEMPERATURE, TOT_HGT_TEND_GRAF, INVALID
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
@@ -92,7 +92,7 @@ module ModelControlDialogModule
                             "Unable to handle the new user settings"C, &
                             "Error encountered"C, &
                             IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
-                        bret = EndDialog(hDlg, IDCANCEL)
+                        bret = DestroyWindow(hDlg)
                         ModelControlDlgProc = 1
                         return
                     end if
@@ -313,14 +313,12 @@ module ModelControlDialogModule
                     end if
                     select case (IAND(wParam, Z'FFFF'))
                         case (IDOK)
-                            bret = EndDialog(hDlg, IDOK)
                             bret = UnhookWindowsHookEx(hHook)
-                            ghModelControlDlg = INVALID
+                            bret = DestroyWindow(hDlg)
                             ModelControlDlgProc = 1
                         case (IDCANCEL)
                             bret = UnhookWindowsHookEx(hHook)
-                            bret = EndDialog(hDlg, IDCANCEL)
-                            ghModelControlDlg = INVALID
+                            bret = DestroyWindow(hDlg)
                             ModelControlDlgProc = 1
                             
                         ! Get result of user editing real values
@@ -392,6 +390,7 @@ module ModelControlDialogModule
 ! ---- F7:  Run Model
                         case (IDC_BUTTON_RUN_MOVIE) ! F7 Run as movie
                             ! paramChange is defined in KeyboardHooksModule
+                            ! Non dimensionalized in the following function
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             ret = InitModelWithModelControlVals()
                             ret = StartTimeLoop()
@@ -399,12 +398,11 @@ module ModelControlDialogModule
                             paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
                             paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
                             paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                            call Dimensionalize() ! Method checks if already dimensionalized
+                            call DimensionalizeModRealValues() ! Method checks if already dimensionalized
 
 ! ---- F10:  Exit to main
                         case (IDC_BUTTON_RETURN_TO_MAIN) ! F10 Close
                             bret = DestroyWindow(hDlg)
-                            ghModelControlDlg = 0
                     end select
 
                 case (WM_CLOSE)
@@ -414,10 +412,11 @@ module ModelControlDialogModule
                 case (WM_DESTROY)
                     ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
                     ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                    call NONDIMENSIONALIZE() ! Method checks if already non-dimensionalized
+                    call NonDimensionalizeModRealValues() ! Method checks if already non-dimensionalized
                     bret = EnableWindow(ghSettingsDlg, .TRUE.)
                     bret = SetForegroundWindow(ghSettingsDlg)
                     bret = ShowWindow(ghSettingsDlg, SW_SHOW)
+                    ghModelControlDlg = 0
             end select
         end function ModelControlDlgProc
 

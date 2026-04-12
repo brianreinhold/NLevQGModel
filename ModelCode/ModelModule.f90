@@ -42,12 +42,6 @@ module ModelModule
             CALL RMLAKL()   ! Computes RML array for the re-projection of the meridional components in the inverse transform routine
                             ! This precomputes some of the factors used in the inverse transform like wavenumber squared, etc. that
                             ! will reduce the muliplications and divisions during the time loop.
-            !----------------------------------------Compute trig arrays for FFT991:
-            !CALL FFTFAX(gCurrentDims%IXMAX, gCurrentDims%IFX, gHorzArr%TRX)
-            !ALL SET99 (gHorzArr%TRX, gCurrentDims%IFX, gCurrentDims%IXMAX)
-            !CALL FFTFAX(gCurrentDims%IYMAX, gCurrentDims%IFY, gHorzArr%TRY)
-            !CALL SET99 (gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%IYMAX)
-
             !===========================================================Zonal model type setup:
             IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW .AND. gModPlotParams%isBarotropic .EQ. 0) THEN
                 !----------------------------Create QcosG and QsinG and place in WW for waves:
@@ -502,67 +496,6 @@ module ModelModule
 
             real, intent(inout) :: buffer(:)
 
-            !---------------------------------------------Flow variables:
-            !REAL*4 PS(gCurrentDims%ITOT, currSettings%maxLevels, 13)
-            !  PS(:, N, 1) = PS at level N
-            !  PS(:, N, 2) = TH
-            !  PS(:, N, 3) = WW
-            !  PS(:, N, 4) = TF
-            !  PS(:, N, 5) = FS
-            !  PS(:, N, 6) = ADS
-            !  PS(:, N, 7) = WS
-            !  PS(:, N, 8) = S
-            !  PS(:, N, 9) = FT
-            !  PS(:, N, 10) = ADT
-            !  PS(:, N, 11) = WT
-            !  PS(:, N, 12) = T
-            !  PS(:, N, 13) = SF
-            !  PS(:, N, 14) = ADO
-            !  PS(:, N, 15) = TOP
-
-            !----------------------------DAT and eigennumbers:
-            !REAL*4 DAT(gCurrentDims%ITOT, 3)
-            !  DAT(:, 1)=DAT
-            !  DAT(:, 2)=AKL
-            !  DAT(:, 3)=AKLI
-
-            !----------------------------Vertical parameters:
-            !REAL*4 PV(currSettings%maxLevels, 13)
-            !  PV(:, 1)=PV
-            !  PV(:, 2)=DP
-            !  PV(:, 3)=DPI
-            !  PV(:, 4)=THS
-            !  PV(:, 5)=FK
-            !  PV(:, 6)=FJ
-            !  PV(:, 7)=AU
-            !  PV(:, 8)=A
-            !  PV(:, 9)=H
-            !  PV(:, 10)=G
-            !  PV(:, 11)=SIG
-            !  PV(:, 12)=X
-            !  PV(:, 13)=Y
-
-            !----------------------------Eigen numbers type:
-            !REAL*4 RML(2 * currSettings%maxMeridWaves + 1, currSettings%maxMeridWaves)
-
-            !----------------------------G1, G2, G3 in G1
-            !REAL*4 G1(KXLYD, 3)
-            !  G1(:, 1)=G1
-            !  G1(:, 2)=G2
-            !  G1(:, 3)=G3
-
-            !-----------------------------Trig work space; TMP=WRK(IBIG+1):
-            !REAL*4 WRK(gCurrentDims%IBIG + LYD)
-            
-            !----------------------------TRX, TRY in TRX(ITRXD+ITRYD)
-            !REAL*4 TRX(ITRXD + ITRYD)
-            
-            !----------------------------CINT,JIN,KIN in INTC:
-            !INTEGER*2 I1M(ITOTD), INTC(NINTD, 4)
-            !  INTC(1,1&2)=CINT
-            !  INTC(1,3)=JIN
-            !  INTC(1,4)=KIN
-
             !------------------------------------------Local variables:
             INTEGER I, K, L, N, NP, NT
             INTEGER ITY
@@ -757,30 +690,10 @@ module ModelModule
 
         !*******************************ROUTINE for NONLINEAR Computations:
         !  Contains both the interaction coefficient routine and the transform routine
-        !  which are separated by the value of integrationMethodTransform.
+        !  which are separated by the value of useTransformMethod.
         !
-        !       NO longer doing the following. Variables are grouped into global type structures
-        !  PS(:, N, 1) = PS at level N
-        !  PS(:, N, 2) = TH
-        !  PS(:, N, 3) = WW
-        !  PS(:, N, 4) = TF
-        !  PS(:, N, 5) = FS
-        !  PS(:, N, 6) = ADS
-        !  PS(:, N, 7) = WS
-        !  PS(:, N, 8) = S
-        !  PS(:, N, 9) = FT
-        !  PS(:, N, 10) = ADT
-        !  PS(:, N, 11) = WT
-        !  PS(:, N, 12) = T
-        !  PS(:, N, 13) = SF
-        !  PS(:, N, 14) = ADO
-        !  PS(:, N, 15) = TOP
 
-        !CALL NONLIN(PS(:,1,14), PS(:,1,1), PS(:,1,15),   G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
-        !CALL NONLIN(PS(:,N,6),  PS(:,N,1), DAT,          G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
-        !CALL NONLIN(PS(:,N,10), DAT,       PS(:,N,2),    G1(:,1), G1(:,2), G1(:,3), RML, WRK, TRX, TRX(ITY), WRK(ITMP), I1M, INTC(:,3), INTC(:,4), currSettings, gCurrentDims)
-  !SUBROUTINE NONLIN(FS,         A,         B,            G1,      G2,      G3,      RML, WRK, TRX, TRY,      TMP,       I1M, JIN,       KIN,       currSettings, gCurrentDims)
-        
+
         !> Routine to compute the nonlinear Jacobian FS = J(A,B)
         !! @param FS The spectral form of the computed Jacobian
         !! @param A The first array in the Jacobian in spectral form J(A,B)
@@ -875,7 +788,7 @@ module ModelModule
             REAL AKN, SQ, AA, BA, RL, RM, AL2
 
             !------------------------------------------------------ Start for interaction coefficients:
-            IF(gUserSettings%integrationMethodTransform .EQ. .FALSE.) then
+            IF(gUserSettings%useTransformMethod .EQ. .FALSE.) then
                 !****************************************Now for the interaction routine:
                 !  Routine to compute the nonlinear terms of the interaction coefficient
                 !  model.  The coefficients are computed in the routine computeInteractionCoefficients()
