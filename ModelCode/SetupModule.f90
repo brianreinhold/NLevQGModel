@@ -739,98 +739,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         end function CheckModParams 
 
-        !> Method to allocate arrays
-        !> This function allocates all the ModelFieldsModule arrays based upon the
-        !> the user settings. It can also switch the integration method from interaction
-        !> coefficients to spectral transform method if the gUserSettings are such that
-        !> too many interaction coefficients are needed.
-        !function ALLOC() result(errorCode)
-        !    use ConstantsModule
-        !    use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams       ! Defines type Settings
-        !    use ModelFieldsModule 
-        !    use ArrayDimensionsModule
-        !    use InteractionCoefficientsModule
-        !
-        !    !--------------- Local variables
-        !    integer :: errorCode
-        !    LOGICAL :: res
-        !
-        !    errorCode = 0
-        !
-        !!---------------------------------Set array dimensions for allocation:
-        !    !  This method loads the IXMAX, IYMAX, IZMAX, KX, LY, IBIG, IBOX, ITOT, IYH, IXMAX1
-        !    !  values into the gArrayDims type.
-        !    !res = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
-        !
-        !    !=====================================Set aside space for all vertical arrays:
-        !    IF (isAlloced(VERT_ARRAYS) .EQ. NEED_REALLOC) errorCode = DeallocateVerticalArrays()
-        !    IF (isAlloced(VERT_ARRAYS) .LE. NEED_REALLOC) then 
-        !        !---------- Allocates and zeros vertical arrays
-        !        errorCode = AllocateVerticalArrays()
-        !        !-------------------------------------Check for Error in allocation (not enough memory):
-        !        IF(errorCode .EQ. 0) THEN
-        !            isAlloced(VERT_ARRAYS) = IS_ALLOCATED
-        !            errorCode = createVertArr(gModIntParams%NLEV)  ! Function in ModelFieldsModule to set up vertical arrays
-        !        else
-        !            errorCode = 11      ! Allocation error code
-        !            isAlloced(VERT_ARRAYS) = NOT_ALLOCATED
-        !            return
-        !        END IF
-        !    END IF
-        !
-        !    !=====================================Set aside space for horizontal arrays:
-        !
-        !    IF(isAlloced(HORZ_ARRAYS) .EQ. NEED_REALLOC) errorCode = deallocateHorizontalArrays()
-        !    IF (isAlloced(HORZ_ARRAYS) .LE. NEED_REALLOC) then 
-        !        !------------------------------------Allocate the Horizontal arrays
-        !        errorCode = AllocateHorizontalArrays()
-        !        !-------------------------------------Error in allocation (not enough memory):
-        !        IF(errorCode .NE. 0)THEN
-        !            isAlloced(HORZ_ARRAYS) = NOT_ALLOCATED
-        !            errorCode = DeallocateVerticalArrays()
-        !            return
-        !        ELSE
-        !            isAlloced(HORZ_ARRAYS) = IS_ALLOCATED
-        !            errorCode = createHorzArr(gModIntParams%kmax2, gModIntParams%lmax2, gModIntParams%nlev, gCurrentDims)
-        !        END IF
-        !    END IF
-        !
-        !    !==================================================Allocate statistics arrays:
-        !    IF(isAlloced(STATS_ARRAYS) .EQ. NEED_REALLOC) errorCode = DeallocateStatsArrays()
-        !    if(isAlloced(STATS_ARRAYS) .LE. NEED_REALLOC) then
-        !        errorCode = AllocateStatsArrays()
-        !        IF(errorCode .NE. 0) THEN
-        !            isAlloced(STATS_ARRAYS) = NOT_ALLOCATED
-        !            errorCode = DeallocateVerticalArrays()
-        !            errorCode = deallocateHorizontalArrays()
-        !            return
-        !        ELSE
-        !            isAlloced(STATS_ARRAYS) = IS_ALLOCATED
-        !        END IF
-        !    END IF
-        !
-        !
-        !    !==================================================For interaction coef model:
-        !    IF(isAlloced(INTERACT_COEF_ARRAYS) .LE. NEED_REALLOC) THEN
-        !        IF(isAlloced(INTERACT_COEF_ARRAYS) .EQ. NEED_REALLOC) errorCode = DeallocateCintArrays()
-        !
-        !        errorCode = AllocateCintArrays()
-        !        !-------------------------------------Error in allocation (not enough memory or too many coefficients):
-        !        IF(errorCode .NE. 0) THEN
-        !            isAlloced(INTERACT_COEF_ARRAYS) = NOT_ALLOCATED    ! Method will have switched to transform method if it wasn't already
-        !            errorCode = 0
-        !        ELSE
-        !            isAlloced(INTERACT_COEF_ARRAYS) = IS_ALLOCATED
-        !        ENDIF
-        !    ENDIF
-        !    !------------------------Indicators for detecting new resolution change:
-        !    gUserSettingsPrev%maxZonalWaves = gUserSettings%maxZonalWaves
-        !    gUserSettingsPrev%maxMeridWaves = gUserSettings%maxMeridWaves
-        !    gUserSettingsPrev%maxLevels = gUserSettings%maxLevels
-        !    gUserSettingsPrev%useTransformMethod = gUserSettings%useTransformMethod
-        !    gUserSettingsPrev%statsOption = gUserSettings%statsOption
-        !END function ALLOC
-
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings
@@ -998,51 +906,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             PS = DAT
         END SUBROUTINE ReshuffleArrays
 
-        !SUBROUTINE ReshuffleArrays(DAT, PS, prevZonalWaves, prevMeridWaves)
-        !    use ModelParamsModule, only: gModIntParams
-        !    use UtilitiesModule, only: ZeroRealArray
-        !
-        !    REAL, intent(inout) :: PS(*)
-        !    real, intent(inout) :: DAT(*)
-        !    INTEGER, intent(in) :: prevZonalWaves, prevMeridWaves !KOLD, prevMeridWaves
-        !
-        !    INTEGER I, II, J, K, L, IOLD, INEW
-        !
-        !    ! To go from I to K, L we use K=(I-1-modIntParam%LMAX2)/(2*modIntParam%LMAX2)+1, L=(I-(2*K-1)*modIntParam%LMAX2+1)/2
-        !    ! where MOD(L, 2) = 0 (before division by 2) means the component is real.
-        !
-        !    !------------------------------------------------ Compute old and new I-sizes:
-        !    IOLD = prevMeridWaves + 2 * prevMeridWaves * prevZonalWaves
-        !    INEW = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * gModIntParams%KMAX2
-        !    !------------------------------------------------ Copy old data into DAT:
-        !    DO I = 1, IOLD
-        !        DAT(I) = PS(I)
-        !    end DO
-        !    !------------------------------------------------ Zero data in array:
-        !    CALL ZeroRealArray(PS, INEW)
-        !    !------------------------------------------------ Compute K,L,II for old data:
-        !    DO I = 1, IOLD
-        !        K = 1 + (I - 1 - prevMeridWaves) / (2 * prevMeridWaves)
-        !        L = I - (2 * K - 1) * prevMeridWaves + 1
-        !        !-------------------------------------------- See if we have cosknx or sinknx:
-        !        II = MOD(L, 2)
-        !        L = L / 2
-        !        !-------------------------------------------- Compute position in new array:
-        !        J = (2 * K - 1) * gModIntParams%LMAX2 + 2 * L - 1 + II
-        !        !-------------------------------------------- Special case for I less than prevMeridWaves:
-        !        IF(I .LE. prevMeridWaves) THEN
-        !            K = 0
-        !            J = I
-        !            !---------------------------------------- Check that new array has the value:
-        !            IF(J .GT. gModIntParams%LMAX2) CYCLE
-        !        ENDIF
-        !        IF(J .GT. INEW) CYCLE
-        !        PS(J) = DAT(I)
-        !    end DO
-        !
-        !END SUBROUTINE
-
-
         !>***************************************************** Get sizes of arrays:
         !> Method populates the Dims type defined in ArrayDimensionsModule
         !> given the input sizes. These are used for allocating the plotting-related arrays
@@ -1209,20 +1072,20 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO N = 1, gModIntParams%NLEV - 1
                 R = EXP(EX * 0.5 * (1. - gVertArr%PV(N) / gVertArr%PV(1)))
         !------------------------------Stop convection at Tropopause
-                IF(gVertArr%PV(N + 1) .GT. TROP) THEN
+                IF(gVertArr%PV(N) .GT. TROP) THEN
                     gVertArr%G(N) = gScaleFactors%dissipation / R
                 ELSE
-                    gVertArr%G(N) = gScaleFactors%dissipation / 20. ! @0 day time scale
+                    gVertArr%G(N) = gScaleFactors%dissipation / 20. ! 20 day time scale
                 ENDIF
             END DO
             !  Vort mix=Constant=20 days:
-            gVertArr%FJ(1:gModIntParams%NLEV - 1) = gScaleFactors%dissipation / 11.0  ! This gives the same value for all N of 11 days
-            gVertArr%FJ(gModIntParams%NLEV) = 0.
+            gVertArr%FJ(1:gModIntParams%NLEV) = gScaleFactors%dissipation / 11.0  ! This gives the same value for all N of 11 days
+
         !====================================================Compute PP,DPI,A,AU,SIG
             CALL ComputeVerticalProfiles()
         !------------------------------------------Compute Petri TF and H profiles:
             CALL RaisanenRadiationProfile()
-            IF(gModIntParams%NLEV .NE. 1) gVertArr%G(gModIntParams%NLEV - 1) = 0.
+            !IF(gModIntParams%NLEV .NE. 1) gVertArr%G(gModIntParams%NLEV - 1) = 0.
         !==========================================Set surface heating and Ekman fric:
             gVertArr%H(1) = gScaleFactors%dissipation / 2.5     ! 2.5 day time scale  
             ! This was set in the RaisanenRadiationProfile method. The conversion between a dimensional dissipation value in 1/days
@@ -1525,10 +1388,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             do N = 1, gModIntParams%NLEV
                 if (gVertArr%FK(N) > 0.0) gVertArr%FK(N) = gScaleFactors%dissipation / gVertArr%FK(N) ! Convert to dimensional FK 1/days
                 if (gVertArr%FJ(N) > 0.0) gVertArr%FJ(N) = gScaleFactors%dissipation / gVertArr%FJ(N) ! Convert to dimensional FJ
-                if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to dimensional G
-                if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to dimensional H
+                if (N .GT. gModIntParams%NLEV - 1) cycle
                 ! Non dimensional form was computed from K/mb. For display we make it per 100 mb
                 gVertArr%SIG(N) = 100. * gVertArr%SIG(N) * gScaleFactors%temperatureScale /(gVertArr%A(N) * gVertArr%PP(1)) ! Convert to dimensional SIG K/100 mb
+                if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to dimensional G
+                if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to dimensional H
             end do
             gVertArr%isDimensionalized = .true. ! Indicate dimensionalized
 
@@ -1547,14 +1411,53 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             do N = 1, gModIntParams%NLEV
                 if (gVertArr%FK(N) > 0.0) gVertArr%FK(N) = gScaleFactors%dissipation / gVertArr%FK(N) ! Convert to non dimensional FK
                 if (gVertArr%FJ(N) > 0.0) gVertArr%FJ(N) = gScaleFactors%dissipation / gVertArr%FJ(N) ! Convert to non dimensional FJ
+                ! Originally calculated from K/mb and made non dimensional, but we display it as K /100mb so we need to divide by 100.
+                if (N .GT. gModIntParams%NLEV - 1) cycle
                 if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to non dimensional G
                 if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to non dimensional H
-                ! Originally calculated from K/mb and made non dimensional, but we display it as K /100mb so we need to divide by 100.
                 gVertArr%SIG(N) = gVertArr%SIG(N) * gVertArr%A(N) * gVertArr%PP(1) / (100.0 * gScaleFactors%temperatureScale) ! Convert to non dimensional SIG
             end do
             gVertArr%isDimensionalized = .false. ! Indicate nondimensionalized
 
         end subroutine NonDimensionalizeVerticalParams
+        
+        subroutine DimensionalizeHorizontalParams()
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelParamsModule, only: gModIntParams, gScaleFactors
+            use ArrayDimensionsModule, only: gCurrentDims
+
+            implicit none
+
+            integer :: Index, N
+            real :: tempScale
+
+            ! Do temperature variables first. There is one less interface than levels
+            do N = 1, gModIntParams%NLEV - 1
+                tempScale = gScaleFactors%temperatureScale / gVertArr%A(N) ! The scaling factor for the temperature at level N
+                do Index = 1, gCurrentDims%ITOT
+                    gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
+                end do
+            end do
+        end subroutine DimensionalizeHorizontalParams
+        
+        subroutine NonDimensionalizeHorizontalParams()
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelParamsModule, only: gModIntParams, gScaleFactors
+            use ArrayDimensionsModule, only: gCurrentDims
+
+            implicit none
+
+            integer :: Index, N
+            real :: tempScale
+
+            ! Do temperature variables first. There is one less interface than levels
+            do N = 1, gModIntParams%NLEV - 1
+                tempScale = gVertArr%A(N) / gScaleFactors%temperatureScale ! The scaling factor for the temperature at level N
+                do Index = 1, gCurrentDims%ITOT
+                    gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
+                end do
+            end do
+        end subroutine NonDimensionalizeHorizontalParams
 
         !***************************SUBROUTINE FOR PRECOMPUTABLE VERTICAL ARRAYS:
         !>  This routine computes all the vertical profiles given the user input
@@ -1629,6 +1532,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gVertArr%A(N) = R * RU
                 RL = RU
             END DO
+            gVertArr%A(gModIntParams%NLEV) = CP * gVertArr%PV(gModIntParams%NLEV)**KAPPA / (CORIOLIS * gVertArr%PP(1)**KAPPA)
             !--------------------------------Set aside root scale factor:
                 !AT = gVertArr%A(1)      ! We'll figure this out later. This is some kind of item for plotting
             !--------------------------------Compute sigma profile AND nondimensionalize:
@@ -1728,7 +1632,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !--------------------------------------------------TH = R*T Potential temperature conv:
                 R = (1000. / gVertArr%PP(N))**KAPPA
         !--------------------------------------------------Compute time scale (Y * R converts the Y temperature to potential temperation):
-                gVertArr%H(N) = .25 * gVertArr%THS(N) / (Y * R) ! The .25 is the linearization of the T**4 boltzmann radiation I believe.
+                if (N .LT. gModIntParams%NLEV - 1) then
+                    gVertArr%H(N) = .25 * (gVertArr%THS(N) +  gVertArr%THS(N + 1)) / (2.0 * Y * R) ! The .25 is the linearization of the T**4 boltzmann radiation I believe.
+                else
+                    gVertArr%H(N) = .25 * gVertArr%THS(N) / (Y * R)! The .25 is the linearization of the T**4 boltzmann radiation I believe.
+                end if
         !--------------------------------------------------Nondimensionalize:
                 IF(gVertArr%H(N) .NE. 0.) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N)
         !--------------------------------------------------Zero TF at level N

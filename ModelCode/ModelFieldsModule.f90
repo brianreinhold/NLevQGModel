@@ -139,6 +139,7 @@ MODULE ModelFieldsModule
     TYPE :: HorzArrays
         LOGICAL :: allocated = .FALSE.          !  Flag to indicate if arrays are allocated and defined
         LOGICAL :: defined = .FALSE.            !  Flag to indicate if arrays are defined with proper sizes
+        LOGICAL :: isDimensionalized = .FALSE.  ! Flag to indicate if arrays have been dimensionalized with physical units (for display to user and graphics)
         REAL, POINTER :: GQ(:,:) => null()      !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
         REAL, POINTER :: BTA(:) => null()       !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
         REAL, POINTER :: PSB(:) => null()       !  PSB(ITOT) is the vert. mean flow for the waves in the modelType = ZONAL_MEAN_FLOWS option

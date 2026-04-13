@@ -29,12 +29,15 @@ module VerticalParamsDialogModule
             use NlevelQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
+            use ConstantsModule, only: REAL_TO_ASCII
+            use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: GetComboIndex, moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit
-            use ModelParamsModule, only: gUserSettings
+            use ModelParamsModule, only: gModIntParams
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
-            use ModelFieldsModule, only: gVertArr
-            use SetUpModule, only: DimensionalizeVerticalParams, NonDimensionalizeVerticalParams
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            use SetUpModule, only: DimensionalizeVerticalParams, NonDimensionalizeVerticalParams, &
+                                   DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
 
 
 
@@ -52,15 +55,18 @@ module VerticalParamsDialogModule
             integer(kind=4) :: iData
             integer(kind=4) :: iret
             integer(BOOL) ::   bret
-            integer(HANDLE) :: hHook
-            save hHook
-    
+            integer(HANDLE), save :: hHook
+
+
             type(T_RECT) :: rc
             type(T_POINT) :: pt
+            
+            real, pointer :: pTempDriving(:)  ! Local 1D pointer
 
             ! For the list view report rows
             integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton, hFocus
             integer, save :: pvRowClicked, thsRowClicked, fkRowClicked, fjRowClicked
+            integer, save :: hRowClicked, gRowClicked, tfRowClicked
             integer :: id
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
@@ -82,35 +88,40 @@ module VerticalParamsDialogModule
                     thsRowClicked = -1
                     fkRowClicked = -1
                     call DimensionalizeVerticalParams()
+                    call DimensionalizeHorizontalParams()
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgVerticalParamsProc), NULL, GetCurrentThreadId())
                     ghVerticalParamsDlg = hDlg
 
-                    !! ===> Combo boxes require manual editing of their height if you want the list of options <== !!
-                    !       to be exposed on click only.
-                    ! Integration Method
-                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
-                    ! Initialize the combo box
-                    iret = 0
-                    if (gUserSettings%useTransformMethod) iret = 1
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
-                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
-
-                    ! Statistics Options
-                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
-                    ! Initialize the combo box
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
-                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
+                    !!! ===> Combo boxes require manual editing of their height if you want the list of options <== !!
+                    !!       to be exposed on click only.
+                    !! Integration Method
+                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
+                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
+                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
+                    !! Initialize the combo box
+                    !iret = 0
+                    !if (gUserSettings%useTransformMethod) iret = 1
+                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
+                    !hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
+                    !
+                    !! Statistics Options
+                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
+                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
+                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
+                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
+                    !! Initialize the combo box
+                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
+                    !hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
 
                     call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Interfaces", ACHAR(176)//"K"], gVertArr%THS, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer")
                     call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Interfaces", "1/days"], gVertArr%FJ, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer")
+                    call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface")
+                    pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)
+                    call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface")
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -156,8 +167,9 @@ module VerticalParamsDialogModule
                                         call moveEditBox(hDlg, hList, hEdit, rowClicked)
                                         ! Function returns pointer to the correct array based on which list view was clicked
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
-                                        ! Method picks the correct real parameter to convert to string for edit box
-                                        str = getStringFromRealForEditBox(j, ptr)
+                                        ! Converts real value to string for edit box
+                                        ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1), str)
+                                        !str = getStringFromRealForEditBox(ptr(J + 1))
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
@@ -172,14 +184,14 @@ module VerticalParamsDialogModule
                     !loWord = IAND(iData, Z'FFFF')
                     !hiWord = ISHFT(iData, -16)
                     ! Combo box change
-                    if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
-                        select case(IAND(wParam, Z'FFFF'))
-                            case (IDC_COMBO_USERSETTINGS1)
-                                gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
-                            case (IDC_COMBO_USERSETTINGS2)
-                                gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
-                        end select
-                    end if
+                    !if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
+                    !    select case(IAND(wParam, Z'FFFF'))
+                    !        case (IDC_COMBO_USERSETTINGS1)
+                    !            gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
+                    !        case (IDC_COMBO_USERSETTINGS2)
+                    !            gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
+                    !    end select
+                    !end if
 
                     select case (IAND(wParam, 16#FFFF))
 
@@ -227,7 +239,9 @@ module VerticalParamsDialogModule
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
-                                            strC = getStringFromRealForEditBox(rowClicked, ptr)
+                                            
+                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1), strC)
+                                            !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC)
                                             exit EN
                                         end if
@@ -243,7 +257,8 @@ module VerticalParamsDialogModule
                 case (WM_DESTROY)
                     !bret = WriteCurrentStateToFile(hDlg, gModelSaveFile, gModelWelford, .true.)
                     bret = UnhookWindowsHookEx(hHook)
-                    call NonDimensionalizeVerticalParams()
+                    call NonDimensionalizeHorizontalParams()
+                    call NonDimensionalizeVerticalParams()                    
                     ghVerticalParamsDlg = 0
             end select
             VerticalParamsDlgProc = 0 ! Didn't process the dialog message dlgMsg
@@ -278,7 +293,10 @@ module VerticalParamsDialogModule
                     if (id == IDC_LIST_LEVELS .OR. &
                         id == IDC_LIST_TEMPERATURES .OR. &
                         id == IDC_LIST_EKMAN_FRICTION .OR. &
-                        id == IDC_LIST_TURB_MIXING) isClicked = .true.
+                        id == IDC_LIST_TURB_MIXING .OR. &
+                        id == IDC_LIST_NEWT_COOLING .OR. &
+                        id == IDC_LIST_TEMP_MIXING .OR. &
+                        id == IDC_LIST_THERMAL_DRIVING) isClicked = .true.
                 end function isListControlId
         
 ! ------ getListControlIdFromRowClicked()
@@ -297,6 +315,12 @@ module VerticalParamsDialogModule
                         id = IDC_LIST_EKMAN_FRICTION
                     else if (fjRowClicked >= 0) then
                         id = IDC_LIST_TURB_MIXING
+                    else if (hRowClicked >= 0) then
+                        id = IDC_LIST_NEWT_COOLING
+                    else if (gRowClicked >= 0) then
+                        id = IDC_LIST_TEMP_MIXING
+                    else if (tfRowClicked >= 0) then
+                        id = IDC_LIST_THERMAL_DRIVING
                     endif
                 end function getListControlIdFromRowClicked
 
@@ -315,6 +339,12 @@ module VerticalParamsDialogModule
                         hList = GetDlgItem(hDlg, IDC_LIST_EKMAN_FRICTION)
                     else if (fjRowClicked >= 0) then 
                         hList = GetDlgItem(hDlg, IDC_LIST_TURB_MIXING)
+                    else if (hRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_NEWT_COOLING)
+                    else if (gRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_TEMP_MIXING)
+                    else if (tfRowClicked >= 0) then 
+                        hList = GetDlgItem(hDlg, IDC_LIST_THERMAL_DRIVING)
                     endif
                 end function getListControlHandleFromRowClicked
 
@@ -333,6 +363,12 @@ module VerticalParamsDialogModule
                         ptr => gVertArr%FK
                     else if (fjRowClicked >= 0) then 
                         ptr => gVertArr%FJ
+                    else if (hRowClicked >= 0) then 
+                        ptr => gVertArr%H
+                    else if (gRowClicked >= 0) then 
+                        ptr => gVertArr%G
+                    else if (tfRowClicked >= 0) then 
+                        ptr => ghorzArr%TF(1, 1:gModIntParams%NLEV)
                     endif
                 end function getArrayFromRowClicked
 
@@ -352,6 +388,12 @@ module VerticalParamsDialogModule
                         fkrowclicked = rowclicked
                     else if (id == IDC_LIST_TURB_MIXING) then
                         fjrowclicked = rowclicked
+                    else if (id == IDC_LIST_NEWT_COOLING) then
+                        hrowclicked = rowclicked
+                    else if (id == IDC_LIST_TEMP_MIXING) then
+                        growclicked = rowclicked
+                    else if (id == IDC_LIST_THERMAL_DRIVING) then
+                        tfrowclicked = rowclicked
                     end if
                 end subroutine setRowClickedForCorrectListControl
 
@@ -370,6 +412,12 @@ module VerticalParamsDialogModule
                         ptr => gVertArr%FK
                     else if (id == IDC_LIST_TURB_MIXING) then
                         ptr => gVertArr%FJ
+                    else if (id == IDC_LIST_NEWT_COOLING) then
+                        ptr => gVertArr%H
+                    else if (id == IDC_LIST_TEMP_MIXING) then
+                        ptr => gVertArr%G
+                    else if (id == IDC_LIST_THERMAL_DRIVING) then
+                        ptr => ghorzArr%TF(1, 1:gModIntParams%NLEV)
                     endif
                 end function getArrayFromId
 
@@ -386,6 +434,10 @@ module VerticalParamsDialogModule
                     thsRowClicked = -1
                     fkRowClicked = -1
                     fjrowclicked = -1
+                    hRowClicked = -1
+                    gRowClicked = -1
+                    tfRowClicked = -1
+
                     if (id == IDC_LIST_LEVELS) then
                         rowClicked = pvRowClicked
                     else if (id == IDC_LIST_TEMPERATURES) then
@@ -394,6 +446,12 @@ module VerticalParamsDialogModule
                         rowClicked = fkRowClicked
                     else if (id == IDC_LIST_TURB_MIXING) then
                         rowClicked = fjRowClicked
+                    else if (id == IDC_LIST_NEWT_COOLING) then
+                        rowClicked = hRowClicked
+                    else if (id == IDC_LIST_TEMP_MIXING) then
+                        rowClicked = gRowClicked
+                    else if (id == IDC_LIST_THERMAL_DRIVING) then
+                        rowClicked = tfRowClicked
                     end if
                 end function getRowClickedFromId
 
@@ -454,7 +512,7 @@ module VerticalParamsDialogModule
             integer :: i
             character(len=16) :: levels
         
-            do i = 1, SIZE(vertArr)
+            do i = 1, gModIntParams%NLEV
                 write(levels, '(A, I0)') trim(description)//" ", i
                 call AddListViewRowReal(hList, levels, [vertArr(i)], '(F6.2)') ! The 'trim' is done in the called subroutine
             end do
@@ -464,22 +522,21 @@ module VerticalParamsDialogModule
         ! one of the real parameters and this method gets the real value and converts it
         ! to a string to load into the edit box. The routine that actually does the work
         ! is RealToAsciiToReal. All this does is pick the correct real parameter to convert.
-        function getStringFromRealForEditBox(caseSelect, vertArr) result(str)
-            use ModelParamsModule, only: gModRealParams
-            use ConstantsModule, only: REAL_TO_ASCII
-            use UtilitiesModule, only: LENGTH, RealToAsciiToReal
-            
-            implicit none
-
-            integer, intent(in) :: caseSelect
-            real, intent(inout) :: vertArr(:)
-
-            character(len=LENGTH) :: str
-            integer :: ios
-
-            ios = RealToAsciiToReal(REAL_TO_ASCII, vertArr(caseSelect + 1), str)
-
-        end function getStringFromRealForEditBox
+        !function getStringFromRealForEditBox(vertValue) result(str)
+        !    use ModelParamsModule, only: gModRealParams
+        !    use ConstantsModule, only: REAL_TO_ASCII
+        !    use UtilitiesModule, only: LENGTH, RealToAsciiToReal
+        !    
+        !    implicit none
+        !
+        !    real, intent(inout) :: vertValue
+        !
+        !    character(len=LENGTH) :: str
+        !    integer :: ios
+        !
+        !    ios = RealToAsciiToReal(REAL_TO_ASCII, vertValue, str)
+        !
+        !end function getStringFromRealForEditBox
 
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
