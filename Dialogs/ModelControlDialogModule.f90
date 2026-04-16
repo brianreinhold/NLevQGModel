@@ -24,12 +24,12 @@ module ModelControlDialogModule
             use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
 
-            use ModelParamsModule, only: gModIntParams, gModRealParams
-            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealValues, DimensionalizeModRealValues
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
+            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams
             use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, LAT_PRES_CROSS_SEC, PLOT_OFF, TEMPERATURE, TOT_HGT_TEND_GRAF, INVALID
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
-            use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue
+            use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
 
             implicit none
@@ -69,7 +69,7 @@ module ModelControlDialogModule
             type(T_POINT) :: pt
 
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hCombo, hStaticCombo
+            integer(HANDLE) :: hList, hEdit, hCombo, hCheckBox
             integer :: i
             INTEGER :: realRowClicked, intRowClicked
             save realRowClicked, intRowClicked
@@ -97,6 +97,9 @@ module ModelControlDialogModule
                         return
                     end if
 
+                    call DimensionalizeModRealParams()
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
+                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
                     ! If we get here we need to save some of the fields in modelIntParams and modelRealParams in case
                     ! the user changes them.
                     paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
@@ -346,7 +349,7 @@ module ModelControlDialogModule
                                         ! Load the new value into the correct modRealParam field
                                         ios = readRealDataFromEditBox(str, realRowClicked)
                                         if (ios .NE. 0) then
-                                            ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
+                                            !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
                                             strC = getStringFromRealForEditBox(realRowClicked)
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_REALVALUES, strC)
                                         end if
@@ -379,7 +382,23 @@ module ModelControlDialogModule
                                         bret = GetDlgItemText(hDlg, IDC_EDIT_INTEGERVALUES, strC, LEN(strC))
                                         call updateListViewValue(hEdit, hList, intRowClicked, strC)
                                     end BLOCK
-                                END SELECT
+                            END SELECT
+                        case (IDC_CHECK_MODREAL_DIMENSIONALIZE)
+                            if (ISHFT(wParam, -16) == BN_CLICKED) then
+        
+                                ! Now we ask Windows: "Is it checked or not?"
+                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE) /= 0) then
+                                    ! User checked it - update your variable/logic here
+                                    call DimensionalizeModRealParams()
+                                else
+                                    ! User unchecked it
+                                    call NonDimensionalizeModRealParams()
+                                end if
+                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
+                                bret = SetFocus(GetDlgItem(hDlg, IDC_REALVALUES))
+                                call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_REALVALUES))
+                                call handleRealListControl(hDlg)
+                            endif
 
 ! ------------------ Now to handle the F1-F10 buttons
 ! ---- F2:  Edit Vertical Parameters
@@ -398,7 +417,7 @@ module ModelControlDialogModule
                             paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
                             paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
                             paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                            call DimensionalizeModRealValues() ! Method checks if already dimensionalized
+                            call DimensionalizeModRealParams() ! Method checks if already dimensionalized
 
 ! ---- F10:  Exit to main
                         case (IDC_BUTTON_RETURN_TO_MAIN) ! F10 Close
@@ -412,7 +431,7 @@ module ModelControlDialogModule
                 case (WM_DESTROY)
                     ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
                     ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                    call NonDimensionalizeModRealValues() ! Method checks if already non-dimensionalized
+                    call NonDimensionalizeModRealParams() ! Method checks if already non-dimensionalized
                     bret = EnableWindow(ghSettingsDlg, .TRUE.)
                     bret = SetForegroundWindow(ghSettingsDlg)
                     bret = ShowWindow(ghSettingsDlg, SW_SHOW)

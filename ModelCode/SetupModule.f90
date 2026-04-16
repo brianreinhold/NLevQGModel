@@ -17,8 +17,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     public :: CheckModelResolutions     ! Function to sanity check and correct model resolution parameters in gModIntParams
     public :: CheckModelControlChanges
     public :: SetDimensions     ! SetDimensions which gets the dimensions for array sizes for allocation
-    public :: DimensionalizeModRealValues    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
-    public :: NonDimensionalizeModRealValues ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
+    public :: DimensionalizeModRealParams    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
+    public :: NonDimensionalizeModRealParams ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
     public :: SetDefaults  ! This creates the default values for all the fields in the ModelParamsModule
     public :: DFDIAB    ! Computes default diabatic vertical profiles
     public :: PERTB     ! Introduces a perturbation into the flow:
@@ -774,7 +774,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             errorCode = CheckModParams()  ! Check all the other possible values the user may have changed.
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
 
-            call NonDimensionalizeModRealValues()    ! call DimensionalizeModRealValues() was done in the WM_INITIDIALOG method in the ModelControl Dialog
+            call NonDimensionalizeModRealParams()    ! call DimensionalizeModRealParams() was done in the WM_INITIDIALOG method in the ModelControl Dialog
 
             if (prevZonalWaves .NE. gModIntParams%KMAX2 .OR. prevMeridWaves .NE. gModIntParams%LMAX2) boolHorzChange = .true.
             if (prevLevels .NE. gModIntParams%NLEV) boolVertChange = .true.
@@ -1030,10 +1030,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             Logical, intent(in) :: needPressureLevels
 
             integer :: N
-            REAL :: R, DELP, THS0, THS1, EX, TROP
+            REAL :: R, DELP, THS1, EX
         !-----------------------------------------------:
-        ! TROP=Pressure level of tropopause
-        ! THS0=Vorticity level 1 potential temperature
+        ! gVertArr%tropopauseLevel=Pressure level of tropopause
+        ! gVertArr%THS(1) = Fixed Vorticity level 1 potential temperature
         ! THS1=Tropospheric static stability (dT/dp)in T/mb which is constant
         ! EX=Exponential decay rate of certain profiles
         
@@ -1053,17 +1053,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 END DO
             ENDIF
         !========================================Compute Basic state temp profile:
-            TROP = 250.         ! Height of tropopause
-            THS0 = 285.         ! Potential temperature at surface (1000 mb)
+            gVertArr%tropopauseLevel = 250.         ! Height of tropopause
+            gVertArr%THS(1) = 285.0                 ! Potential temperature of vorticity level 1 (lowest layer). Note that it is NOT at an interface
+                                                    ! The THS field is to compute static stabilty at the interfaces and to use in the Raisanen sheme
             THS1 = .14          ! Increase in potential temperature per 100 mb
         !----------------------------------Potential temperature at tropopause
-            EX = THS0 + (gVertArr%PV(1) - TROP) * THS1
+            EX = gVertArr%THS(1) + (gVertArr%PV(1) - gVertArr%tropopauseLevel) * THS1
             DO N = 1, gModIntParams%NLEV
-                IF(gVertArr%PV(N) .GT. TROP) THEN
-                    gVertArr%THS(N) = THS0 + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
+                IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
+                    gVertArr%THS(N) = gVertArr%THS(1) + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
                 ELSE
         !-----------------------------------Stratospheric isothermal profile in Temp.
-                    gVertArr%THS(N) = EX * (TROP / gVertArr%PV(N))**KAPPA
+                    gVertArr%THS(N) = EX * (gVertArr%tropopauseLevel / gVertArr%PV(N))**KAPPA
                 ENDIF
             END DO
             gVertArr%FK(1 : gModIntParams%NLEV) = 0.     ! Zero ekman friction for every level
@@ -1072,7 +1073,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO N = 1, gModIntParams%NLEV - 1
                 R = EXP(EX * 0.5 * (1. - gVertArr%PV(N) / gVertArr%PV(1)))
         !------------------------------Stop convection at Tropopause
-                IF(gVertArr%PV(N) .GT. TROP) THEN
+                IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
                     gVertArr%G(N) = gScaleFactors%dissipation / R
                 ELSE
                     gVertArr%G(N) = gScaleFactors%dissipation / 20. ! 20 day time scale
@@ -1147,7 +1148,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  BOT,TPP is the pressure range to be displayed in X sections
         !  CONV is a convergence test for equilibrated solutions
         !  SPINUP is a spinup time toss amount for SENSIV runs
-        !  TROP is the height of the tropopause in mb
+        !  gVertArr%tropopauseLevel is the height of the tropopause in mb
         !  AMPT,AMPS,ANGS,EFOLD are prescribed "bomb" disturbance features
         !
         ! These parameters are dimensionalized and then non dimensionalized
@@ -1173,7 +1174,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%ZHGT = 900.
             gModRealParams%ZHGT2 = 950.
             gModRealParams%ZHGT3 = 500.
-            gModRealParams%RLAT = 45.
+            gModRealParams%RLAT = PI/4.
             gModRealParams%RLON = 0.
             gModRealParams%XPOS = 0.
             gModRealParams%YPOS = PI/4.
@@ -1181,7 +1182,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%TPP = 0.
             gModRealParams%CONV = 0.
             gModRealParams%SPINUP = 160.
-            gModRealParams%TROP = 250.
             gModRealParams%AMPT = 500.
             gModRealParams%AMPS = 50.
             gModRealParams%ANGS = 60.
@@ -1340,7 +1340,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> Subroutine to dimensionalize the gModRealParams before displaying to the user
         !> Only three of the parameters are affected. DELT, BETA, RN
         !> Two others XPOS, YPOS go to degrees in 'dimensional' form, otherwise they are in radians.
-        subroutine DimensionalizeModRealValues()
+        subroutine DimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
             
@@ -1352,13 +1352,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%BETA = 4. * gModRealParams%BETA
             gModRealParams%XPOS = gModRealParams%XPOS * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%YPOS = gModRealParams%YPOS * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%RLAT = gModRealParams%RLAT * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%RLON = gModRealParams%RLON * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
-        end subroutine DimensionalizeModRealValues
+        end subroutine DimensionalizeModRealParams
 
         !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
         !> user has examined and or changed them. Only three of the parameters are affected. DELT, BETA, RN.
         !> Two others XPOS, YPOS go to radians 'nondimensional' form, otherwise they are in degrees.
-        subroutine NonDimensionalizeModRealValues()
+        subroutine NonDimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
 
@@ -1372,8 +1374,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%BETA = gModRealParams%BETA / 4.
             gModRealParams%XPOS = gModRealParams%XPOS / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%YPOS = gModRealParams%YPOS / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%RLAT = gModRealParams%RLAT / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%RLON = gModRealParams%RLON / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
-        end subroutine NonDimensionalizeModRealValues
+        end subroutine NonDimensionalizeModRealParams
         
         subroutine DimensionalizeVerticalParams()
             use ModelFieldsModule, only: gVertArr
@@ -1411,10 +1415,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             do N = 1, gModIntParams%NLEV
                 if (gVertArr%FK(N) > 0.0) gVertArr%FK(N) = gScaleFactors%dissipation / gVertArr%FK(N) ! Convert to non dimensional FK
                 if (gVertArr%FJ(N) > 0.0) gVertArr%FJ(N) = gScaleFactors%dissipation / gVertArr%FJ(N) ! Convert to non dimensional FJ
-                ! Originally calculated from K/mb and made non dimensional, but we display it as K /100mb so we need to divide by 100.
                 if (N .GT. gModIntParams%NLEV - 1) cycle
                 if (gVertArr%G(N) > 0.0) gVertArr%G(N) = gScaleFactors%dissipation / gVertArr%G(N) ! Convert to non dimensional G
                 if (gVertArr%H(N) > 0.0) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N) ! Convert to non dimensional H
+                ! Originally calculated from K/mb and made non dimensional, but we display it as K /100mb so we need to divide by 100.
                 gVertArr%SIG(N) = gVertArr%SIG(N) * gVertArr%A(N) * gVertArr%PP(1) / (100.0 * gScaleFactors%temperatureScale) ! Convert to non dimensional SIG
             end do
             gVertArr%isDimensionalized = .false. ! Indicate nondimensionalized
@@ -1430,6 +1434,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             integer :: Index, N
             real :: tempScale
+            
+            if (gHorzArr%isDimensionalized) return
 
             ! Do temperature variables first. There is one less interface than levels
             do N = 1, gModIntParams%NLEV - 1
@@ -1438,6 +1444,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
+            gHorzArr%isDimensionalized = .true.
         end subroutine DimensionalizeHorizontalParams
         
         subroutine NonDimensionalizeHorizontalParams()
@@ -1450,6 +1457,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             integer :: Index, N
             real :: tempScale
 
+            if (.NOT. gHorzArr%isDimensionalized) return
+
             ! Do temperature variables first. There is one less interface than levels
             do N = 1, gModIntParams%NLEV - 1
                 tempScale = gVertArr%A(N) / gScaleFactors%temperatureScale ! The scaling factor for the temperature at level N
@@ -1457,6 +1466,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
+            gHorzArr%isDimensionalized = .false.
         end subroutine NonDimensionalizeHorizontalParams
 
         !***************************SUBROUTINE FOR PRECOMPUTABLE VERTICAL ARRAYS:
@@ -1494,8 +1504,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             END DO
             !-----------------------------Compute the delta P's and the ratio PP(1)/DP(n)
             DO N = 1, gModIntParams%NLEV
-                gVertArr%DP(N) = gVertArr%PP(N) - gVertArr%PP(N + 1)
-                gVertArr%DPI(N) = gVertArr%PP(1) / gVertArr%DP(N)
+                !gVertArr%DP(N) = gVertArr%PP(N) - gVertArr%PP(N + 1)
+                gVertArr%DPI(N) = gVertArr%PP(1) / (gVertArr%PP(N) - gVertArr%PP(N + 1))
             END DO
             !--------------------------------Set scale height for orography as 11m/mb:
             gPlotScales(OROGRAPHY) = (gVertArr%PP(1) - gVertArr%PP(2)) * 11.

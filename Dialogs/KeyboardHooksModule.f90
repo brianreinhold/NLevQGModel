@@ -163,6 +163,7 @@ module KeyboardHooksModule
             use SetUpModule, only: CheckModelControlChanges
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams
+            use DialogHelpersModule, only: HideMyEdit
             
             implicit none
 
@@ -276,6 +277,7 @@ module KeyboardHooksModule
                             if (hFocus == hLB_Real) hFocus = GetDlgItem(ghModelControlDlg, IDC_REALVALUES)
                             if (hFocus == hLB_Integer) hFocus = GetDlgItem(ghModelControlDlg, IDC_INTEGERVALUES)
                             bret = SetFocus(hFocus)
+                            call HideMyEdit(GetDlgItem(ghModelControlDlg, IDC_EDIT_REALVALUES))
                         END IF
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN

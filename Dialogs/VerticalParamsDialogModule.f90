@@ -31,7 +31,7 @@ module VerticalParamsDialogModule
 
             use ConstantsModule, only: REAL_TO_ASCII
             use UtilitiesModule, only: RealToAsciiToReal
-            use DialogHelpersModule, only: GetComboIndex, moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
+            use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit
             use ModelParamsModule, only: gModIntParams
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
@@ -64,7 +64,7 @@ module VerticalParamsDialogModule
             real, pointer :: pTempDriving(:)  ! Local 1D pointer
 
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton, hFocus
+            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus
             integer, save :: pvRowClicked, thsRowClicked, fkRowClicked, fjRowClicked
             integer, save :: hRowClicked, gRowClicked, tfRowClicked
             integer :: id
@@ -93,26 +93,8 @@ module VerticalParamsDialogModule
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgVerticalParamsProc), NULL, GetCurrentThreadId())
                     ghVerticalParamsDlg = hDlg
 
-                    !!! ===> Combo boxes require manual editing of their height if you want the list of options <== !!
-                    !!       to be exposed on click only.
-                    !! Integration Method
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
-                    !! Initialize the combo box
-                    !iret = 0
-                    !if (gUserSettings%useTransformMethod) iret = 1
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
-                    !hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
-                    !
-                    !! Statistics Options
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
-                    !! Initialize the combo box
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
-                    !hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VERT_DIMENSIONALIZE)
+                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
 
                     call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer")
                     call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer")
@@ -205,6 +187,29 @@ module VerticalParamsDialogModule
 
                         case (IDCANCEL)
                             bret = EndDialog(hDlg, IDCANCEL)
+                            VerticalParamsDlgProc = 1
+                            
+                        case (IDC_CHECK_VERT_DIMENSIONALIZE)
+                            if (ISHFT(wParam, -16) == BN_CLICKED) then
+        
+                                ! Now we ask Windows: "Is it checked or not?"
+                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_VERT_DIMENSIONALIZE) /= 0) then
+                                    ! User checked it - update your variable/logic here
+                                    call DimensionalizeHorizontalParams()
+                                    call DimensionalizeVerticalParams()
+                                else
+                                    ! User unchecked it
+                                    call NonDimensionalizeHorizontalParams()
+                                    call NonDimensionalizeVerticalParams()
+                                end if
+                                bret = PostMessage(hDlg, WM_APP + 100, 0, 0)
+                                call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer")
+                                call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer")
+                                call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface")
+                                call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface")
+                                pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)
+                                call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface")
+                            endif
                             VerticalParamsDlgProc = 1
 
                         ! Get result of user editing real values
@@ -514,7 +519,7 @@ module VerticalParamsDialogModule
         
             do i = 1, gModIntParams%NLEV
                 write(levels, '(A, I0)') trim(description)//" ", i
-                call AddListViewRowReal(hList, levels, [vertArr(i)], '(F6.2)') ! The 'trim' is done in the called subroutine
+                call AddListViewRowReal(hList, levels, [vertArr(i)], '(F7.3)') ! The 'trim' is done in the called subroutine
             end do
         end subroutine loadLevelsIntItemsIntoListView
         

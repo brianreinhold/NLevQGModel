@@ -62,9 +62,11 @@ MODULE ModelFieldsModule
     !  DP(11) =     50,   50, 100, 100, 100, 100, 100, 100, 100, 100, 100, mb
     ! 
     TYPE :: VertArrays
-        LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
-        LOGICAL :: defined = .FALSE.   ! Flag to indicate if arrays are defined with proper sizes
+        LOGICAL :: allocated         = .FALSE. ! Flag to indicate if arrays are allocated
+        LOGICAL :: defined           = .FALSE. ! Flag to indicate if arrays are defined with proper sizes
         LOGICAL :: isDimensionalized = .FALSE. ! Flag to indicate if arrays have been dimensionalized with physical units (e.g., mb, K, m/s)
+        REAL ::    tropopauseLevel   = 250.0   !  Height of the tropopause
+
         REAL, POINTER :: PV(:) => null()    !  PV(maxLevels) is the user specified levels of the streamfunction. IN a two-layer
                                             !                model this would be at 750 and 250 mb. The interfaces (PP)
                                             !                would be 1000, 500, and 0 (top) mb.
@@ -139,7 +141,7 @@ MODULE ModelFieldsModule
     TYPE :: HorzArrays
         LOGICAL :: allocated = .FALSE.          !  Flag to indicate if arrays are allocated and defined
         LOGICAL :: defined = .FALSE.            !  Flag to indicate if arrays are defined with proper sizes
-        LOGICAL :: isDimensionalized = .FALSE.  ! Flag to indicate if arrays have been dimensionalized with physical units (for display to user and graphics)
+        LOGICAL :: isDimensionalized = .FALSE.  !  Flag to indicate if arrays have been dimensionalized with physical units (for display to user and graphics)
         REAL, POINTER :: GQ(:,:) => null()      !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
         REAL, POINTER :: BTA(:) => null()       !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
         REAL, POINTER :: PSB(:) => null()       !  PSB(ITOT) is the vert. mean flow for the waves in the modelType = ZONAL_MEAN_FLOWS option

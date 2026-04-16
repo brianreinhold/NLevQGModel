@@ -73,8 +73,6 @@ module ModelParamsModule
         REAL :: SPINUP  !  SPINUP is a spinup time which we exclude from any SENSIV runs. Sensitivity runs are 
                         !     a sequence of intergrations where a parameter (like the surface friction) changes by
                         !     certain amount and a run is done and statistics taken.
-        REAL :: TROP    !  TROP is the height of the tropopause in mb (this is where the static stability will suddenly increase.
-
         ! Parameters for a created 'bomb' disturbance like that done for the sudden stratospheric warming experiments.
         REAL :: AMPT    !  Amplitude of the streamfunction for the prescribed "bomb" disturbance feature 
         REAL :: AMPS    !  Amplitude of the temperature for the prescribed "bomb" disturbance feature  

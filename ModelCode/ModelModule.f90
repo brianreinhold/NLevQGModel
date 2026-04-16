@@ -485,7 +485,59 @@ module ModelModule
         END subroutine RMLAKL
 
         !************************************************************ EQUATION SYSTEM:
-        !  This routine computes the tendency equations for the Quasi-Geostrophic model.
+        ! This routine computes the tendency equations for the Quasi-Geostrophic model.
+        ! We have the vorticity equation for each level n. del2 is the horizontal laplacian, J is the Jacobian,
+        ! f is the Coriolis parameter, w is the vertical velocity, p is pressure, and H is the scale height.
+        ! d(del2 PS(n)) + J(PS(n), del2PS(n)) + f + f*top/H) – f(w(n-1) – w(n))/(p(n-1) – p(n)) =
+        !   fk(n)del2(sf(n)-ps(n)) + fj(n)u(n)del2(ps(n+1) – ps(n)) + fj(n-1)v(n)del2(PS(n-1)-PS(n))
+        ! u(n) = (p(n+1) – p(n+2)) / (p(n) - p(n+2))  pressures are at the boundaries, PP in this model
+        ! v(n) = (p(n-1) – p(n)) / (p(n-1) - p(n+1))
+        ! Temperature equation
+        ! dTH(n)/dt +  J((PS(n+1) + PS(n))/2, TH(n)) -SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(TH(n+1) – TH(n)) + G(n-1)*v'(n)*(TH(n-1) – TH(n))
+        ! u'(n) = (p'(n+1) – p'(n+2)) / (p'(n) - p(n + 2)) pressures are at the boundaries, PV in this model
+        ! v'(n) = (p'(n-1) – p'(n)) / (p'(n-1) - p'(n+1))
+        ! Thermal wind equation:
+        ! A(n)del2(TH(n)) = del2(PS(n+1) - PS(n))) where A(n) = cp*[p(n)**kappa - p(n+1)**kappa]/(f * p(1)**kappa)
+        ! del2(PS) = -a**2
+        ! d(ps(n))/dt - [J(ps(n), del2(ps(n))) + f + f*top) - (w(n-1) - w(n))/(p(n-1) - p(n))]/a**2 = 
+        !           fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) – ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
+        ! d(th(n))/dt + J((PS(n+1) + PS(n))/2, TH(n)) - SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) – TH(n)) + 
+        !           G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) – TH(n))
+        ! th(n) = ps(n+1) - ps(n)   Thermal wind relation
+        
+        ! if we call S(n) = fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) – ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
+        !       and  T(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) – TH(n)) + G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) – TH(n))
+        !       and  W(n) = (w(n-1) - w(n))/(p(n-1) - p(n))
+        
+        ! Then 
+        ! d(ps(n))/dt - [J(ps(n), del2(ps(n))) + f + f*top) - W(n)]/a**2 = S(n)
+        ! d(th(n))/dt + J((PS(n+1) + PS(n))/2, TH(n)) - SIG(n)*w(n) = T(n)
+        ! We can use the thermal wind relation to compute the omegas Top is only at the lowest layer.
+        
+        ! using th(n) = ps(n+1) - ps(n) 
+        
+        ! d(th(n))/dt = [J((PS, del2(ps) + f)(n+1) - J((PS, del2(ps) + f + f*top)(n) - W(n+1) + W(n))]/a**2 + S(n+1) - S(n)
+        ! d(th(n))/dt = -J((PS(n+1) + PS(n))/2, TH(n)) + SIG(n)*w(n) + T(n)
+        !
+        ! J(PS)(n) = J(PS(n), del2(ps(n)) + f + f*top/H)
+        ! J(TH)(n) = J((PS(n+1) + PS(n))/2, TH(n))
+        ! Eliminate the time derivative
+        ! -J(TH)(n) + SIG(n)*w(n) + T(n) = [J(PS)(n+1) - J(PS)(n) - W(n+1) + W(n))]/a**2 + S(n+1) - S(n)
+        ! 0 = J(TH)(n) - SIG(n)*w(n) - T(n) + [J(PS)(n+1) - J(PS)(n) - W(n+1) + W(n))]/a**2 + S(n+1) - S(n)
+        ! J(TH)(n) - T(n) + [J(PS)(n+1) - J(PS)(n)]/a**2 + S(n+1) - S(n) = [a**2*SIG(n)*w(n) + W(n+1) - W(n)]/a**2
+
+        ! Define
+        ! C(n) = J(TH)(n) - T(n) + [J(PS)(n+1) - J(PS)(n)]/a**2 + S(n+1) - S(n)
+        ! C(n) = [a**2*SIG(n)*w(n) + (w(n) - w(n+1))/(p(n) - p(n+1)) - (w(n-1) - w(n))/(p(n-1) - p(n))]/a**2
+        
+        ! w(n)[1/(a**2(p(n)- p(n+1))) + 1/(a**2(p(n-1) - p(n))) + SIG(n)] -w(n+1)/(a**2(p(n) - p(n+1))) - w(n-1)/(a**2(p(n-1) - p(n))) = C(n)
+        
+        ! alpha(n)*w(n) - epsilon(n)*w(n+1) - gamma(n)*w(n-1) = C(n)
+        ! where
+        ! gamma(n) = 1/(a**2(p(n-1) - p(n)))
+        ! alpha(n) = gamma(n+1) + gamma(n) + sig(n)
+        ! epsilon(n) = gamma(n+1)
+
         !===========================================================================
         SUBROUTINE EquationSystem (buffer)
             use ModelParamsModule
@@ -497,9 +549,9 @@ module ModelModule
             real, intent(inout) :: buffer(:)
 
             !------------------------------------------Local variables:
-            INTEGER I, K, L, N, NP, NT
-            INTEGER ITY
-            REAL AX, BRN, C, C1, C2, GMN, GMN1, R, R1
+            INTEGER :: I, K, L, N, NP, NT
+            REAL :: AX, BRN, R, R1
+            REAL :: C, Clower, Cupper, gamma, gammaLower, alpha, alpha1 ! Terms for iterative omega loop
 
             IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) THEN
                 !-----------------Compute waves at level "N" based upon structures and PSB:
@@ -516,11 +568,9 @@ module ModelModule
             !  First we compute the nonlinear terms by either transforms or interactions,
             !  the orographic term has to be computed at level one.
             !  Then we compute the beta effect and add to vorticity advections.
-            !  Next we compute the diabatic terms.
+            !  Next we compute the diabatic terms in STERMS and TTERMS
             !  Then we do the iterative proceedure to compute omega.
             !  Lastly we get the tendency for the streamfunction at each level.
-            !----------------------------------------Compute indices:
-            ITY = gCurrentDims%ITRXD + 1
 
             !----------------------------------------Compute Orographic influence:
             CALL NONLIN(gHorzArr%ADO, gHorzArr%PS(:, 1), gHorzArr%TOP)
@@ -566,9 +616,6 @@ module ModelModule
 
             !----------------------------------------Compute diabatic strm terms:
             call STERMS()
-            ! This is CALL STERMS(PS,S,SF,DP,FK,FJ)
-            !CALL STERMS(PS, PS(:, 1, 8), PS(:, 1, 13), PV(:, 2), PV(:, 5), PV(:, 6), currSettings)
-
             !-----------------------------------Barotropic computation:
             IF(gModIntParams%NLEV .EQ. 1) THEN
                 DO I = 1, gCurrentDims%ITOT
@@ -582,11 +629,9 @@ module ModelModule
                 !-----------------------------------Compute strm and temp at temperature level:
                 DO I = 1, gCurrentDims%ITOT
                     buffer(I) = (gHorzArr%PS(I, N) + gHorzArr%PS(I, N + 1)) / 2.
-                    gHorzArr%TH(I, N) = (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N)) / 2.
+                    gHorzArr%TH(I, N) = (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N)) ! No division by two here
                 END DO
                 CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
-                !CALL NONLIN(PS(:, N, 10), buffer, PS(:, N, 2), G1(:, 1), G1(:, 2), G1(:,3), RML, WRK, TRX, &
-                !            TRX(ITY), WRK(ITMP), I1M, INTC(:, 3), INTC(:, 4), currSettings, gCurrentDims)
                 !----------------------------------------Negate ADT to make warm adv pos:
                 DO I = 1, gCurrentDims%ITOT
                     gHorzArr%ADT(I, N) = -gHorzArr%ADT(I, N)
@@ -613,44 +658,54 @@ module ModelModule
             ENDIF
 
             !============================================Omega iteration loop:
-            !mu(n)= 2(p(n+1) - p(n+2))/(p(n) - p(n+2))	where the p's are the pressures of the temperature levels
-            !lambda(n)= 2(p(n-1) - p(n))/(p(n-1) - p(n+1))
-            !mu'(n)= 2(p'(n+1) - p'(n+2))/(p'(n) - p'(n+2))	where these p's are the pressures of the vorticity levels
-            !lambda'(n)= 2(p'(n-1) - p'(n))/(p'(n-1) - p'(n+1))
+            !mu(n) = 2(p(n+1) - p(n+2))/(p(n) - p(n+2))	where the p's are the pressures of the boundary levels (PP array)
+            !lambda(n) = 2(p(n-1) - p(n))/(p(n-1) - p(n+1))
+            !mu'(n) = 2(p'(n+1) - p'(n+2))/(p'(n) - p'(n+2))	where these p's are the pressures of the boundaries (PV array)
+            !lambda'(n) = 2(p'(n-1) - p'(n))/(p'(n-1) - p'(n+1))
 
-            !S(n) =  k(n)*del2(PSI(n)* - PSI(n)) + j(n) * mu(n)*del2(PSI(n+1) - PSI(n)) + j(n)-lambda(n)*del2(psi(n-1)- psi(n))
-            !T(n) = h(n)(theta(n)* - theta(n)) + g(n)mu'(n)(theta(n+1) - theta(n)) + g(n-1)lambda'(n)(theta(n-1)- theta(n))
+            !S(n) =  k(n)*del2(PSIF(n) - PSI(n)) + j(n) * mu(n)*del2(PSI(n+1) - PSI(n)) + j(n)-lambda(n)*del2(psi(n-1)- psi(n))
+            !T(n) = h(n)(thetaF(n) - theta(n)) + g(n)mu'(n)(theta(n+1) - theta(n)) + g(n-1)lambda'(n)(theta(n-1)- theta(n))
             !J(Theta) = J(PSI,Theta)
             !J(PSI) = J(Psi, del2(psi) + f + fh/H)
 
-            !C(n) = J(Theta)(n) - T(n) + (S(n+1)- S(n))/2 + (1/a2)[J(Psi)(n+1) - J(Psi)(n) ]/2
+            !C(n) = J(Theta)(n) - T(n) + (S(n+1)- S(n))/2 + (1/a2)[J(Psi)(n+1) - J(Psi)(n) ]
             
-            !alpha(n)*omega(n) – beta(n)*omega(n+1) – gamma(n)*omega(n-1) = C(n)
+            !alpha(n)*omega(n) – epsilon(n)*omega(n+1) – gamma(n-1)*omega(n-1) = C(n)
             !alpha(n) = gamma(n+1) + gamma(n) + sig(n)
-            !gamma(n) = 1/(2*a**2 * P(n))
-            !beta(n) = 1/(2*a**2 * P(n+1)) = gamma(n+1)
+            !gamma(n) = 1/(a**2 * P(n))
+            !epsilon(n) = 1/(a**2 * P(n+1)) = gamma(n+1)
+            
+            !alpha(n)*omega(n) – gamma(n+1)*omega(n+1) – gamma(n-1)*omega(n-1) = C(n)
+            ! Write
+            ! WW(n) = X(n)*WW(n+1) + Y(n)
+            ! Y(n) will have WW(n-1) in it, but the lower boundary condition of WW(0) = 0 will allow us to Y(n) to the top and there
+            ! we can compute WW(NLEV-1)) at the top interface since WW(NLEV) = 0. It will be Y(NLEV-1). Then we can go back down to 
+            ! WW(n) for n = NLEV-2 down to 1.
 
-            DO I = 1, K
-                AX = gHorzArr%AKLI(I) / 2.   ! AKLI(i) is the invers
-                GMN1 = gVertArr%DPI(1) * AX  ! DPI(maxLevels)=1./(PP(N-1)-PP(N)) is the inverse of the layer thickness
-                GMN = gVertArr%DPI(2) * AX
-                R = GMN + GMN1 + gVertArr%SIG(1)
-                C2 = gHorzArr%S(I, 2) + gHorzArr%ADS(I, 2)
+
+            DO I = 1, gCurrentDims%ITOT
+                AX = gHorzArr%AKLI(I)   ! AKLI(i) is the inverse of a**2 and it depends only on the horizontal wavenumbers, not on the vertical level
+                ! DPI(N) = PP(1)/(PP(N)-PP(N+1)) is the scaled inverse of the layer thickness. The PP array itself is NOT scaled.
+                gammaLower = gVertArr%DPI(1) * AX  ! PP(1)/(a**2 * (PP(1) - PP(2)))
+                gamma = gVertArr%DPI(2) * AX   ! PP(1)/(a**2 * (PP(2) - PP(3)))
+                alpha = gamma + gammaLower + gVertArr%SIG(1)
+                Cupper = gHorzArr%S(I, 2) + gHorzArr%ADS(I, 2)  ! Tendencies from streamfunction above omega level
                 !-----------------------------------------------Add orography at bottom level:
-                C1 = gHorzArr%S(I, 1) + gHorzArr%ADS(I, 1) + gHorzArr%ADO(I)
-                C = gHorzArr%ADT(I, 1) + gHorzArr%T(I, 1) + (C1 - C2) / 2.
-                gVertArr%X(1)  = GMN / R
-                gVertArr%Y(1) = -C / R
+                Clower = gHorzArr%S(I, 1) + gHorzArr%ADS(I, 1) + gHorzArr%ADO(I)   ! Tendencies from streamfunction below omega level
+                C = gHorzArr%ADT(I, 1) + gHorzArr%T(I, 1) + (Clower - Cupper)   ! Temperature tendency plus difference in strm tendencies. This value
+                                                                                ! of C(n) comes the omega eq. where the time derivative is eliminated
+                gVertArr%X(1)  = gamma / alpha
+                gVertArr%Y(1) = -C / alpha
                 !-----------------------------------------------Iterative loop for NLEV>2
                 DO N = 2, gModIntParams%NLEV - 1
-                    GMN1 = GMN
-                    GMN = gVertArr%DPI(N + 1) * AX
-                    R = (GMN + GMN1 * (1. - gVertArr%X(N - 1)) + gVertArr%SIG(N))
-                    C1 = C2
-                    C2 = gHorzArr%S(I, N + 1) + gHorzArr%ADS(I, N + 1)
-                    C = gHorzArr%ADT(I, N) + gHorzArr%T(I, N) + (C1 - C2) / 2.
-                    gVertArr%X(N) = GMN / R
-                    gVertArr%Y(N) = (GMN1 * gVertArr%Y(N - 1) -C) / R
+                    gammaLower = gamma
+                    gamma = gVertArr%DPI(N + 1) * AX    ! PP(1)/(a**2 * (PP(N) - PP(N+1)))
+                    alpha = (gamma + gammaLower * (1. - gVertArr%X(N - 1)) + gVertArr%SIG(N))
+                    Clower = Cupper
+                    Cupper = gHorzArr%S(I, N + 1) + gHorzArr%ADS(I, N + 1)
+                    C = gHorzArr%ADT(I, N) + gHorzArr%T(I, N) + (Clower - Cupper)
+                    gVertArr%X(N) = gamma / alpha
+                    gVertArr%Y(N) = (gammaLower * gVertArr%Y(N - 1) - C) / alpha
                 END DO
                 !------------------------------------Upper boundary to compute WW(NLEV-1):
                 gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
@@ -1055,82 +1110,93 @@ module ModelModule
         end subroutine DODADY
 
         !*****************************Routines to compute the diabatic tendency terms:
-        ! CALL STERMS(PS,S,SF,DP,FK,FJ)
         SUBROUTINE STERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             
             implicit none
 
-            !INCLUDE 'NPARAM.f90'
-            !REAL*4 PS(ITOTD,currSettings%maxLevels),S(ITOTD,currSettings%maxLevels),SF(ITOTD, currSettings%maxLevels)
-            !REAL*4 DP(currSettings%maxLevels),FK(currSettings%maxLevels),FJ(currSettings%maxLevels)
+            REAL EkmanMixingLower, EkmanMixingUpper, EkmanFromAbove, EkmanFromBelow, DPS
+            INTEGER N, NLEV, ITOT
+            
+            ! fk(n)*(sf(i, n) – ps(i,n)) + fj(n)*u(n)*(ps(i,n+1) – ps(i,n)) + fj(n-1)*v(n)*(ps(i, n-1) – ps(i, n))
+            ! u(n) = 2(pp(n+1) – pp(n+2))/(pp(n) – pp(n+2))  weighting functions to account for different layer thicknesses for the ekman mixing
+            ! v(n) = 2(pp(n-1) – pp(n))/(pp(n-1) – pp(n+1))  Pressures are at temperature levels or interfaces
 
-            REAL R1, DPS
-            INTEGER I, N
             !----------------------------------------Compute diabatic strm terms:
-            DO N = 1, gModIntParams%NLEV
-                DO I = 1, gCurrentDims%ITOT
-                    !----------------------------------Weighted mixing scheme:
-                    IF (N == 1) THEN
-                        R1 = 2.0 * gVertArr%DP(2) / (gVertArr%DP(1) + gVertArr%DP(2))
-                        DPS = gVertArr%FJ(1) * R1 * (gHorzArr%PS(I, 2) - gHorzArr%PS(I, 1))
+            ! gHorzArr%S = tendencies of the streamfunction due to diabatic processes. This includes both the direct diabatic driving
+            !              and the indirect effect of ekman dissipation and ekman mixing.
+            NLEV = gModIntParams%NLEV
+            ITOT = gCurrentDims%ITOT
+            ! Barotropic case is a special case as there is no ekman mixing and we can skip the do loop over N and just do the calculation 
+            ! for the single level.
+            if (NLEV == 1) then
+                ! Replaces a do-loop over I
+                gHorzArr%S(1:ITOT, 1) = gVertArr%FK(1) * (gHorzArr%SF(1:ITOT, 1) - gHorzArr%PS(1:ITOT, 1))
+                return
+            endif
 
-                    ELSE IF (N == gModIntParams%NLEV) THEN
-                        R1 = 2.0 * gVertArr%DP(N - 1) / (gVertArr%DP(N - 1) + gVertArr%DP(N))
-                        DPS = gVertArr%FJ(N - 1) * R1 * (gHorzArr%PS(I, N - 1) - gHorzArr%PS(I, N))
+            ! Lower and upper boundaries first. Avoids a lot of if-then-elses in the loop
+            ! If all layers are the same thickness, 2 * (gVertArr%PP(N + 1) - gVertArr%PP(N + 2)) / (gVertArr%PP(N) - gVertArr%PP(N + 2)) would be 1.0
 
-                    ELSE
-                        R1 = 2.0 * gVertArr%DP(N + 1) / (gVertArr%DP(N + 1) + gVertArr%DP(N))
-                        DPS = gVertArr%FJ(N) * R1 * (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N))
+            EkmanMixingLower = 2.0 * gVertArr%FJ(1) * (gVertArr%PP(2) - gVertArr%PP(3)) / (gVertArr%PP(1) + gVertArr%PP(3))
+            EkmanMixingUpper = 2.0 * gVertArr%FJ(NLEV - 1) * (gVertArr%PP(NLEV - 1) - gVertArr%PP(NLEV)) / (gVertArr%PP(NLEV -1) - gVertArr%PP(NLEV + 1))
+            ! Replace the do loop over ITOT
+            gHorzArr%S(1:ITOT, 1) = gVertArr%FK(1) * (gHorzArr%SF(1:ITOT, 1) - gHorzArr%PS(1:ITOT, 1)) + &
+                        EkmanMixingLower * (gHorzArr%PS(1:ITOT, 2) - gHorzArr%PS(1:ITOT, 1))
+            gHorzArr%S(1:ITOT, NLEV) = gVertArr%FK(NLEV) * (gHorzArr%SF(1:ITOT, NLEV) - gHorzArr%PS(1:ITOT, NLEV)) + &
+                        EkmanMixingUpper * (gHorzArr%PS(1:ITOT, NLEV - 1) - gHorzArr%PS(1:ITOT, NLEV))
 
-                        R1 = 2.0 * gVertArr%DP(N - 1) / (gVertArr%DP(N - 1) + gVertArr%DP(N))
-                        DPS = DPS + gVertArr%FJ(N - 1) * R1 * (gHorzArr%PS(I, N - 1) - gHorzArr%PS(I, N))
-                    END IF
-                    gHorzArr%S(I, N) = gVertArr%FK(N) * (gHorzArr%SF(I, N) - gHorzArr%PS(I, N)) + DPS
-                END DO
+            ! Handle levels between boundaries
+            DO N = 2, gModIntParams%NLEV - 1
+                EkmanFromAbove = 2.0 * gVertArr%FJ(N) * (gVertArr%PP(N + 1) - gVertArr%PP(N + 2)) / (gVertArr%PP(N) - gVertArr%PP(N + 2))
+                EkmanFromBelow = 2.0 * gVertArr%FJ(N - 1) * (gVertArr%PP(N - 1) - gVertArr%PP(N)) / (gVertArr%PP(N - 1) - gVertArr%PP(N + 1))
+                ! Replace the do loop over ITOT
+                gHorzArr%S(1:ITOT, N) = gVertArr%FK(N) * (gHorzArr%SF(1:ITOT, N) - gHorzArr%PS(1:ITOT, N)) + &
+                   EkmanFromAbove * (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) + &
+                   EkmanFromBelow * (gHorzArr%PS(1:ITOT, N - 1) - gHorzArr%PS(1:ITOT, N))
             END DO
         END subroutine STERMS
-        
+
         !****************************************Compute diabatic temperature terms:
-        !SUBROUTINE TTERMS(TH, T, TF, PV, AU, H, G, currSettings)
         SUBROUTINE TTERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ArrayDimensionsModule
-
             
-            !INCLUDE 'NPARAM.f90'
-            !REAL*4 TH(ITOTD, currSettings%maxLevels), T(ITOTD, currSettings%maxLevels), TF(ITOTD, currSettings%maxLevels)
-            !REAL*4 PV(currSettings%maxLevels), AU(currSettings%maxLevels), H(currSettings%maxLevels), G(currSettings%maxLevels)
-            
-            REAL R1, DTH
-            INTEGER I, N
-            
-            DTH = 0.0
-            DO N = 1, gModIntParams%NLEV - 1
-                DO I = 1, gCurrentDims%ITOT
-                    !-----------------------------------Weighted temperature mixing:
-                    if (gModIntParams%NLEV > 2) Then
-                        IF (N == 1) THEN
-                            R1 = 2.0 * (gVertArr%PV(2) - gVertArr%PV(3)) / (gVertArr%PV(1) - gVertArr%PV(3))
-                            DTH = gVertArr%G(1) * R1 * (gHorzArr%TH(I, 2) * gVertArr%AU(1) - gHorzArr%TH(I, 1))
+            REAL, DIMENSION(gModIntParams%NLEV) :: R_Upper, R_Lower
 
-                        ELSE IF (N == gModIntParams%NLEV - 1) THEN
-                            R1 = 2.0 * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
-                            DTH = gVertArr%G(N - 1) * R1 * (gHorzArr%TH(I, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(I, N))
+            INTEGER :: N, ITOT, NLEV
 
-                        ELSE
-                            R1 = 2.0 * (gVertArr%PV(N + 1) - gVertArr%PV(N + 2)) / (gVertArr%PV(N) - gVertArr%PV(N + 2))
-                            DTH = gVertArr%G(N) * R1 * (gVertArr%AU(N) * gHorzArr%TH(I,N+1) - gHorzArr%TH(I,N))
+            NLEV = gModIntParams%NLEV
+            ITOT = gCurrentDims%ITOT
+            if (NLEV < 2) return ! SHould never be hit but just in case.
 
-                            R1 = 2.0 * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
-                            DTH = DTH + gVertArr%G(N - 1) * R1 * (gHorzArr%TH(I, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(I, N))
-                        END IF
-                    ENDIF
-                    gHorzArr%T(I, N) = gVertArr%H(N) * (gHorzArr%TF(I, N) - gHorzArr%TH(I, N)) + DTH
+            ! 1. Pre-calculate scalar coefficients for each level (The "N" loop)
+            R_Upper = 0.0
+            R_Lower = 0.0
+
+            IF (NLEV > 2) THEN
+                ! N = 1 Case
+                R_Upper(1) = 2.0 * gVertArr%G(1) * (gVertArr%PV(2) - gVertArr%PV(3)) / (gVertArr%PV(1) - gVertArr%PV(3))
+        
+                ! Intermediate Levels
+                DO N = 2, NLEV - 2
+                    R_Lower(N) = 2.0 * gVertArr%G(N - 1) * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
+                    R_Upper(N) = 2.0 * gVertArr%G(N) * (gVertArr%PV(N + 1) - gVertArr%PV(N + 2)) / (gVertArr%PV(N) - gVertArr%PV(N + 2))
                 END DO
+
+                ! N = NLEV - 1 Case
+                R_Lower(NLEV - 1) = 2.0 * gVertArr%G(NLEV - 2) * (gVertArr%PV(NLEV - 2) - gVertArr%PV(NLEV - 1)) / (gVertArr%PV(NLEV - 2) - gVertArr%PV(NLEV))
+            END IF
+
+            ! 2. The Heavy Lifting (Vectorized)
+            DO N = 1, NLEV - 1
+                ! Replace the do loop over ITOT
+                gHorzArr%T(1:ITOT, N) = gVertArr%H(N) * (gHorzArr%TF(1:ITOT, N) - gHorzArr%TH(1:ITOT, N)) &
+                    + R_Upper(N) * (gHorzArr%TH(1:ITOT, N + 1) * gVertArr%AU(N) - gHorzArr%TH(1:ITOT, N)) &
+                    + R_Lower(N) * (gHorzArr%TH(1:ITOT, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(1:ITOT, N))
             END DO
         END subroutine TTERMS
 

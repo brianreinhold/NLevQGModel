@@ -61,8 +61,10 @@
 #define IDC_LIST_TEMP_MIXING            1055
 #define IDC_STATIC_TEMP_MIXING          1056
 #define IDC_LIST_THERMAL_DRIVING        1057
-#define IDC_STATIC_TEMP_MIXING2         1058
 #define IDC_STATIC_THERMAL_DRIVING      1058
+#define IDC_CHECK_VERT_DIMENSIONALIZE   1059
+#define IDC_CHECK1                      1060
+#define IDC_CHECK_MODREAL_DIMENSIONALIZE 1060
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -72,7 +74,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        110
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1047
+#define _APS_NEXT_CONTROL_VALUE         1061
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
