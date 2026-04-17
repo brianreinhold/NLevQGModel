@@ -6,7 +6,7 @@ module ModelModule
                                                 ! to start running the model (F7 or F8)
     public :: StartTimeLoop
     public :: GQSET
-    public :: RMLAKL
+    public :: ComputeAKLTerms
     public :: EquationSystem
     public :: NONLIN
     public :: ComputeJacobianByTransform
@@ -14,7 +14,7 @@ module ModelModule
     public :: DoDADY
     public :: STERMS
     public :: TTERMS
-    public :: InverseTransform      ! Not used anymore
+    !public :: InverseTransform      ! Not used anymore
     public :: PROFIL
     public :: PICK
     public :: TRANS
@@ -39,7 +39,7 @@ module ModelModule
             REAL :: VR24
 
             errorCode = 0
-            CALL RMLAKL()   ! Computes RML array for the re-projection of the meridional components in the inverse transform routine
+            CALL ComputeAKLTerms()   ! Computes RML array for the re-projection of the meridional components in the inverse transform routine
                             ! This precomputes some of the factors used in the inverse transform like wavenumber squared, etc. that
                             ! will reduce the muliplications and divisions during the time loop.
             !===========================================================Zonal model type setup:
@@ -99,10 +99,11 @@ module ModelModule
             ! Test transforms
             !call test_transforms()
 
-            write(msg, '(*(I2, 1X))') (gCintArr%JIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
-            call LogMessage(msg)
-            write(msg, '(*(I2, 1X))') (gCintArr%KIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
-            call LogMessage(msg)
+            ! This can only be used if the number of interaction coefficients is small
+            !write(msg, '(*(I2, 1X))') (gCintArr%JIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
+            !call LogMessage(msg)
+            !write(msg, '(*(I2, 1X))') (gCintArr%KIN(K), K = 1, gCintArr%numOfInteractionCoeffs)
+            !call LogMessage(msg)
 
 
             errorCode = 0
@@ -199,7 +200,7 @@ module ModelModule
                             ! This change will not effect the number of interaction coefficients
                             gCintArr%numOfInteractionCoeffs = &
                                             computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, gCintArr%numOfInteractionCoeffs)
-                            CALL RMLAKL()           ! Subroutine is in this file
+                            CALL ComputeAKLTerms()           ! Subroutine is in this file
                             RNP = gModRealParams%RN
                         END IF
                         !-----------------------------------------Static stability? Check if changed
@@ -211,12 +212,11 @@ module ModelModule
                     !--------------------------------------------- Start of original integrations:
                     !ITIME = INT(TIME) / gModIntParams%MOUT   ! I cannot figure out where this time value is set. Does not appear to be used.
                     !---------------------------------------------------- Initialize plot window:
-200                 IXP = 1
 
 
 
                     !--------------------------------------------------- Stats setup:
-                    IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
+200                 IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
                         gStatsArr%PSA = 0.0       ! F90 shortcut to zero an N-d array
                         gStatsArr%PSS = 0.0
                         gStatsArr%EK = 0.0
@@ -421,7 +421,7 @@ module ModelModule
 
         ! Resets the GQ field to Q(cosG,sinG)
         subroutine GQSET()
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gHorzArr
             
@@ -441,30 +441,36 @@ module ModelModule
             END DO
         end subroutine GQSET
 
-        !******************************************** Precompute ARRAYs RML,AKL for inverse transform:
-        SUBROUTINE RMLAKL()
+        !****************************** Precompute ARRAYs AKL and AKLI for the del2 operator:
+        ! The Array AKL and AKLI are for the del2 operator which gives a**2 = k*k*rn*rn + l*l.
+        ! IN many places we divide by a**2. Since division is expensive, we precompute 1/a**2
+        ! and AKLI(I) = 1/AKL(I). Recall we store the waves as all zonal only structs in the
+        ! first LMAX elements and then cosnkx*sinly and sinnkx*sinly for all l for each k.
+        SUBROUTINE ComputeAKLTerms()
             use ModelFieldsModule, only: gHorzArr
-            use ModelParamsModule, only: gModIntParams, gModRealParams, PI
+            use ModelParamsModule, only: gModIntParams, gModRealParams
+            use ConstantsModule, only: PI
 
             implicit none
 
-            ! Local variables        
-            INTEGER I, K, L, M
-            REAL R, RL2, RM2, RTEM
+            ! Local variables
+            INTEGER :: I, K, L
+            REAL :: R
 
-            !--------------------------------------Reprojection array RML(2*gModIntParams%LMAX2+1,gModIntParams%LMAX2):
-            !  Precalculation of the RML array for the re-projection of the meridional
-            !  components in the inverse transform routine:
-            DO L = 1, gModIntParams%LMAX2
-                RL2 = REAL(L * L)
-                DO M = 1, 2 * gModIntParams%LMAX2 + 1
-                    RM2 = REAL((M - 1)**2)
-                    RTEM = PI * (RM2 - RL2)
-                    gHorzArr%RML(M, L) = 0.      ! RML(2 * maxMeridWaves+1, maxMeridWaves)
-                    IF (RTEM .NE. 0.) gHorzArr%RML(M, L) = 4. / RTEM
-                END DO
-            END DO
-        !----------------------------------------Compute AKL and AKLI:
+            !!--------------------------------------Reprojection array RML(2*gModIntParams%LMAX2+1,gModIntParams%LMAX2):
+            !!  Precalculation of the RML array for the re-projection of the meridional
+            !!  components in the inverse transform routine:
+            !DO L = 1, gModIntParams%LMAX2
+            !    RL2 = REAL(L * L)
+            !    DO M = 1, 2 * gModIntParams%LMAX2 + 1
+            !        RM2 = REAL((M - 1)**2)
+            !        RTEM = PI * (RM2 - RL2)
+            !        gHorzArr%RML(M, L) = 0.      ! RML(2 * maxMeridWaves+1, maxMeridWaves)
+            !        IF (RTEM .NE. 0.) gHorzArr%RML(M, L) = 4. / RTEM
+            !    END DO
+            !END DO
+
+            !----------------------------------------Compute AKL and AKLI:
             DO L = 1, gModIntParams%LMAX2
                 gHorzArr%AKL(L) = REAL(L * L)
                 gHorzArr%AKLI(L) = 1. / gHorzArr%AKL(L)
@@ -476,13 +482,13 @@ module ModelModule
                 DO L = 1, gModIntParams%LMAX2
                     I = I + 1
                     gHorzArr%AKL(I) = R + REAL(L * L)
-                    gHorzArr%AKLI(I) = 1. / gHorzArr%AKL(I)
                     I = I + 1
                     gHorzArr%AKL(I) = gHorzArr%AKL(I - 1)
-                    gHorzArr%AKLI(I) = gHorzArr%AKLI(I - 1)
                 END DO
             END DO
-        END subroutine RMLAKL
+            ! Compute the array of inverses
+            gHorzArr%AKLI = 1. / gHorzArr%AKL
+        END subroutine ComputeAKLTerms
 
         !************************************************************ EQUATION SYSTEM:
         ! This routine computes the tendency equations for the Quasi-Geostrophic model.
@@ -599,17 +605,16 @@ module ModelModule
 
             !---------------------------------------Add Beta effect to ADS:
             IF(gModRealParams%BETA .NE. 0.) THEN
-                I = gModIntParams%LMAX2 + 1
+                I = gModIntParams%LMAX2 + 1     ! Skip the zonal structs - beta has no effect on them
                 BRN = gModRealParams%BETA * gModRealParams%RN
                 DO K = 1, gModIntParams%KMAX2
                     R = BRN * REAL(K)
                     DO L = 1,  gModIntParams%LMAX2
                         R1 = R * gHorzArr%AKLI(I)
-                        DO N = 1, gModIntParams%NLEV
-                            gHorzArr%ADS(I, N) = gHorzArr%ADS(I, N) + R1 * gHorzArr%PS(I + 1, N)
-                            gHorzArr%ADS(I + 1, N) = gHorzArr%ADS(I + 1, N) - R1 * gHorzArr%PS(I, N)
-                        END DO
-                    I = I + 2
+                        ! Array slicing to handle the loop over N
+                        gHorzArr%ADS(I, 1:gModIntParams%NLEV) = gHorzArr%ADS(I, 1:gModIntParams%NLEV) + R1 * gHorzArr%PS(I + 1, 1:gModIntParams%NLEV)
+                        gHorzArr%ADS(I + 1, 1:gModIntParams%NLEV) = gHorzArr%ADS(I + 1, 1:gModIntParams%NLEV) - R1 * gHorzArr%PS(I, 1:gModIntParams%NLEV)
+                        I = I + 2
                     END DO
                 END DO
             ENDIF
@@ -628,7 +633,7 @@ module ModelModule
             DO N = 1,  gModIntParams%NLEV - 1
                 !-----------------------------------Compute strm and temp at temperature level:
                 DO I = 1, gCurrentDims%ITOT
-                    buffer(I) = (gHorzArr%PS(I, N) + gHorzArr%PS(I, N + 1)) / 2.
+                    buffer(I) = (gHorzArr%PS(I, N) + gHorzArr%PS(I, N + 1)) / 2. ! Mean streamfunction at temperature interface
                     gHorzArr%TH(I, N) = (gHorzArr%PS(I, N + 1) - gHorzArr%PS(I, N)) ! No division by two here
                 END DO
                 CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
@@ -692,9 +697,12 @@ module ModelModule
                 Cupper = gHorzArr%S(I, 2) + gHorzArr%ADS(I, 2)  ! Tendencies from streamfunction above omega level
                 !-----------------------------------------------Add orography at bottom level:
                 Clower = gHorzArr%S(I, 1) + gHorzArr%ADS(I, 1) + gHorzArr%ADO(I)   ! Tendencies from streamfunction below omega level
+                
+                ! This C appears to be negated to account that gHorzArr%ADT(I, 1) was negated to make warm advection positive (probably for plotting)
                 C = gHorzArr%ADT(I, 1) + gHorzArr%T(I, 1) + (Clower - Cupper)   ! Temperature tendency plus difference in strm tendencies. This value
                                                                                 ! of C(n) comes the omega eq. where the time derivative is eliminated
                 gVertArr%X(1)  = gamma / alpha
+                ! The 'negativity' of C is reversed here. 
                 gVertArr%Y(1) = -C / alpha
                 !-----------------------------------------------Iterative loop for NLEV>2
                 DO N = 2, gModIntParams%NLEV - 1
@@ -727,7 +735,9 @@ module ModelModule
                 gHorzArr%FS(I, 1) = gHorzArr%ADS(I, 1) + gHorzArr%ADO(I) + gHorzArr%WS(I, 1) + gHorzArr%S(I,1)
                 !-----------------------------------Load temperature arrays for diagnostics:
                 DO N = 1, gModIntParams%NLEV - 1
+                    ! The temperature equation is d(Theta)/dt = -J(theta) + sig*w + T
                     gHorzArr%WT(I, N) = gVertArr%SIG(N) * gHorzArr%WW(I, N)
+                    ! Again, we negated gHorzArr%ADT(I, N) above.
                     gHorzArr%FT(I, N) = gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
                 END DO
             END DO
@@ -861,8 +871,8 @@ module ModelModule
                         L = gCintArr%JIN(index)
                         K = gCintArr%KIN(index)
                         FS(I) = FS(I) + gCintArr%CINT(index) * (B(K) * A(L) - B(L) * A(K))
-                        write(msg, '(A, I4, A, F9.6, 1X, A, I4, A, I4, 1x, I4)') 'I: ', I, ' coef: ', gCintArr%CINT(INDEX), ' index: ', index, ' K, L: ', K, L
-                        call LogMessage(msg)
+                        !write(msg, '(A, I4, A, F9.6, 1X, A, I4, A, I4, 1x, I4)') 'I: ', I, ' coef: ', gCintArr%CINT(INDEX), ' index: ', index, ' K, L: ', K, L
+                        !call LogMessage(msg)
                         index = index + 1
                     END DO
                 END DO
@@ -1215,148 +1225,148 @@ module ModelModule
         !  IYMAX=The number of grid points in y (IYMAX+2=LY)
         !  IFX(13),IFY(13)=The factors arrays for FFT991
         ! SUBROUTINE InverseTransform(G3, WRK, TRY, TRX, IFX, IFY, KX, gModIntParams%KMAX2, gModIntParams%LMAX2, IXMAX, IYMAX, RML)
-        SUBROUTINE InverseTransform()
-            use ConstantsModule, only: INVERSE_TRANSFORM
-            use ModelFieldsModule, only: gHorzArr, G3_pool
-            use ModelParamsModule, only: gModIntParams
-            use ArrayDimensionsModule
-            !use FFT991Module, only: FFT991
-            
-            IMPLICIT NONE
-            
-            INTEGER :: L2MAXR
-            INTEGER :: K, L, KCOS, KSIN, MCOS, M1, M, LSIN, MSIN, LCOS
-
-            REAL :: AA, BA, RL, RM
-
-            ! Zero the tails of G3
-            ! Flatten the two d array. For G(K, L) with KX max x, flat = K + (L - 1) * KX
-            ! K in this case is (gCurrentDims%IXMAX + 1) for cos part and (gCurrentDims%IXMAX + 2) for sin part
-            DO L = 1, gCurrentDims%IYMAX + 2
-                gHorzArr%G3(gCurrentDims%IXMAX + 1, L) = 0.
-                gHorzArr%G3(gCurrentDims%IXMAX + 2, L) = 0.
-            END DO
-
-            DO K = 1, gCurrentDims%IXMAX + 2
-                gHorzArr%G3(K, gCurrentDims%IYMAX + 1) = 0.
-                gHorzArr%G3(K, gCurrentDims%IYMAX + 2) = 0.
-            END DO
-
-            ! Y-Transform for all x rows
-            !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, INVERSE_TRANSFORM)
-
-            ! X-Transform for all y components
-            L2MAXR = 4 * gModIntParams%LMAX2 + 2
-            !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRX, gCurrentDims%IFX, 1, gCurrentDims%KX, gCurrentDims%IXMAX, L2MAXR, INVERSE_TRANSFORM)
-            
-            !
-            !  Currently, G3 has the following components after the FFT991 call: 
-            ! 
-            !  The cosnx siny components are in G3(2*K-1,2*L)     But one has to
-            !  The sinnx siny components are in G3(2*K,2*L)       remember that the
-            !  The cosnx cosy components are in G3(2*K-1,2*L-1)   0,0 components, etc
-            !  The sinnx cosy components are in G3(2*K,2*L-1)     are also present.
-            !
-            !  The data from the tranforms has to be corrected to fit the form of the
-            !  eigenfunctions for the channel model.  All the cos(0)x (cosly, sinly)
-            !  terms need to be multiplied by SQRT(2).  In addition, all the sinly terms
-            !  need to be negated.
-            !  The (cosknx, sinknx) cos(0)y terms are okay except that the sinknx term
-            !  needs to be negated.
-            !  The (cosnkx, sinnkx)(cosly, sinly) terms need to be multiplied by 2.  In
-            !  addition, all sin terms are negative, but then sinnkxsinly become positive.
-            !  So only the cross terms need to be negated.
-            !
-            !  However, we do not make these corrections since some of them simply become
-            !  undone in JTRN when recombined to mean strmf and mean potential temp.  The
-            !  only "correction" done is to divide the (cosnKx, sinnKx)cos(0)y terms by 2.
-            !  The reason we do this is because of the reprojection routine which would
-            !  need to make a special check for the L=0 value.
-            !
-            !  Of course, by not doing these corrections here, we have to be careful in the
-            !  reprojection routines.  When sinly is projected onto cosly, no factors are
-            !  involved, but we have to remember that sinly is negative and cosly positive,
-            !  thus we have to make the correction in the reprojection routine.
-            !
-            !  Here is the correction for the pure zonal wave components:
-            
-            KCOS = 1
-            DO K = 1, gModIntParams%KMAX2
-                KCOS = KCOS + 2
-                KSIN = KCOS + 1
-                gHorzArr%G3(KCOS, 1) = gHorzArr%G3(KCOS, 1) / 2.
-                gHorzArr%G3(KSIN, 1) = gHorzArr%G3(KSIN, 1) / 2.
-            END DO
-
-            !--------------------- The reprojection routine:
-            !
-            !  This is the extra loop which takes each cosy structure and projects it onto
-            !  sinly eigenfunctions.    COSMY=(4L/(L*L-M*M))PI SINLY
-            !  We also speed up this routine by computing beforehand the 4/(L*L-M*M)PI
-            !  values.  We had to have twice the range for the M values than the
-            !  L values since we retain LMAXR values which must be transformed over to
-            !  compatible eigenfunctions, but retain only gModIntParams%LMAX2 eigenfunctions.  For example
-            !  cos2y is decomposed onto siny (and sin3y...) but not sin2y.  Thus we need
-            !  M=2 but only L=1, since the cos2y comes from siny*siny and cosy*cosy.
-            KCOS = 1
-            DO K = 1, gModIntParams%KMAX2
-                KCOS = KCOS + 2
-                KSIN = KCOS + 1
-                !  The extra range on M is needed to project the (cosknx,sinknx) cos(0)y terms.
-                MCOS = -1
-                DO M = 1, 2 * gModIntParams%LMAX2 + 1
-                    MCOS = MCOS + 2
-                    M1 = MOD(M - 1, 2) + 1
-                    !-----------------------------------------  Get coskx cosy components:
-                    AA = gHorzArr%G3(KCOS, MCOS)
-                    !-----------------------------------------  Get sinkx cosy components:
-                    BA = gHorzArr%G3(KSIN, MCOS)
-                    DO L = M1, gModIntParams%LMAX2, 2
-                        LSIN = 2 * L + 2
-                        RL = REAL(L)
-                        !  Place each cosly component in all the siny components.  (The ORIGINAL
-                        !  expression has a minus sign in front of A and B, but to keep all cos sin
-                        !  combinations negative, the positive "A" must be negated, giving plus.  With
-                        !  the sin sin, which must be positive, "B" must be negated, making also plus.
-                        !  The components we are interested in also are off by a factor of two, but the
-                        !  pure zonal wave components are not (reached when MCOS=1) which is why we
-                        !  divided these components by two in the loop above.  Are you confused?)
-                        gHorzArr%G3(KCOS, LSIN) = gHorzArr%G3(KCOS, LSIN) + AA * RL * gHorzArr%RML(M, L)
-                        gHorzArr%G3(KSIN, LSIN) = gHorzArr%G3(KSIN, LSIN) + BA * RL * gHorzArr%RML(M, L)
-                    END DO
-                END DO
-            END DO
-
-            !------------------------------ Zonal part ----------------------------------
-            !
-            !  Since all products in the Jacobian which give zonal structure come from the
-            !  advection of one wave by another, the structure will always be zero at the
-            !  boundaries.  Thus the DIRECT result is one of pure sinly structure, which
-            !  then must be projected onto cosly.  No pure cosy structures result from the
-            !  Jacobian advective process itself.  Nevertheless, we take the real part of
-            !  the transform to get the cosy parts for a more general routine which can be
-            !  used from things like local disturbance generators.
-            !
-            !  This is the extra loop which takes each sinly component and projects it onto
-            !  cosy components.  SINMY=(4M/(M*M-L*L)) COSLY
-            MSIN = 2
-            DO M = 1, 2 * gModIntParams%LMAX2
-                MSIN = MSIN + 2
-                M1 = MOD(M, 2) + 1
-                RM = M
-                !---------------------------------------------------  Get the sinly component:
-                BA = gHorzArr%G3(1, MSIN) * RM
-                DO L = M1, gModIntParams%LMAX2, 2
-                    LCOS = 2 * L + 1
-                    !  Here again the sinly is negative to be projected onto cosly which is
-                    !  positive.  Thus the B term in the expression below is now negative.
-                    !  (Originally it was positive.)
-
-                    gHorzArr%G3(1, LCOS) = gHorzArr%G3(1, LCOS) - BA * gHorzArr%RML(M + 1, L)
-                END DO
-            END DO
-
-        END SUBROUTINE InverseTransform
+        !SUBROUTINE InverseTransform()
+        !    use ConstantsModule, only: INVERSE_TRANSFORM
+        !    use ModelFieldsModule, only: gHorzArr, G3_pool
+        !    use ModelParamsModule, only: gModIntParams
+        !    use ArrayDimensionsModule
+        !    !use FFT991Module, only: FFT991
+        !    
+        !    IMPLICIT NONE
+        !    
+        !    INTEGER :: L2MAXR
+        !    INTEGER :: K, L, KCOS, KSIN, MCOS, M1, M, LSIN, MSIN, LCOS
+        !
+        !    REAL :: AA, BA, RL, RM
+        !
+        !    ! Zero the tails of G3
+        !    ! Flatten the two d array. For G(K, L) with KX max x, flat = K + (L - 1) * KX
+        !    ! K in this case is (gCurrentDims%IXMAX + 1) for cos part and (gCurrentDims%IXMAX + 2) for sin part
+        !    DO L = 1, gCurrentDims%IYMAX + 2
+        !        gHorzArr%G3(gCurrentDims%IXMAX + 1, L) = 0.
+        !        gHorzArr%G3(gCurrentDims%IXMAX + 2, L) = 0.
+        !    END DO
+        !
+        !    DO K = 1, gCurrentDims%IXMAX + 2
+        !        gHorzArr%G3(K, gCurrentDims%IYMAX + 1) = 0.
+        !        gHorzArr%G3(K, gCurrentDims%IYMAX + 2) = 0.
+        !    END DO
+        !
+        !    ! Y-Transform for all x rows
+        !    !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, INVERSE_TRANSFORM)
+        !
+        !    ! X-Transform for all y components
+        !    L2MAXR = 4 * gModIntParams%LMAX2 + 2
+        !    !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRX, gCurrentDims%IFX, 1, gCurrentDims%KX, gCurrentDims%IXMAX, L2MAXR, INVERSE_TRANSFORM)
+        !    
+        !    !
+        !    !  Currently, G3 has the following components after the FFT991 call: 
+        !    ! 
+        !    !  The cosnx siny components are in G3(2*K-1,2*L)     But one has to
+        !    !  The sinnx siny components are in G3(2*K,2*L)       remember that the
+        !    !  The cosnx cosy components are in G3(2*K-1,2*L-1)   0,0 components, etc
+        !    !  The sinnx cosy components are in G3(2*K,2*L-1)     are also present.
+        !    !
+        !    !  The data from the tranforms has to be corrected to fit the form of the
+        !    !  eigenfunctions for the channel model.  All the cos(0)x (cosly, sinly)
+        !    !  terms need to be multiplied by SQRT(2).  In addition, all the sinly terms
+        !    !  need to be negated.
+        !    !  The (cosknx, sinknx) cos(0)y terms are okay except that the sinknx term
+        !    !  needs to be negated.
+        !    !  The (cosnkx, sinnkx)(cosly, sinly) terms need to be multiplied by 2.  In
+        !    !  addition, all sin terms are negative, but then sinnkxsinly become positive.
+        !    !  So only the cross terms need to be negated.
+        !    !
+        !    !  However, we do not make these corrections since some of them simply become
+        !    !  undone in JTRN when recombined to mean strmf and mean potential temp.  The
+        !    !  only "correction" done is to divide the (cosnKx, sinnKx)cos(0)y terms by 2.
+        !    !  The reason we do this is because of the reprojection routine which would
+        !    !  need to make a special check for the L=0 value.
+        !    !
+        !    !  Of course, by not doing these corrections here, we have to be careful in the
+        !    !  reprojection routines.  When sinly is projected onto cosly, no factors are
+        !    !  involved, but we have to remember that sinly is negative and cosly positive,
+        !    !  thus we have to make the correction in the reprojection routine.
+        !    !
+        !    !  Here is the correction for the pure zonal wave components:
+        !    
+        !    KCOS = 1
+        !    DO K = 1, gModIntParams%KMAX2
+        !        KCOS = KCOS + 2
+        !        KSIN = KCOS + 1
+        !        gHorzArr%G3(KCOS, 1) = gHorzArr%G3(KCOS, 1) / 2.
+        !        gHorzArr%G3(KSIN, 1) = gHorzArr%G3(KSIN, 1) / 2.
+        !    END DO
+        !
+        !    !--------------------- The reprojection routine:
+        !    !
+        !    !  This is the extra loop which takes each cosy structure and projects it onto
+        !    !  sinly eigenfunctions.    COSMY=(4L/(L*L-M*M))PI SINLY
+        !    !  We also speed up this routine by computing beforehand the 4/(L*L-M*M)PI
+        !    !  values.  We had to have twice the range for the M values than the
+        !    !  L values since we retain LMAXR values which must be transformed over to
+        !    !  compatible eigenfunctions, but retain only gModIntParams%LMAX2 eigenfunctions.  For example
+        !    !  cos2y is decomposed onto siny (and sin3y...) but not sin2y.  Thus we need
+        !    !  M=2 but only L=1, since the cos2y comes from siny*siny and cosy*cosy.
+        !    KCOS = 1
+        !    DO K = 1, gModIntParams%KMAX2
+        !        KCOS = KCOS + 2
+        !        KSIN = KCOS + 1
+        !        !  The extra range on M is needed to project the (cosknx,sinknx) cos(0)y terms.
+        !        MCOS = -1
+        !        DO M = 1, 2 * gModIntParams%LMAX2 + 1
+        !            MCOS = MCOS + 2
+        !            M1 = MOD(M - 1, 2) + 1
+        !            !-----------------------------------------  Get coskx cosy components:
+        !            AA = gHorzArr%G3(KCOS, MCOS)
+        !            !-----------------------------------------  Get sinkx cosy components:
+        !            BA = gHorzArr%G3(KSIN, MCOS)
+        !            DO L = M1, gModIntParams%LMAX2, 2
+        !                LSIN = 2 * L + 2
+        !                RL = REAL(L)
+        !                !  Place each cosly component in all the siny components.  (The ORIGINAL
+        !                !  expression has a minus sign in front of A and B, but to keep all cos sin
+        !                !  combinations negative, the positive "A" must be negated, giving plus.  With
+        !                !  the sin sin, which must be positive, "B" must be negated, making also plus.
+        !                !  The components we are interested in also are off by a factor of two, but the
+        !                !  pure zonal wave components are not (reached when MCOS=1) which is why we
+        !                !  divided these components by two in the loop above.  Are you confused?)
+        !                gHorzArr%G3(KCOS, LSIN) = gHorzArr%G3(KCOS, LSIN) + AA * RL * gHorzArr%RML(M, L)
+        !                gHorzArr%G3(KSIN, LSIN) = gHorzArr%G3(KSIN, LSIN) + BA * RL * gHorzArr%RML(M, L)
+        !            END DO
+        !        END DO
+        !    END DO
+        !
+        !    !------------------------------ Zonal part ----------------------------------
+        !    !
+        !    !  Since all products in the Jacobian which give zonal structure come from the
+        !    !  advection of one wave by another, the structure will always be zero at the
+        !    !  boundaries.  Thus the DIRECT result is one of pure sinly structure, which
+        !    !  then must be projected onto cosly.  No pure cosy structures result from the
+        !    !  Jacobian advective process itself.  Nevertheless, we take the real part of
+        !    !  the transform to get the cosy parts for a more general routine which can be
+        !    !  used from things like local disturbance generators.
+        !    !
+        !    !  This is the extra loop which takes each sinly component and projects it onto
+        !    !  cosy components.  SINMY=(4M/(M*M-L*L)) COSLY
+        !    MSIN = 2
+        !    DO M = 1, 2 * gModIntParams%LMAX2
+        !        MSIN = MSIN + 2
+        !        M1 = MOD(M, 2) + 1
+        !        RM = M
+        !        !---------------------------------------------------  Get the sinly component:
+        !        BA = gHorzArr%G3(1, MSIN) * RM
+        !        DO L = M1, gModIntParams%LMAX2, 2
+        !            LCOS = 2 * L + 1
+        !            !  Here again the sinly is negative to be projected onto cosly which is
+        !            !  positive.  Thus the B term in the expression below is now negative.
+        !            !  (Originally it was positive.)
+        !
+        !            gHorzArr%G3(1, LCOS) = gHorzArr%G3(1, LCOS) - BA * gHorzArr%RML(M + 1, L)
+        !        END DO
+        !    END DO
+        !
+        !END SUBROUTINE InverseTransform
 
         !********************************************Subroutine to compute increments:
         !  Routine increments either strm, vertical diabatic arrays or RN or BETA

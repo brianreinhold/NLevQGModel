@@ -9,7 +9,7 @@ module ConstantsModule
     public  ! Makes everything in the module public (unless otherwise specified)
 
     integer, parameter :: wp = real64 ! Double precision
-    
+
     real, parameter :: PI = 4.*ATAN(1.)
     real, parameter :: PI_INVERSE = 1./PI
     real, parameter :: RAD_TO_DEGREES = 180./PI

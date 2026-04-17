@@ -473,7 +473,7 @@ MODULE ModelFieldsModule
             gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
 
             ! RML is always the same size?
-            gHorzArr%RML(1 : 2 * gUserSettings%maxMeridWaves + 1, 1 : gUserSettings%maxMeridWaves) => RML_pool
+            !gHorzArr%RML(1 : 2 * gUserSettings%maxMeridWaves + 1, 1 : gUserSettings%maxMeridWaves) => RML_pool
             
             ! Transform arrays
             gHorzArr%TRX(1 : arraySizes%ITRXD) => TRX_pool(1 : arraySizes%ITRXD)

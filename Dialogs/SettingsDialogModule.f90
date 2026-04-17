@@ -188,8 +188,6 @@ module SettingsDialogModule
                                 iret = ShowWindow(ghModelControlDlg, SW_SHOW)
                                 iret = UpdateWindow(ghModelControlDlg) ! Optional: forces an immediate paint
                             end if
-                            !iret = DialogBoxParam(ghInstance, LOC("ModelControlDlg"C), hDlg, LOC(ModelControlDlgProc), 0_LONG_PTR)
-                            !ghSettingsDlg = hDlg
                             SettingsDlgProc = 1
                             return
                         case (IDC_BUTTON_EXIT_SETTINGS) ! F10 Close

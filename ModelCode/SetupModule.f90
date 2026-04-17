@@ -38,8 +38,27 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
     contains
 
-        ! The major type instances that are defined in the array and parameter modules are
-        ! gUserSettings, gArrayDims, gVertArr, gHorzArr, gStatsArr, gCintArr
+        ! The user has two levels of control over the model parameters. The first level is set in the
+        ! Settings dialog and that is the maximum number of zonal waves, meridional waves and levels that
+        ! the model can have. These are stored in the gUserSettings type. The allocation of the model arrays
+        ! based upon those values. The user then has a second level of control and this is done in the 
+        ! Model Control dialog. The user can change the actual number of zonal waves, meridional waves and levels
+        ! without reallocation as long as those values are less than or equal to those in gUserSettings. These
+        ! values are stored in the gModIntParams type. 
+        ! Since the user can change the values in gUserSettings we need to keep a second type gUserSettingsPrev to 
+        ! compare to the current gUserSettings values to see if reallocation is required. 
+    
+        ! When the user first starts the following happens:
+        ! StartUp is called. 
+        !   It initializes some constants that will never change.
+        !   It tries to read the default save file.
+        !      If the file is found
+        !         the values are read and checked to valid.
+        !         the arrays are allocated based upon the read values
+        !      If the file is not found or there is an error reading the file
+        !         defaults are set
+        !         the arrays are allocated based upon the default values
+        !   The Settings Dialog appears
 
         !> **************************************************** StartUp
         function StartUp() result(errorCode)
@@ -58,7 +77,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             integer :: errorCode
 
             !INTEGER, PARAMETER :: ERROR_FILE_NOT_FOUND = 2 ! More efficient than using use 'ifwinty'
-
+            ! This method does not need to be called again.
             call initConstants()
 
             errorCode = 0     ! Initialize err code to success
@@ -94,35 +113,39 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 end if
 
                 ! Since data were not loaded from a save file for whatever reason,
-                ! we initialize the model with default values. The SetDefaults() function
-                ! returns the value IXIYL which is the number of levels. It is used to
-                ! allocate space for the IXL and IYL arrays which are used for storing
-                ! a wavenumber (K and L, respectively) at all levels for plotting a time
-                ! series of the vertical structure of a wave. It is equal to the number
-                ! of current levels. We set it here just to handle the return value as
-                ! required by FORTRAN.
+                ! we initialize the model with default values. 
                 call SetDefaults()   ! Subroutine 1ocated in this file
                 !-----------------Get and set array dim, Allocate, SET default profiles:
 
-                !---------------------------------Set array dimensions for allocation:
-                !  This method loads the IXMAX, IYMAX, IZMAX, KX, LY, IBIG, IBOX, ITOT, IYH, IXMAX1
-                !  values into the gArrayDims type.
-                gArrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
-                gCurrentDims = gArrayDims
-
-                ! This function allocates all the arrays and creates the default vertical profiles and perturbs the fields
-                ! The dimensions in the gUserSettings and gModIntParams types are the same as is the gArrayDims and gCurrentDims.
-                errorCode = newAllocation()
+                errorCode = SetAndAllocateArrays()
                 if (errorCode .NE. 0) then
-                    call LogMessage('The model arrays could not be allocated. Cannot run model.')
+                    call LogMessage('The model arrays could not be allocated with default parameters. Cannot run model.')
                     return
-                ENDIF
+                endif
             end if
-            ! At this time the user is presented with the 'main menu'. There the user has the chance to 
-            ! the values in the gUserSettings fields (max zonal, meridional, levels, integration method
-            ! and stats options
             call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
         end function StartUp
+
+        function SetAndAllocateArrays() result(errorCode)
+            use ArrayDimensionsModule, only: gArrayDims, gCurrentDims
+            use ModelParamsModule, only: gUserSettings, gModIntParams
+
+            implicit none
+
+            integer :: errorCode
+
+            errorCode = 0
+            
+            !---------------------------------Set array dimensions for allocation:
+            !  This method loads the IXMAX, IYMAX, IZMAX, KX, LY, IBIG, IBOX, ITOT, IYH, IXMAX1
+            !  values into the gArrayDims type.
+            gArrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
+            gCurrentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+
+            ! This function allocates all the arrays and creates the default vertical profiles and perturbs the fields
+            ! The dimensions in the gUserSettings and gModIntParams types are the same as is the gArrayDims and gCurrentDims.
+            errorCode = newAllocation()
+        end function SetAndAllocateArrays
 
         !> This method allocates all the model arrays assuming that nothing has been allocated yet BUT
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
@@ -260,12 +283,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! Since we are on the way to the model control variables here, we don't care about the return
             ! value which only says something was out of bounds and has been fixed.
 
-            gArrayDims = SetDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)  ! Function in module SetUpModule
-            gCurrentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
-            !---------------------------------------------Allocate arrays based upon what we have read:
-
-            errorCode = newAllocation()  ! Function 1ocated in this file
-            ! A pressure profile will be created but they could very easily be overwritten when reading in the data arrays.
+            errorCode = SetAndAllocateArrays()
             if (errorCode .NE. 0) then
                 call LogMessage('The model arrays could not be allocated based upon the header data read from file ' // fileData%fileName)
                 CLOSE(fileData%fileHandle)
@@ -741,14 +759,14 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
-            use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gScaleFactors
             use InteractionCoefficientsModule, only: gCintArr, createCintArr, computeInteractionCoefficients
             use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr
             use ArrayDimensionsModule, only: gCurrentDims
             use Fftw3HelpersModule, only: setup_fftw_plans
 
             integer, intent(in) :: prevZonalWaves, prevMeridWaves, prevLevels
-            real, intent(in) :: prevRN  ! nondimensional
+            real, intent(inout) :: prevRN  ! nondimensional
 
             integer :: errorCode, I, N
             LOGICAL :: bret, boolUpdateCint, boolHorzChange, boolVertChange
@@ -775,6 +793,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
 
             call NonDimensionalizeModRealParams()    ! call DimensionalizeModRealParams() was done in the WM_INITIDIALOG method in the ModelControl Dialog
+            ! Also need to non-dimensionalize prevRN
+            prevRN = gScaleFactors%longestWave / prevRN
 
             if (prevZonalWaves .NE. gModIntParams%KMAX2 .OR. prevMeridWaves .NE. gModIntParams%LMAX2) boolHorzChange = .true.
             if (prevLevels .NE. gModIntParams%NLEV) boolVertChange = .true.
@@ -823,6 +843,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! to recreate the Cint arrays as well and then compute the interaction coefficients.
 
             if (boolUpdateCint .OR. (prevRN .NE. gModRealParams%RN)) then
+                ! Now that we have checked prevRn for a change, put it back into dimensional form with the new value
+                prevRN = gScaleFactors%longestWave / gModRealParams%RN
                 ! Horizontal resolution has changed, need to recompute cint arrays.
                 if (boolUpdateCint) then
                     ! Compute number of coefficients only. flag = 0 singals to do that. Need to create the gCintArr array shapes.
