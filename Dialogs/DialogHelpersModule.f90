@@ -107,13 +107,14 @@ module DialogHelpersModule
         !! @left: The current left coordinate in the parent window of the ListView.
         !! @top: The current top coordinate in the parent window of the ListView.
         !! @width: The current width of the ListView control
-        subroutine ResizeListViewToFitItems(hwndList, left, top, width)
+        subroutine ResizeListViewToFitItems(hwndList, left, top, width, dlgHeight)
             use ifwinty
             use user32      ! For SendMessage
 
             implicit none
             integer(HANDLE), intent(in) :: hwndList
             integer, intent(in) :: left, top, width
+            integer, optional, intent(in) :: dlgHeight
 
             integer(BOOL) :: bret
             integer :: itemCount, heightPixels
@@ -127,6 +128,11 @@ module DialogHelpersModule
 
             ! Extract height from high word
             heightPixels = ISHFT(approxRect, -16)
+            
+            ! Do we have enough room in the dialog to expand the list view to fit all items? If not, we will skip and scroll
+            if (present(dlgHeight)) then
+                if (top + heightPixels > dlgHeight) return
+            end if
 
             ! Resize the control
             bret = MoveWindow(hwndList, left, top, width, heightPixels - 14, .TRUE.) 

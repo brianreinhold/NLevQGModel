@@ -479,7 +479,7 @@ module VerticalParamsDialogModule
 
             integer(HANDLE) :: hList 
             integer(bool) :: bret
-            integer :: widths(2)
+            integer :: widths(2), dlgHeight
             type(T_RECT) :: rc
             type(T_POINT) :: pt
             
@@ -493,13 +493,16 @@ module VerticalParamsDialogModule
             call loadLevelsIntItemsIntoListView(hList, vertArr, description)
             bret = UpdateWindow(hList)
 
+            ! Check that we have enough room to resize. If not we dont and we scroll.
+            bret = GetClientRect(hDlg, rc)
+            dlgHeight = rc%bottom   ! Note that rc%top and rc%left are both 0
             ! Getting the current position and width of the ListView control in the dialog
             bret = GetWindowRect(hList, rc) ! Gets the ListView rectangle coordinates (this is screen coordinates)
             pt%x = rc%left  ! A T_POINT struct is needed to convert the screen coordinates to dlg coordinates
             pt%y = rc%top
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
             ! The makes the height sized to encompass the actual number of rows added
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
         end subroutine handleIntListControl
 
         subroutine loadLevelsIntItemsIntoListView(hList, vertArr, description)

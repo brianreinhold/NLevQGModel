@@ -5,6 +5,7 @@
 #define IDD_MODEL_CONTROL               106
 #define IDD_SETTINGS_DLG                107
 #define IDD_VERTICAL_PARAMS             108
+#define IDD_INIT_VARIABLES              110
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
 #define IDC_COMBO_USERSETTINGS1         1013
@@ -45,6 +46,7 @@
 #define IDC_BUTTON_RUN_MOVIE            1046
 #define IDC_EDIT1                       1046
 #define IDC_EDIT_VERTICAL               1046
+#define IDC_EDIT_HORZ                   1046
 #define IDC_BUTTON_VIEW_STATISTICS2     1047
 #define IDC_LIST_TEMPERATURES           1047
 #define IDC_BUTTON_RUN_SEQUENTIALLY     1048
@@ -63,8 +65,17 @@
 #define IDC_LIST_THERMAL_DRIVING        1057
 #define IDC_STATIC_THERMAL_DRIVING      1058
 #define IDC_CHECK_VERT_DIMENSIONALIZE   1059
-#define IDC_CHECK1                      1060
 #define IDC_CHECK_MODREAL_DIMENSIONALIZE 1060
+#define IDC_LIST_INIT_STRM              1062
+#define IDC_BUTTON_EXIT_INIT_VARIABLES  1063
+#define IDC_LIST_INIT_TEMP_DRIVING      1064
+#define IDC_LIST_INIT_OROGRAPHY         1065
+#define IDC_LIST_INIT_STRM_DRIVING      1066
+#define IDC_STATIC_INIT_STRM            1067
+#define IDC_STATIC_INIT_TEMP_DRIVING    1068
+#define IDC_STATIC_INIT_OROGRAPHY       1069
+#define IDC_STATIC_INIT_OROGRAPHY2      1070
+#define IDC_STATIC_INIT_STRM_DRIVING    1070
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -72,9 +83,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        110
+#define _APS_NEXT_RESOURCE_VALUE        112
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1061
+#define _APS_NEXT_CONTROL_VALUE         1068
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

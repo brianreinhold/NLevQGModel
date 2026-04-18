@@ -31,6 +31,7 @@ module ModelControlDialogModule
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
+            use InitVariablesDialogModule, only: InitVariablesDlgProc
 
             implicit none
             
@@ -404,6 +405,11 @@ module ModelControlDialogModule
 ! ---- F2:  Edit Vertical Parameters
                         case (IDC_BUTTON_VERTICAL_PARAMS) ! F2 Set vertical profile parameters
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
+
+                            ! ---- F3:  Initialize flow variables
+                        case (IDC_BUTTON_INIT_FLOW_VARIABLES) ! F3 Initialize varaibles
+                            ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
                             ghModelControlDlg = hDlg
 
 ! ---- F7:  Run Model

@@ -384,5 +384,101 @@ module KeyboardHooksModule
             ! Pass to next hook in chain
             KeyboardForDlgVerticalParamsProc = CallNextHookEx(0, nCode, wParam, lParam)
         END FUNCTION KeyboardForDlgVerticalParamsProc
+        
+        function KeyboardForDlgInitVariablesProc(nCode, wParam, lParam)
+        !DEC$ IF DEFINED(_X86_)
+        !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgInitVariablesProc@16' :: KeyboardForDlgInitVariablesProc
+        !DEC$ ELSE
+        !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgInitVariablesProc' :: KeyboardForDlgInitVariablesProc
+        !DEC$ ENDIF
+            USE IFWIN
+            use user32
+            use NlevelQGModelGlobals, only: ghInitVariablesDlg, LogMessage
+            use DlgProcInterfacesModule
+            
+            implicit none
+
+            include '../resource.fd'
+
+            INTEGER(kind=4), INTENT(IN) :: nCode
+            integer(UINT_PTR), intent(in) :: wParam
+            integer(LONG_PTR), intent(in) :: lParam
+
+            integer(LRESULT) ::  KeyboardForDlgInitVariablesProc ! LRESULT
+            integer(kind=4) :: iret
+            integer(BOOL) ::   bret
+            integer(HANDLE) :: hFocus, hLB_User
+
+            IF (GetForegroundWindow() .EQ. ghInitVariablesDlg) then
+
+                IF (nCode >= 0) THEN
+                    IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
+                        ! F1: Configure colors and set map contour intervals
+                        call LogMessage('User pressed F1 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F2: Load data from a saved file
+                        call LogMessage('User pressed F2 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F3: Save data to a file
+                        call LogMessage('User pressed F3 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        call LogMessage('User pressed F4 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F5: Go to Sensitivity file menu
+                        call LogMessage('User pressed F5 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F6: Generic help
+                        call LogMessage('User pressed F6 key in InitVariables Dialog')
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F10 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F10: Return to main menu
+                        call LogMessage('User pressed F10 key in InitVariables Dialog')
+                        bret = PostMessage(ghInitVariablesDlg, WM_CLOSE, 0, 0)
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_RETURN) THEN
+                        ! Trap the Enter key: return non-zero to prevent default processing
+                        call LogMessage('User pressed Enter key, trapped by hook')
+                        ! Get the handle of the window that currently has focus
+                        ! If it is one of the list boxes, we are going to programmatically
+                        ! click on the top row.
+                        hFocus = GetFocus() ! currently focused control
+                        hLB_User = GetDlgItem(ghInitVariablesDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
+                        IF (hFocus == hLB_User) THEN
+                            bret = PostMessage(ghInitVariablesDlg, WM_APP + 100, 0, 0) ! Hides edit box if it is in focus
+                        END IF
+                        KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+                END IF
+            END IF
+            ! Pass to next hook in chain
+            KeyboardForDlgInitVariablesProc = CallNextHookEx(0, nCode, wParam, lParam)
+        END FUNCTION KeyboardForDlgInitVariablesProc
 
 end module KeyboardHooksModule
