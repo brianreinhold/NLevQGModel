@@ -76,6 +76,11 @@
 #define IDC_STATIC_INIT_OROGRAPHY       1069
 #define IDC_STATIC_INIT_OROGRAPHY2      1070
 #define IDC_STATIC_INIT_STRM_DRIVING    1070
+#define IDC_CHECK_HORZ_DIMENSIONALIZE   1071
+#define IDC_BUTTON_INIT_ZERO_ALL        1072
+#define IDC_COMBO1                      1073
+#define IDC_COMBO_LEVEL                 1073
+#define IDC_STATIC_COMBO_LEVEL          1074
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -85,7 +90,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        112
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1068
+#define _APS_NEXT_CONTROL_VALUE         1075
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

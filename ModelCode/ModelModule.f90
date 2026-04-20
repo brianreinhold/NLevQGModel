@@ -28,7 +28,7 @@ module ModelModule
             use ConstantsModule, only: ZONAL_MEAN_FLOW, ERR_SCALING_PARAMETER_ZERO, ZLEVEL_1
             use ArrayDimensionsModule
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ModelParamsModule, only: gModIntParams, gModRealParams, gModPlotParams, gModScalingParams, gUserSettings
+            use ModelParamsModule, only: gModPlotParams, gModScalingParams, gModIntParams, gModRealParams, gUserSettings
             use InteractionCoefficientsModule, only: computeInteractionCoefficients
             !use FFT991Module, only: SET99
             implicit none
@@ -73,7 +73,7 @@ module ModelModule
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales
             use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
-            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, PERTB
+            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation
             use InteractionCoefficientsModule
             use NlevelQGModelGlobals, only: ghwndMain, LogMessage
             use iso_c_binding
@@ -241,7 +241,7 @@ module ModelModule
                     ITOTB = gCurrentDims%ITOT
                     IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) ITOTB = gModIntParams%LMAX2
                     !--------------------------------------------------- Actual beginning of loop:
-        900         DO KCYC = 1, gModIntParams%ICYC
+                    DO KCYC = 1, gModIntParams%ICYC
                         DO KSTEP = 1, gModIntParams%ISTEP
                             !---------------------------------------KSTEPT=Total # of current time steps:
 850                         KSTEPT = KSTEPT + 1
@@ -282,9 +282,8 @@ module ModelModule
                                 !
                                 IF(NCYC4 .EQ. 1) THEN
                                     !---------------------------------------------- Selecting when to output data:
-                                    N = gModIntParams%MOUT
-                                    ITEMP = MOD(KSTEP - 1, N)
-                                    !IF(ITEMP .EQ. 0) EXECUTE PLTNOW
+                                    !if (MOD(KSTEP - 1, gModIntParams%MOUT) == 0) call PlotData()
+
                                     !-----------------------------------------Compute mean fields:
                                     IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
                                         CALL ComputeGQ()
@@ -379,7 +378,7 @@ module ModelModule
                                         write(msg, '(A, I4, A, I4, A, I4)') 'Level=', N, ' KSTEP=', KSTEP, ' NCYC4=', NCYC4
                                         call LogMessage("Numerical instability. Exiting. " // msg)
                                         call ZeroHorzArrays(.true.) ! Don't zero settings like TF, SF, TOP, AKL, etc.
-                                        call PERTB()
+                                        call CreatePerturbation()
                                         return  !GO TO 105
                                     ENDIF
                                 END DO
@@ -546,9 +545,10 @@ module ModelModule
 
         !===========================================================================
         SUBROUTINE EquationSystem (buffer)
-            use ModelParamsModule
-            use ArrayDimensionsModule
-            use ModelFieldsModule
+            use ConstantsModule, only: ZONAL_MEAN_FLOW, RAD_TO_DEGREES
+            use ModelParamsModule, only: gModIntParams, gModRealParams
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gHorzArr, gVertArr
 
             implicit none
 
@@ -764,8 +764,8 @@ module ModelModule
         !! @param A The first array in the Jacobian in spectral form J(A,B)
         !! @param B The second array in the Jacobian in spectral form J(A,B)
         SUBROUTINE NONLIN(FS, A, B)
-            use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, FORWARD_TRANSFORM
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, SQRT2, SQRT22
+            use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, FORWARD_TRANSFORM, SQRT2, SQRT22
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
             use ArrayDimensionsModule
             use ModelFieldsModule, only: gHorzArr, G1_pool
             use InteractionCoefficientsModule, only: gCintArr
@@ -1062,8 +1062,9 @@ module ModelModule
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         subroutine DODADY(A)
             use ArrayDimensionsModule
+            use ConstantsModule, only: SQRT2
             use ModelFieldsModule, only: gHorzArr
-            use ModelParamsModule, only: gModRealParams, gModIntParams, SQRT2
+            use ModelParamsModule, only: gModRealParams, gModIntParams
             use Fftw3HelpersModule
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
 
@@ -1188,9 +1189,11 @@ module ModelModule
             R_Lower = 0.0
 
             IF (NLEV > 2) THEN
-                ! N = 1 Case
+                ! N = 1 Case. Here we have to skip the R_Lower
                 R_Upper(1) = 2.0 * gVertArr%G(1) * (gVertArr%PV(2) - gVertArr%PV(3)) / (gVertArr%PV(1) - gVertArr%PV(3))
-        
+                gHorzArr%T(1:ITOT, 1) = gVertArr%H(1) * (gHorzArr%TF(1:ITOT, 1) - gHorzArr%TH(1:ITOT, 1)) &
+                    + gVertArr%G(1) * R_Upper(1) * (gHorzArr%TH(1:ITOT, 2) * gVertArr%AU(1) - gHorzArr%TH(1:ITOT, 1))
+
                 ! Intermediate Levels
                 DO N = 2, NLEV - 2
                     R_Lower(N) = 2.0 * gVertArr%G(N - 1) * (gVertArr%PV(N - 1) - gVertArr%PV(N)) / (gVertArr%PV(N - 1) - gVertArr%PV(N + 1))
@@ -1202,7 +1205,7 @@ module ModelModule
             END IF
 
             ! 2. The Heavy Lifting (Vectorized)
-            DO N = 1, NLEV - 1
+            DO N = 2, NLEV - 1
                 ! Replace the do loop over ITOT
                 gHorzArr%T(1:ITOT, N) = gVertArr%H(N) * (gHorzArr%TF(1:ITOT, N) - gHorzArr%TH(1:ITOT, N)) &
                     + R_Upper(N) * (gHorzArr%TH(1:ITOT, N + 1) * gVertArr%AU(N) - gHorzArr%TH(1:ITOT, N)) &
@@ -1210,172 +1213,16 @@ module ModelModule
             END DO
         END subroutine TTERMS
 
-        !***************************************************************************
-        !  Routine to convert grid point data to channel model spectral components.
-        !  The input matrix is assumed to be in G3 and the output matrix
-        !  is G3.  The format is the standard for the FFT991 routines where the
-        !  cosnx and sinnx are stored in K and K+1 and the cosly and sinly are stored
-        !  in L and L+1.  The first two columns contain the zonal components, but the
-        !  second column is always zero since it is the sinn(0)x column.
-        !
-        !------------------------------------------We have
-        !  KX=The dimension of the grid point arrays in x:
-        !  gModIntParams%KMAX2,gModIntParams%LMAX2=The number of x and y waves
-        !  IXMAX=The number of grid points in x IXMAX+2=KX
-        !  IYMAX=The number of grid points in y (IYMAX+2=LY)
-        !  IFX(13),IFY(13)=The factors arrays for FFT991
-        ! SUBROUTINE InverseTransform(G3, WRK, TRY, TRX, IFX, IFY, KX, gModIntParams%KMAX2, gModIntParams%LMAX2, IXMAX, IYMAX, RML)
-        !SUBROUTINE InverseTransform()
-        !    use ConstantsModule, only: INVERSE_TRANSFORM
-        !    use ModelFieldsModule, only: gHorzArr, G3_pool
-        !    use ModelParamsModule, only: gModIntParams
-        !    use ArrayDimensionsModule
-        !    !use FFT991Module, only: FFT991
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    INTEGER :: L2MAXR
-        !    INTEGER :: K, L, KCOS, KSIN, MCOS, M1, M, LSIN, MSIN, LCOS
-        !
-        !    REAL :: AA, BA, RL, RM
-        !
-        !    ! Zero the tails of G3
-        !    ! Flatten the two d array. For G(K, L) with KX max x, flat = K + (L - 1) * KX
-        !    ! K in this case is (gCurrentDims%IXMAX + 1) for cos part and (gCurrentDims%IXMAX + 2) for sin part
-        !    DO L = 1, gCurrentDims%IYMAX + 2
-        !        gHorzArr%G3(gCurrentDims%IXMAX + 1, L) = 0.
-        !        gHorzArr%G3(gCurrentDims%IXMAX + 2, L) = 0.
-        !    END DO
-        !
-        !    DO K = 1, gCurrentDims%IXMAX + 2
-        !        gHorzArr%G3(K, gCurrentDims%IYMAX + 1) = 0.
-        !        gHorzArr%G3(K, gCurrentDims%IYMAX + 2) = 0.
-        !    END DO
-        !
-        !    ! Y-Transform for all x rows
-        !    !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRY, gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, INVERSE_TRANSFORM)
-        !
-        !    ! X-Transform for all y components
-        !    L2MAXR = 4 * gModIntParams%LMAX2 + 2
-        !    !CALL FFT991(gHorzArr%G3_1d, gCurrentDims%KXLYD, gHorzArr%WRK, gHorzArr%TRX, gCurrentDims%IFX, 1, gCurrentDims%KX, gCurrentDims%IXMAX, L2MAXR, INVERSE_TRANSFORM)
-        !    
-        !    !
-        !    !  Currently, G3 has the following components after the FFT991 call: 
-        !    ! 
-        !    !  The cosnx siny components are in G3(2*K-1,2*L)     But one has to
-        !    !  The sinnx siny components are in G3(2*K,2*L)       remember that the
-        !    !  The cosnx cosy components are in G3(2*K-1,2*L-1)   0,0 components, etc
-        !    !  The sinnx cosy components are in G3(2*K,2*L-1)     are also present.
-        !    !
-        !    !  The data from the tranforms has to be corrected to fit the form of the
-        !    !  eigenfunctions for the channel model.  All the cos(0)x (cosly, sinly)
-        !    !  terms need to be multiplied by SQRT(2).  In addition, all the sinly terms
-        !    !  need to be negated.
-        !    !  The (cosknx, sinknx) cos(0)y terms are okay except that the sinknx term
-        !    !  needs to be negated.
-        !    !  The (cosnkx, sinnkx)(cosly, sinly) terms need to be multiplied by 2.  In
-        !    !  addition, all sin terms are negative, but then sinnkxsinly become positive.
-        !    !  So only the cross terms need to be negated.
-        !    !
-        !    !  However, we do not make these corrections since some of them simply become
-        !    !  undone in JTRN when recombined to mean strmf and mean potential temp.  The
-        !    !  only "correction" done is to divide the (cosnKx, sinnKx)cos(0)y terms by 2.
-        !    !  The reason we do this is because of the reprojection routine which would
-        !    !  need to make a special check for the L=0 value.
-        !    !
-        !    !  Of course, by not doing these corrections here, we have to be careful in the
-        !    !  reprojection routines.  When sinly is projected onto cosly, no factors are
-        !    !  involved, but we have to remember that sinly is negative and cosly positive,
-        !    !  thus we have to make the correction in the reprojection routine.
-        !    !
-        !    !  Here is the correction for the pure zonal wave components:
-        !    
-        !    KCOS = 1
-        !    DO K = 1, gModIntParams%KMAX2
-        !        KCOS = KCOS + 2
-        !        KSIN = KCOS + 1
-        !        gHorzArr%G3(KCOS, 1) = gHorzArr%G3(KCOS, 1) / 2.
-        !        gHorzArr%G3(KSIN, 1) = gHorzArr%G3(KSIN, 1) / 2.
-        !    END DO
-        !
-        !    !--------------------- The reprojection routine:
-        !    !
-        !    !  This is the extra loop which takes each cosy structure and projects it onto
-        !    !  sinly eigenfunctions.    COSMY=(4L/(L*L-M*M))PI SINLY
-        !    !  We also speed up this routine by computing beforehand the 4/(L*L-M*M)PI
-        !    !  values.  We had to have twice the range for the M values than the
-        !    !  L values since we retain LMAXR values which must be transformed over to
-        !    !  compatible eigenfunctions, but retain only gModIntParams%LMAX2 eigenfunctions.  For example
-        !    !  cos2y is decomposed onto siny (and sin3y...) but not sin2y.  Thus we need
-        !    !  M=2 but only L=1, since the cos2y comes from siny*siny and cosy*cosy.
-        !    KCOS = 1
-        !    DO K = 1, gModIntParams%KMAX2
-        !        KCOS = KCOS + 2
-        !        KSIN = KCOS + 1
-        !        !  The extra range on M is needed to project the (cosknx,sinknx) cos(0)y terms.
-        !        MCOS = -1
-        !        DO M = 1, 2 * gModIntParams%LMAX2 + 1
-        !            MCOS = MCOS + 2
-        !            M1 = MOD(M - 1, 2) + 1
-        !            !-----------------------------------------  Get coskx cosy components:
-        !            AA = gHorzArr%G3(KCOS, MCOS)
-        !            !-----------------------------------------  Get sinkx cosy components:
-        !            BA = gHorzArr%G3(KSIN, MCOS)
-        !            DO L = M1, gModIntParams%LMAX2, 2
-        !                LSIN = 2 * L + 2
-        !                RL = REAL(L)
-        !                !  Place each cosly component in all the siny components.  (The ORIGINAL
-        !                !  expression has a minus sign in front of A and B, but to keep all cos sin
-        !                !  combinations negative, the positive "A" must be negated, giving plus.  With
-        !                !  the sin sin, which must be positive, "B" must be negated, making also plus.
-        !                !  The components we are interested in also are off by a factor of two, but the
-        !                !  pure zonal wave components are not (reached when MCOS=1) which is why we
-        !                !  divided these components by two in the loop above.  Are you confused?)
-        !                gHorzArr%G3(KCOS, LSIN) = gHorzArr%G3(KCOS, LSIN) + AA * RL * gHorzArr%RML(M, L)
-        !                gHorzArr%G3(KSIN, LSIN) = gHorzArr%G3(KSIN, LSIN) + BA * RL * gHorzArr%RML(M, L)
-        !            END DO
-        !        END DO
-        !    END DO
-        !
-        !    !------------------------------ Zonal part ----------------------------------
-        !    !
-        !    !  Since all products in the Jacobian which give zonal structure come from the
-        !    !  advection of one wave by another, the structure will always be zero at the
-        !    !  boundaries.  Thus the DIRECT result is one of pure sinly structure, which
-        !    !  then must be projected onto cosly.  No pure cosy structures result from the
-        !    !  Jacobian advective process itself.  Nevertheless, we take the real part of
-        !    !  the transform to get the cosy parts for a more general routine which can be
-        !    !  used from things like local disturbance generators.
-        !    !
-        !    !  This is the extra loop which takes each sinly component and projects it onto
-        !    !  cosy components.  SINMY=(4M/(M*M-L*L)) COSLY
-        !    MSIN = 2
-        !    DO M = 1, 2 * gModIntParams%LMAX2
-        !        MSIN = MSIN + 2
-        !        M1 = MOD(M, 2) + 1
-        !        RM = M
-        !        !---------------------------------------------------  Get the sinly component:
-        !        BA = gHorzArr%G3(1, MSIN) * RM
-        !        DO L = M1, gModIntParams%LMAX2, 2
-        !            LCOS = 2 * L + 1
-        !            !  Here again the sinly is negative to be projected onto cosly which is
-        !            !  positive.  Thus the B term in the expression below is now negative.
-        !            !  (Originally it was positive.)
-        !
-        !            gHorzArr%G3(1, LCOS) = gHorzArr%G3(1, LCOS) - BA * gHorzArr%RML(M + 1, L)
-        !        END DO
-        !    END DO
-        !
-        !END SUBROUTINE InverseTransform
-
         !********************************************Subroutine to compute increments:
         !  Routine increments either strm, vertical diabatic arrays or RN or BETA
         !  given R so the model can be rerun. 'I' gives which quantity (1-9).
         !  PRF is the start and end profile for the incrementing:
         !
         SUBROUTINE PROFIL(PRF, R, II)
-            use ModelFieldsModule
-            use ModelParamsModule
+            use ConstantsModule, only: RAD_TO_DEGREES
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams
+            !use ModelParamsModule
 
             implicit none
             !--------------------------------------------------------------
@@ -1474,7 +1321,7 @@ module ModelModule
         END SUBROUTINE PROFIL
 
         SUBROUTINE PICK(DAT, PS, N, IP)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gUserSettings
 
             implicit none
@@ -1503,9 +1350,9 @@ module ModelModule
         END subroutine PICK
 
         SUBROUTINE TRANS(G, DT, WK, TX, TM)
-            use ConstantsModule, only: FORWARD_TRANSFORM
+            use ConstantsModule, only: FORWARD_TRANSFORM, SQRT22
             use ArrayDimensionsModule
-            use ModelParamsModule, only: gModIntParams, SQRT22
+            use ModelParamsModule, only: gModIntParams
             
             !-------------------------------------------------Variables passed
             !  G,TM=Grid point array of output data
@@ -1666,7 +1513,7 @@ module ModelModule
         END subroutine ComputeGQ
         
         subroutine DoubleLoops(field, M)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only : gHorzArr, gStatsArr
             use ModelParamsModule, only: gModIntParams
             

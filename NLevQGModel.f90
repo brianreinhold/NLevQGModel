@@ -523,6 +523,38 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             lret = SendMessage(hWnd, 161, 2, 0) 
             MainWndProc = 0
             RETURN
+            
+        case (WM_SYSKEYUP)
+            ! Will cause the model to quit on the next plot check.
+            if (wParam == VK_F10) then
+                !if (gDataType%runState == RUNNING) then
+                !    gDataType%runState = STOPPED
+                !    call LogMessage("User stopped run using F10")
+                !else
+                !    if (gDataType%dataSource == MODEL) then
+                !        call LogMessage("User returning to ModelControl Dialog via F10")
+                !        ret = SetFocus(ghCurrentDlg)
+                !    else if (gDataType%dataSource == FILE .OR. gDataType%dataSource == ENSEMBLES) then
+                !        call LogMessage("User returning to Ensembles Dialog via F10")
+                !        if (gDataType%dataSource == ENSEMBLES) then
+                !            call computeMseAndSpredFromEnsembles(hWnd, gEnsembleSetData, gObsBaseFile, .true.) ! This is a termination; True = cleanup
+                !        endif
+                !        ret = SetForegroundWindow(ghCurrentDlg)
+                !        ret = SendMessage(ghCurrentDlg, WM_NEXTDLGCTL, GetDlgItem(ghCurrentDlg, IDC_BUTTON_RUN_DIFF), INT(1, INT_PTR))
+                !    endif
+                !    gTimeSteps = 0 ! Reset the elapsed time displayed in plots
+                !    if(ALLOCATED(X)) then
+                !        call LogMessage("DeAllocated interpolated grid X on F10")
+                !        deallocate(X)
+                !    endif
+                !    if(ALLOCATED(X_Overlay)) then
+                !        call LogMessage("DeAllocated interpolated grid X_overlay on F10")
+                !        deallocate(X_Overlay)
+                !    endif
+                !endif
+            endif
+            MainWndProc = 0
+            return
 
         ! WM_COMMAND: user command
         case (WM_COMMAND)

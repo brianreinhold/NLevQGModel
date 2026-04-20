@@ -184,8 +184,15 @@ module KeyboardHooksModule
 
                 IF (nCode >= 0) THEN
                     IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F1: Configure colors and set map contour intervals
+                        ! F7: Run as a movie
                         call LogMessage('User pressed F1 key in Model Control Dialog')
+                        iret = CheckModelControlChanges(paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        iret = InitModelWithModelControlVals()
+                        iret = StartTimeLoop()
+                        paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                        paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                        paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                        paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -226,19 +233,11 @@ module KeyboardHooksModule
                     END IF
 
                     IF (wParam == VK_F7 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F7: Run as a movie
+                        ! F7: Set map contour intervals and graph ranges
                         call LogMessage('User pressed F7 key in Model Control Dialog')
-                        iret = CheckModelControlChanges(paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                        iret = InitModelWithModelControlVals()
-                        iret = StartTimeLoop()
-                        paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                        paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                        paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                        paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
-
 
                     IF (wParam == VK_F8 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F8: Run as a sequence of maps
@@ -395,6 +394,7 @@ module KeyboardHooksModule
             use user32
             use NlevelQGModelGlobals, only: ghInitVariablesDlg, LogMessage
             use DlgProcInterfacesModule
+            use ModelFieldsModule, only: gHorzArr
             
             implicit none
 
@@ -413,8 +413,13 @@ module KeyboardHooksModule
 
                 IF (nCode >= 0) THEN
                     IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
-                        ! F1: Configure colors and set map contour intervals
+                        ! F1: Zero variables
                         call LogMessage('User pressed F1 key in InitVariables Dialog')
+                        gHorzArr%PS = 0.0
+                        gHorzArr%TF = 0.0
+                        gHorzArr%TOP = 0.0
+                        gHorzArr%SF = 0.0
+                        gHorzArr%FS = 0.0  
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF

@@ -21,7 +21,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     public :: NonDimensionalizeModRealParams ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
     public :: SetDefaults  ! This creates the default values for all the fields in the ModelParamsModule
     public :: DFDIAB    ! Computes default diabatic vertical profiles
-    public :: PERTB     ! Introduces a perturbation into the flow:
+    public :: CreatePerturbation     ! Introduces a perturbation into the flow:
     public :: ComputeVerticalProfiles     ! Computes outside-loop Vertical arrays
     public :: RaisanenRadiationProfile    ! Radiation profile based upon ECMWF radiation model
 
@@ -169,7 +169,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             error = createVertArr(gModIntParams%NLEV)
             if (error .NE. 0) return
             call DFDIAB(.true.)  ! Subroutine 1ocated in this file
-            call PERTB() ! Subroutine 1ocated in this file
+            call CreatePerturbation() ! Subroutine 1ocated in this file
             ! TODO fix to be consistent with the others
             error = AllocateStatsArrays()
             if (error .NE. 0) return
@@ -571,7 +571,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 CALL DFDIAB(.true.) ! recreate the vertical profiles. This uses gModIntParams%NLEV as the number of levels
             endif
             !-------------------------------------------Introduce perturbation if there have been reallocations:
-            if (boolHorzResult .OR. boolVertResult) CALL PERTB()         ! Subroutine 1ocated in this file
+            if (boolHorzResult .OR. boolVertResult) CALL CreatePerturbation()         ! Subroutine 1ocated in this file
 
             ! TODO Stats arrays
             !IF(boolStatsResult) isAlloced(STATS_ARRAYS) = NEED_REALLOC
@@ -1121,7 +1121,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         END subroutine DFDIAB
 
         !*****************************************Place perturbation in flow:
-        SUBROUTINE PERTB()
+        SUBROUTINE CreatePerturbation()
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1135,7 +1135,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             END DO
         !---------------------------------Perturb ALL surface components:
             gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
-        END SUBROUTINE PERTB
+        END SUBROUTINE CreatePerturbation
 
         !***************************************************** SetDefaults:
         !> THis function sets default values to gModRealParams, gModIntParams, gModScalingParams,
@@ -1448,6 +1448,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine NonDimensionalizeVerticalParams
         
         subroutine DimensionalizeHorizontalParams()
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gScaleFactors
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1455,7 +1456,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             implicit none
 
             integer :: Index, N
-            real :: tempScale
+            real :: tempScale, topScale
             
             if (gHorzArr%isDimensionalized) return
 
@@ -1466,10 +1467,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
+            gHorzArr%PS = gScaleFactors%heights * gHorzArr%PS ! Convert to dimensional heights all at once
+            gHorzArr%SF = gScaleFactors%heights * gHorzArr%SF ! Convert to dimensional heights
+
+            ! The height of a 'standard' pressure level PP(n) is given by z = (R*T/g)ln(PP(1)/PP(N))
+            ! T is the virtual temperature of the column in K which is given by (THS(1) + THS(2))/2
+            topScale = GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2) )/ (2.0 * GRAVITY)
+            gHorzArr%TOP = topScale * gHorzArr%TOP ! Convert to dimensional heights
             gHorzArr%isDimensionalized = .true.
         end subroutine DimensionalizeHorizontalParams
-        
+
         subroutine NonDimensionalizeHorizontalParams()
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gScaleFactors
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1477,7 +1486,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             implicit none
 
             integer :: Index, N
-            real :: tempScale
+            real :: tempScale, heightsScale, topScale
 
             if (.NOT. gHorzArr%isDimensionalized) return
 
@@ -1488,6 +1497,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
+            heightsScale = 1.0 / gScaleFactors%heights ! The scaling factor for the heights
+            gHorzArr%PS = heightsScale * gHorzArr%PS ! Convert to nondimensional 
+            gHorzArr%SF = heightsScale * gHorzArr%SF ! Convert to nondimensional 
+
+            topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))
+            gHorzArr%TOP = topScale * gHorzArr%TOP ! Convert to nondimensional
             gHorzArr%isDimensionalized = .false.
         end subroutine NonDimensionalizeHorizontalParams
 

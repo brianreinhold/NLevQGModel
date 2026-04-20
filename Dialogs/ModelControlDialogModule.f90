@@ -17,9 +17,9 @@ module ModelControlDialogModule
         !DEC$ ENDIF
             use ifwinty
             use ifwin
-            use kernel32
-            use user32
-            use gdi32
+            !use kernel32
+            !use user32
+            !use gdi32
 
             use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
@@ -402,18 +402,8 @@ module ModelControlDialogModule
                             endif
 
 ! ------------------ Now to handle the F1-F10 buttons
-! ---- F2:  Edit Vertical Parameters
-                        case (IDC_BUTTON_VERTICAL_PARAMS) ! F2 Set vertical profile parameters
-                            ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
-                            ghModelControlDlg = hDlg
-
-                            ! ---- F3:  Initialize flow variables
-                        case (IDC_BUTTON_INIT_FLOW_VARIABLES) ! F3 Initialize varaibles
-                            ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
-                            ghModelControlDlg = hDlg
-
-! ---- F7:  Run Model
-                        case (IDC_BUTTON_RUN_MOVIE) ! F7 Run as movie
+! ---- F1:  Run Model
+                        case (IDC_BUTTON_RUN_MOVIE) ! F1 Run as movie
                             ! paramChange is defined in KeyboardHooksModule
                             ! Non dimensionalized in the following function
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
@@ -424,6 +414,16 @@ module ModelControlDialogModule
                             paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
                             paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
                             call DimensionalizeModRealParams() ! Method checks if already dimensionalized
+
+! ---- F2:  Edit Vertical Parameters
+                        case (IDC_BUTTON_VERTICAL_PARAMS) ! F2 Set vertical profile parameters
+                            ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
+
+! ---- F3:  Initialize flow variables
+                        case (IDC_BUTTON_INIT_FLOW_VARIABLES) ! F3 Initialize varaibles
+                            ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
 
 ! ---- F10:  Exit to main
                         case (IDC_BUTTON_RETURN_TO_MAIN) ! F10 Close

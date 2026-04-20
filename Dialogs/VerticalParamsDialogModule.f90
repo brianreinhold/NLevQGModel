@@ -177,7 +177,8 @@ module VerticalParamsDialogModule
 
                     select case (IAND(wParam, 16#FFFF))
 
-                        case (IDC_BUTTON_EXIT_VERTICAL) ! F10 Close
+!  F10  Exit --------------------------------------------
+                        case (IDC_BUTTON_EXIT_VERTICAL)
                             bret = EndDialog(hDlg, 0)
                             VerticalParamsDlgProc = 1
 

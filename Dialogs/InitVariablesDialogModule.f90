@@ -22,9 +22,9 @@ module InitVariablesDialogModule
 
             use ifwinty
             use ifwin
-            use kernel32
-            use user32
-            use gdi32
+            !use kernel32
+            !use user32
+            !use gdi32
 
             use NlevelQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
             use iso_c_binding
@@ -33,11 +33,11 @@ module InitVariablesDialogModule
             use ConstantsModule, only: REAL_TO_ASCII
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
-                                           updateListViewValue, HideMyEdit
+                                           updateListViewValue, HideMyEdit, GetComboIndex
             use ModelParamsModule, only: gModIntParams
             use KeyboardHooksModule, only: KeyboardForDlgInitVariablesProc
             use ModelFieldsModule, only: gVertArr, gHorzArr
-            !use SetUpModule, only: DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
+            use SetUpModule, only: DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
 
 
 
@@ -51,6 +51,7 @@ module InitVariablesDialogModule
 
             include 'resource.fd'
 
+            ! Local variables
             integer(KIND=4) :: lData
             integer(kind=4) :: iData
             integer(kind=4) :: iret
@@ -62,14 +63,16 @@ module InitVariablesDialogModule
             type(T_POINT) :: pt
             
             real, pointer :: pTempDriving(:)  ! Local 1D pointer
-
+            integer, save :: levelIndex = 1 ! Current levelIndex being edited in the list view. 
+            
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus
+            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo
             integer, save :: psRowClicked, tfRowClicked, topRowClicked, sfRowClicked
             integer :: id
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
+            integer :: i
 
             select case (dlgMsg)
             CASE (WM_APP + 100)
@@ -86,22 +89,24 @@ module InitVariablesDialogModule
                     psRowClicked = -1
                     tfRowClicked = -1
                     topRowClicked = -1
-                    !call DimensionalizeInitVariables()
-                    !call DimensionalizeHorizontalParams()
+                    call DimensionalizeHorizontalParams()
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgInitVariablesProc), NULL, GetCurrentThreadId())
                     ghInitVariablesDlg = hDlg
+                    
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_LEVEL)
+                    do i = 1, gModIntParams%NLEV
+                        write(buffer, '(F6.1)') gVertArr%PV(i)
+                        bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(trim(buffer)//char(0)))
+                    end do
+                    ! Initialize the combo box with the lowest levelIndex
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(0, UINT_PTR), 0)
+                    ! How many items to display in dropdown
+                    !bret = SendMessage(hCombo, Z'1701', INT(min(gModIntParams%NLEV, 20)), 0) ! CB_SETMINVISIBLE = 0x1701
 
-                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VERT_DIMENSIONALIZE)
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_HORZ_DIMENSIONALIZE)
                     bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
-
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Component", "meters"], gHorzArr%PS, 1)
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Component", ACHAR(176)//"C"], gHorzArr%TF, 1)
-                    ! The topography is a one-d array. We need to fake a two-d array to reuse the same handleIntListControl subroutine. 
-                    ! The second dimension is just 1 in this case and the subroutine will index it accordingly.
-                    ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1)
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, 1)
+                    call populateListControls(levelIndex)
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -148,7 +153,7 @@ module InitVariablesDialogModule
                                         ! Function returns pointer to the correct array based on which list view was clicked
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
                                         ! Converts real value to string for edit box
-                                        ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, 1), str)
+                                        ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, levelIndex), str)
                                         !str = getStringFromRealForEditBox(ptr(J + 1))
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
@@ -164,20 +169,15 @@ module InitVariablesDialogModule
                     !loWord = IAND(iData, Z'FFFF')
                     !hiWord = ISHFT(iData, -16)
                     ! Combo box change
-                    !if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
-                    !    select case(IAND(wParam, Z'FFFF'))
-                    !        case (IDC_COMBO_USERSETTINGS1)
-                    !            gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
-                    !        case (IDC_COMBO_USERSETTINGS2)
-                    !            gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
-                    !    end select
-                    !end if
+                    if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
+                        select case(IAND(wParam, Z'FFFF'))
+                            case (IDC_COMBO_LEVEL)
+                                levelIndex = GetComboIndex(hDlg, IDC_COMBO_LEVEL) + 1
+                                call populateListControls(levelIndex)
+                        end select
+                    end if
 
                     select case (IAND(wParam, 16#FFFF))
-
-                        case (IDC_BUTTON_EXIT_INIT_VARIABLES) ! F10 Close
-                            bret = EndDialog(hDlg, 0)
-                            InitVariablesDlgProc = 1
 
                         case (IDOK)
                             bret = EndDialog(hDlg, IDOK)
@@ -186,28 +186,36 @@ module InitVariablesDialogModule
                         case (IDCANCEL)
                             bret = EndDialog(hDlg, IDCANCEL)
                             InitVariablesDlgProc = 1
+
+!--F1: Zero all fields ====================================================
+                        case (IDC_BUTTON_INIT_ZERO_ALL)
+                            gHorzArr%PS = 0.0
+                            gHorzArr%TF = 0.0
+                            gHorzArr%TOP = 0.0
+                            gHorzArr%SF = 0.0
+                            gHorzArr%FS = 0.0           ! This is probably not necessary
+                            InitVariablesDlgProc = 1
+
+!--F10: EXIT ==============================================================
+                        case (IDC_BUTTON_EXIT_INIT_VARIABLES) ! F10 Close
+                            bret = EndDialog(hDlg, 0)
+                            InitVariablesDlgProc = 1
+
                             
-                        case (IDC_CHECK_VERT_DIMENSIONALIZE)
+                        case (IDC_CHECK_HORZ_DIMENSIONALIZE)
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
-        
+
                                 ! Now we ask Windows: "Is it checked or not?"
-                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_VERT_DIMENSIONALIZE) /= 0) then
+                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_HORZ_DIMENSIONALIZE) /= 0) then
                                     ! User checked it - update your variable/logic here
-                                    !call DimensionalizeHorizontalParams()
-                                    !call DimensionalizeInitVariables()
+                                    call DimensionalizeHorizontalParams()
                                 else
                                     ! User unchecked it
-                                    !call NonDimensionalizeHorizontalParams()
-                                    !call NonDimensionalizeInitVariables()
+                                    call NonDimensionalizeHorizontalParams()
                                 end if
                                 bret = PostMessage(hDlg, WM_APP + 100, 0, 0)
-                                call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Component", "meters"], gHorzArr%PS, 1)
-                                call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Component", ACHAR(176)//"C"], gHorzArr%TF, 1)
-                                ! The topography is a one-d array. We need to fake a two-d array to reuse the same handleIntListControl subroutine. 
-                                ! The second dimension is just 1 in this case and the subroutine will index it accordingly.
-                                ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
-                                call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1)
-                                call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, 1)
+                                call populateListControls(levelIndex)
+
                             endif
                             InitVariablesDlgProc = 1
 
@@ -244,7 +252,7 @@ module InitVariablesDialogModule
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
                                             
-                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1, 1), strC)
+                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1, levelIndex), strC)
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, strC)
                                             exit EN
@@ -261,13 +269,26 @@ module InitVariablesDialogModule
                 case (WM_DESTROY)
                     !bret = WriteCurrentStateToFile(hDlg, gModelSaveFile, gModelWelford, .true.)
                     bret = UnhookWindowsHookEx(hHook)
-                    !call NonDimensionalizeHorizontalParams()
-                    !call NonDimensionalizeInitVariables()
+                    call NonDimensionalizeHorizontalParams()
                     ghInitVariablesDlg = 0
             end select
             InitVariablesDlgProc = 0 ! Didn't process the dialog message dlgMsg
 
         contains
+
+                subroutine populateListControls(N)
+                    implicit none
+
+                    integer, intent(in) :: N
+
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Component", "meters"], gHorzArr%PS, N)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Component", ACHAR(176)//"C"], gHorzArr%TF, N)
+                    ! The topography is a one-d array. We need to fake a two-d array to reuse the same handleIntListControl subroutine. 
+                    ! The second dimension is just 1 in this case and the subroutine will index it accordingly.
+                    ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, N)
+                end subroutine populateListControls
 
                 ! Set of 'contained' subroutine and function to link list control rows to the corresponding arrays
                 ! Contained methods have access to all declared variables in the parent function so one does not 
@@ -451,6 +472,7 @@ module InitVariablesDialogModule
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
             call loadLevelsIntItemsIntoListView(hList, horzArr, level)
+            bret = SendMessage(hList, LVM_ENSUREVISIBLE, 0, 0)
             bret = UpdateWindow(hList)
 
             !! Getting the current position and width of the ListView control in the dialog
