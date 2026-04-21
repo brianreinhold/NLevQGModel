@@ -274,12 +274,54 @@ module UtilitiesModule
 
             ! If we are overwriting an existing file, ensure it is truncated to zero. Otherwise move to the start
             else if (.not. justOpen) then
-                !rewind(fileInfo%fileHandle)
                 ! In STREAM access, use the POS specifier to go to the start instead of REWIND
                 write(fileInfo%fileHandle, pos = 1)  ! This does not truncate
                 endfile(fileInfo%fileHandle)         ! This truncates making the file open for a clean start
             end if
 
         end function openModelFile
+
+        !subroutine GetUserFile(selected_file, hWnd)
+        !    use ifwin
+        !    implicit none
+        !
+        !    character(len=*), intent(out) :: selected_file
+        !    integer(HANDLE), intent(in) :: hWnd
+        !    
+        !    type(T_OPENFILENAME) :: ofn
+        !    type(T_OPENFILENAME), save :: empty_ofn  ! Guaranteed zero-initialized (the 'save' makes it non zero on startup  
+        !                                             ! before program runs
+        !    integer :: status, nameLength
+        !    
+        !    nameLength = LEN(selected_file)
+        !    
+        !    ofn = empty_ofn ! Zeros the entire structure which is huge!!
+        !
+        !    ! 1. Initialize the structure
+        !    ofn%lStructSize = sizeof(ofn)
+        !    ofn%hwndOwner = hWnd        ! Or pass your main window handle
+        !    ofn%lpstrFile = loc(selected_file)
+        !    ofn%nMaxFile = nameLength
+        !    selected_file = char(0) ! Ensure buffer is null-terminated
+        !
+        !    ! 2. Set file filters (Format: Description\0*.ext\0\0)
+        !    ofn%lpstrFilter = loc("All Files (*.*)"//char(0)//"*.*"//char(0)//char(0))
+        !    ofn%nFilterIndex = 1
+        !
+        !    ! 3. Set flags (e.g., must exist, don't change working directory)
+        !    ofn%Flags = ior(OFN_PATHMUSTEXIST, ior(OFN_FILEMUSTEXIST, OFN_NOCHANGEDIR))
+        !
+        !
+        !    ! 4. Open the dialog
+        !    status = GetOpenFileName(ofn)
+        !
+        !    if (status /= 0) then
+        !        ! Success: selected_file now contains the path
+        !        ! Remove the trailing null character for Fortran use
+        !        selected_file = selected_file(1:index(selected_file, char(0))-1)
+        !    else
+        !        selected_file = " " ! File with blanks
+        !    end if
+        !end subroutine
 
 end module UtilitiesModule

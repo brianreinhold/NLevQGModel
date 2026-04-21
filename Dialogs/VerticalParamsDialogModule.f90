@@ -22,9 +22,6 @@ module VerticalParamsDialogModule
 
             use ifwinty
             use ifwin
-            use kernel32
-            use user32
-            use gdi32
 
             use NlevelQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding

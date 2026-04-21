@@ -63,13 +63,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> **************************************************** StartUp
         function StartUp() result(errorCode)
             use ifwinty!, only ERROR_FILE_NOT_FOUND
+            use ifwin
+
             use ConstantsModule, only: MAP_OVERLAY_1, POTENTIAL_TEMP, OMEGA, INVALID
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, &
                 gNLevFile, gPlotControls, gSensFile, initConstants
-            use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            use NlevelQGModelGlobals, only: LogMessage, ghwndMain    ! For logging
             use ArrayDimensionsModule, only: gArrayDims, gCurrentDims
             use ModelFieldsModule, only: createHorzArr
             use Fftw3HelpersModule, only: setup_fftw_plans
+            use UtilitiesModule, only: openModelFile
 
             implicit none
 
@@ -101,7 +104,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gSensFile%fileHandle = INVALID
             !---------------------------Read in input parameters and allocate memory:
             ! If file does not exist or another error occurred we will set defaults
-            errorCode = ReadSaveFile(gNLevFile)      ! function is 1ocated in this file
+            errorCode = openModelFile(gNLevFile, .true., ghwndMain)
+            if (errorCode == 0) errorCode = ReadSaveFile(gNLevFile)   ! function is 1ocated in this file
             if (errorCode .NE. 0) then
                 ! We get here the file was not found or there was an error reading it
                 if (errorCode == ERROR_FILE_NOT_FOUND) then
@@ -120,6 +124,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = SetAndAllocateArrays()
                 if (errorCode .NE. 0) then
                     call LogMessage('The model arrays could not be allocated with default parameters. Cannot run model.')
+                    errorCode = MessageBox(ghwndMain, "The model arrays could not be allocated with default parameters."//char(0), "Allocation failure"//char(0), MB_OK)
                     return
                 endif
             end if
@@ -150,8 +155,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> This method allocates all the model arrays assuming that nothing has been allocated yet BUT
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
-            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateVerticalArrays, AllocateStatsArrays, createHorzArr, createVertArr
-            use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr
+            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateVerticalArrays, AllocateStatsArrays, createHorzArr, createVertArr, &
+                       DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
+            use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr, DeallocateCintArrays
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
 
             implicit none
@@ -159,11 +165,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             integer :: error, currentNoOfInteractions
 
             error = 0
-
+            error = DeallocateHorizontalArrays()
             error = AllocateHorizontalArrays()
             if (error .NE. 0) return
             error = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
             if (error .NE. 0) return
+            error = DeallocateVerticalArrays()
             error = AllocateVerticalArrays()
             if (error .NE. 0) return
             error = createVertArr(gModIntParams%NLEV)
@@ -171,10 +178,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             call DFDIAB(.true.)  ! Subroutine 1ocated in this file
             call CreatePerturbation() ! Subroutine 1ocated in this file
             ! TODO fix to be consistent with the others
+            error = DeallocateStatsArrays()
             error = AllocateStatsArrays()
             if (error .NE. 0) return
-            if (gUserSettings%useTransformMethod .EQV. .FALSE.) then
+            if (gUserSettings%useTransformMethod .EQV. .FALSE.) then ! Equivalent to  if (.NOT. gUserSettings%useTransformMethod)
                 ! Using interaction coefficients
+                error = DeallocateCintArrays()
                 error = AllocateCintArrays()
                 if (error .EQ. -1) then
                     error = 0       ! switched to transform method. Too many interaction coefficients
@@ -191,40 +200,36 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end function newAllocation
 
         !> **************************************************** SaveModelState
-        function SaveModelState() result(errorCode)
+        function SaveModelState(fileData, deallocateFields) result(errorCode)
             use NlevelQGModelGlobals, only: LogMessage    ! For logging
-            use ModelParamsModule, only: gNLevFile
+            use ModelParamsModule, only: FileStruct
             use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
+            
+            implicit none
+            
+            type(FileStruct), intent(inout) :: fileData
+            LOGICAL, intent(in) :: deallocateFields
 
             integer :: errorCode
             logical :: fileExists
             
             errorCode = 0
 
-            INQUIRE(FILE = gNLevFile%fileName, EXIST = fileExists)
-            if (.NOT. fileExists) then
-
-                call LogMessage('The file ' // trim(gNLevFile%fileName) // ' is being created')
-                OPEN(NEWUNIT = gNLevFile%fileHandle, FILE = trim(gNLevFile%fileName), FORM = 'UNFORMATTED', ACCESS = 'SEQUENTIAL', STATUS = 'NEW', IOSTAT = errorCode)
-            elseif (gNLevFile%fileHandle == -1) then
-                OPEN(NEWUNIT = gNLevFile%fileHandle, FILE = trim(gNLevFile%fileName), FORM = 'UNFORMATTED', ACCESS = 'SEQUENTIAL', STATUS = 'OLD', IOSTAT = errorCode)
-                call LogMessage('The file ' // trim(gNLevFile%fileName) // ' exits. Overwriting with current model state.')
-            end if
-            if (errorCode .NE. 0) then
-                call LogMessage('The file ' // trim(gNLevFile%fileName) // ' could not be opened')
-                return
-            end if
-            errorCode = WriteFileData(gNLevFile%fileHandle)
+            errorCode = WriteFileData(fileData%fileHandle)
             if (errorCode .NE. 0) then
                 call LogMessage('Error writing data to file. Model state could not be saved.')
             else
-                call LogMessage('Model state has been saved to file ' // trim(gNLevFile%fileName) //'.')
+                call LogMessage('Model state has been saved to file ' // trim(fileData%fileName) //'.')
             end if
-            close(gNLevFile%fileHandle)
-            gNLevFile%fileHandle = -1
-            fileExists = DeallocateHorizontalArrays()
-            fileExists = DeallocateVerticalArrays()
-            fileExists = DeallocateStatsArrays()
+            close(fileData%fileHandle)
+            fileData%fileHandle = -1
+
+            if (deallocateFields) then
+                ! Just borrowing the existing logical variable to call the deallocation functions
+                fileExists = DeallocateHorizontalArrays()
+                fileExists = DeallocateVerticalArrays()
+                fileExists = DeallocateStatsArrays()
+            endif
         end function SaveModelState
 
         !***************************************************************** ReadSaveFile:
@@ -247,21 +252,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             logical :: res
 
             errorCode = 0
-
-            ! Does the file exist?
-            INQUIRE(FILE = trim(fileData%fileName), EXIST = fileExists)
-            if (.NOT. fileExists) then
-                ! We dont treat this as an error
-                errorCode = ERROR_FILE_NOT_FOUND
-                call LogMessage('The file ' // trim(fileData%fileName) // ' was not found. Loading defaults.')
-                return
-            end if
-            ! If we get here the file exists
-            OPEN(NEWUNIT = fileData%fileHandle, FILE = trim(fileData%fileName), FORM = 'UNFORMATTED', ACCESS = 'SEQUENTIAL', STATUS = 'OLD', IOSTAT = errorCode)
-            if (errorCode .NE. 0) then
-                call LogMessage('The file ' // trim(fileData%fileName) // ' could not be opened.')
-                return
-            end if
 
         !---------------------------------------Read header for allocation:
             ! This loads all the ModelParamsModule fields
@@ -310,8 +300,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ENDIF
             END DO
 
-        !----------------------------------------------------Do not close SENSIV file (check this later)
-!120        IF(IEXEC .NE. 5) CLOSE(fileHandle)
             CLOSE(fileData%fileHandle)
             fileData%fileHandle = -1
         END function ReadSaveFile
@@ -536,7 +524,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gArrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
                 gCurrentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
                 ! Handle horizontal array changes (which includes vertical dimensions):
-                if (gHorzArr%allocated) errorCode = deallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
+                if (gHorzArr%allocated) errorCode = DeallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
 
                 errorCode = allocateHorizontalArrays()    ! Reallocate horizontal arrays
                 if(errorCode .NE. 0) return
@@ -1005,7 +993,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             arraySizes%IYH = arraySizes%IYMAX / 2 + 1
             arraySizes%IXMAX1 = arraySizes%IXMAX + 1
             
-            arraySizes%ITOTND = arraySizes%ITOT * levels ! Forgot to add this
+            arraySizes%ITOTND = arraySizes%ITOT * levels
             arraySizes%ITRXD = 3 * arraySizes%IXMAX / 2 + 1
             arraySizes%ITRYD = 3 * arraySizes%IYMAX / 2 + 1
             
@@ -1603,9 +1591,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: KAPPA, SQRT2, TEMPERATURE
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use ModelParamsModule, only: gModIntParams, gScaleFactors, gPlotScales
-            !use ArrayDimensionsModule
-            !use UtilitiesModule
-        
+
             implicit none
 
         !---------------------------------------------------------------Model for TF:

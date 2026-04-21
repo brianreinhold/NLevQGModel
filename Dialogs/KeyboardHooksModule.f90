@@ -50,7 +50,7 @@ module KeyboardHooksModule
             USE IFWIN
             use user32
             use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, LogMessage
-            use DlgProcInterfacesModule
+            use DlgProcInterfacesModule, only: ModelControlDlgProc
             
             implicit none
 
@@ -158,8 +158,7 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NlevelQGModelGlobals
-            use DlgProcInterfacesModule
+            use NlevelQGModelGlobals, only: ghModelControlDlg, LogMessage
             use SetUpModule, only: CheckModelControlChanges
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams
@@ -289,16 +288,15 @@ module KeyboardHooksModule
         END FUNCTION KeyboardForDlgModelControlProc
         
         function KeyboardForDlgVerticalParamsProc(nCode, wParam, lParam)
-        !DEC$ IF DEFINED(_X86_)
-        !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgVerticalParamsProc@16' :: KeyboardForDlgVerticalParamsProc
-        !DEC$ ELSE
-        !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgVerticalParamsProc' :: KeyboardForDlgVerticalParamsProc
-        !DEC$ ENDIF
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgVerticalParamsProc@16' :: KeyboardForDlgVerticalParamsProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgVerticalParamsProc' :: KeyboardForDlgVerticalParamsProc
+            !DEC$ ENDIF
             USE IFWIN
             use user32
             use NlevelQGModelGlobals, only: ghVerticalParamsDlg, LogMessage
-            use DlgProcInterfacesModule
-            
+
             implicit none
 
             include '../resource.fd'
@@ -385,15 +383,14 @@ module KeyboardHooksModule
         END FUNCTION KeyboardForDlgVerticalParamsProc
         
         function KeyboardForDlgInitVariablesProc(nCode, wParam, lParam)
-        !DEC$ IF DEFINED(_X86_)
-        !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgInitVariablesProc@16' :: KeyboardForDlgInitVariablesProc
-        !DEC$ ELSE
-        !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgInitVariablesProc' :: KeyboardForDlgInitVariablesProc
-        !DEC$ ENDIF
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgInitVariablesProc@16' :: KeyboardForDlgInitVariablesProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgInitVariablesProc' :: KeyboardForDlgInitVariablesProc
+            !DEC$ ENDIF
             USE IFWIN
             use user32
             use NlevelQGModelGlobals, only: ghInitVariablesDlg, LogMessage
-            use DlgProcInterfacesModule
             use ModelFieldsModule, only: gHorzArr
             
             implicit none

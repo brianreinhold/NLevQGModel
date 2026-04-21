@@ -17,21 +17,20 @@ module ModelControlDialogModule
         !DEC$ ENDIF
             use ifwinty
             use ifwin
-            !use kernel32
-            !use user32
-            !use gdi32
 
             use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
 
-            use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
-            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile
+            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
+                                   ReadSaveFile, SaveModelState
             use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, LAT_PRES_CROSS_SEC, PLOT_OFF, TEMPERATURE, TOT_HGT_TEND_GRAF, INVALID
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
-            use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit
+            use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
             use InitVariablesDialogModule, only: InitVariablesDlgProc
+            use UtilitiesModule, only: openModelFile
 
             implicit none
             
@@ -41,6 +40,7 @@ module ModelControlDialogModule
             integer(LONG_PTR) :: lParam
             integer(LRESULT) :: ModelControlDlgProc
 
+            character(len=270) :: selected_file
             integer(HANDLE) :: hHook
             save hHook
 
@@ -77,6 +77,7 @@ module ModelControlDialogModule
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
+            LOGICAL :: res
 
             ModelControlDlgProc = 0
 
@@ -403,7 +404,7 @@ module ModelControlDialogModule
 
 ! ------------------ Now to handle the F1-F10 buttons
 ! ---- F1:  Run Model
-                        case (IDC_BUTTON_RUN_MOVIE) ! F1 Run as movie
+                        case (IDC_BUTTON_RUN_MODEL) ! F1 Run as movie
                             ! paramChange is defined in KeyboardHooksModule
                             ! Non dimensionalized in the following function
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
@@ -416,13 +417,33 @@ module ModelControlDialogModule
                             call DimensionalizeModRealParams() ! Method checks if already dimensionalized
 
 ! ---- F2:  Edit Vertical Parameters
-                        case (IDC_BUTTON_VERTICAL_PARAMS) ! F2 Set vertical profile parameters
+                        case (IDC_BUTTON_VERTICAL_PARAMS)
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
                             ghModelControlDlg = hDlg
 
 ! ---- F3:  Initialize flow variables
-                        case (IDC_BUTTON_INIT_FLOW_VARIABLES) ! F3 Initialize varaibles
+                        case (IDC_BUTTON_INIT_FLOW_VARIABLES)
                             ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
+
+! ---- F4:  Save Current Flow
+                        case (IDC_BUTTON_SAVE_CURRENT_FLOW)
+                            res = GetUserSelectedSaveName(hDlg, gNLevFile)
+                            if (res) then
+                                ret = openModelFile(gNLevFile, .false., hDlg)
+                                if (ret == 0) ret = SaveModelState(gNLevFile, .false.)
+                            endif
+                            ghModelControlDlg = hDlg
+
+! ---- F5:  Load Saved Flow
+                        case (IDC_BUTTON_LOAD_SAVED_FLOW)
+                            res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
+                            if (res) then
+                                if (len_trim(gNLevFile%fileName) == 0) return
+                                call LogMessage("Save file loaded: "// selected_file)
+                                ret = openModelFile(gNLevFile, .true., hDlg)
+                                if (ret == 0) ret = ReadSaveFile(gNLevFile)
+                            endif
                             ghModelControlDlg = hDlg
 
 ! ---- F10:  Exit to main
@@ -631,11 +652,11 @@ module ModelControlDialogModule
             bret = .TRUE.
 
             select case (caseSelect)
-                case (0)    ! gUserSettings%maxZonalWaves
+                case (0)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%KMAX2, .TRUE.)
-                case (1)    ! gUserSettings%maxMeridWaves
+                case (1)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%LMAX2, .TRUE.)
-                case (2)    !gUserSettings%maxLevels
+                case (2)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%NLEV, .TRUE.)
                 case (3)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%ICYC, .TRUE.)
@@ -751,7 +772,7 @@ module ModelControlDialogModule
         function reloadComboBoxFields(hDlg, MPLOT, comboId) result(bret)
             use ifwinty
             use user32      ! For SendMessage
-            use ConstantsModule
+            use ConstantsModule, only: HOV_DIAG_AT_LONG
 
             implicit none
 

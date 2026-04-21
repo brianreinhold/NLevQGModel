@@ -234,6 +234,7 @@ MODULE ModelFieldsModule
         END FUNCTION AllocateVerticalArrays
 
         subroutine ZeroVerticalArrays()
+            implicit none
             BV = 0.0
         end subroutine ZeroVerticalArrays
 

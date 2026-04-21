@@ -1,5 +1,5 @@
 module ModelParamsModule
-    use ConstantsModule 
+    use ConstantsModule, only: PLOT_SCALES_SIZE
     implicit none
 
     ! The original code compacted all the values into a single common block and single buffer
@@ -31,7 +31,7 @@ module ModelParamsModule
     public :: gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams, gModScalingParams, gPlotControls
     public :: gNLevFile, gSensFile
     ! Constants that are not expressed as parameters
-    public :: PI, PI_INVERSE, RAD_TO_DEGREES, SQRT2, SQRT22, CHANNEL_WIDTH, CORIOLIS, gPlotScales
+    public :: gPlotScales
 
     ! Define the model parameters
     ! These settings determine the size of the arrays used and thus the memory allocations that need to be done.
@@ -217,7 +217,11 @@ module ModelParamsModule
     contains
 
         subroutine initConstants()
-            use ConstantsModule
+            use ConstantsModule, only: CORIOLIS, CORIOLIS_INVERSE, SECONDS_PER_DAY, PI, CHANNEL_WIDTH, GRAVITY, &
+                   VORTICITY, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
+                   OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, &
+                   HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, PLOT_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
+                   MEAN_TEMP_TEND_GRAF, HGT_WAVE_SPEED_GRAF, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, AMPLITUDE_RATIO_GRAF
 
             implicit none
 
@@ -233,7 +237,7 @@ module ModelParamsModule
             !-------------------------------Scaling for the temperature field in deg C:
             gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS    ! 2.6121725E+08
             gScaleFactors%CORIOLIS = CORIOLIS
-    
+
             !-------------------------------Scale factors for the plotted quantities:
             !  Plot order of 2-D: VOR, PS, TH, WW, TF, S, T, FS, ADS, ADT
             !  Plot order of 1-D: ADO, TOP, SF

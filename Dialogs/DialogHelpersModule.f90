@@ -416,8 +416,10 @@ module DialogHelpersModule
         !> This routine hides the edit box that overlays a list control value. THis is called
         !> when the user clicks on something else besides a list control row.
         subroutine HideMyEdit(hEdit)
-            use ifwin
+            use ifwin, only: BOOL, HANDLE, SW_HIDE, ShowWindow, SetWindowText
+
             implicit none
+
             integer(HANDLE), intent(in) :: hEdit
             
             integer(BOOL) :: bret
@@ -431,8 +433,6 @@ module DialogHelpersModule
         function GetComboIndex(hDlg, ctrlID) result(idx)
             use ifwinty
             use ifwin
-            use user32
-            use gdi32
 
             INTEGER(HANDLE), INTENT(IN) :: hDlg
             INTEGER, INTENT(IN) :: ctrlID
@@ -441,123 +441,105 @@ module DialogHelpersModule
             idx = SendMessage(GetDlgItem(hDlg, ctrlID), CB_GETCURSEL, 0, 0)
         END function GetComboIndex
 
-!! =============================== WINDOWS FILE ROUTINES
-!        SUBROUTINE SaveModelState(hDlg, welford)
-!            use ifwinty    ! or equivalent win32 module
-!            use ifwin      ! for GetSaveFileName and constants
-!            use ModelModule, only: WriteCurrentStateToFile
-!            use ModelTypesModule, only: FileStruct, WelfordType
-!            use UtilitiesModule, only: openModelFile
-!
-!            implicit none
-!            
-!            integer(HANDLE), intent(in) :: hDlg
-!            type(WelfordType), intent(in) :: welford(20)
-!            
-!            type(T_OPENFILENAME) :: ofn
-!            character(260)       :: szFile = ""C  ! Uses the C-string extension to null the buffer
-!                                                  ! shown to user          for win32 api
-!            character(100)       :: szFilter    = "Model save Files (*.sav)"C// "*.sav"C // ""C
-!
-!            LOGICAL :: bres
-!            integer :: ires
-!            type(FileStruct) :: fileInfo
-!
-!            ! Clear and set structure size
-!            ofn%lpstrCustomFilter = 0
-!            ofn%nMaxCustFilter    = 0
-!            ofn%lpstrFileTitle    = 0
-!            ofn%nMaxFileTitle     = 0
-!            ofn%lpstrInitialDir   = 0
-!            ofn%lpstrTitle        = 0
-!            ofn%lCustData         = 0
-!            ofn%lpfnHook          = 0
-!            ofn%lpTemplateName    = 0
-!
-!            ofn%lStructSize = sizeof(ofn)
-!            ofn%hwndOwner   = hDlg  ! Parent dialog handle
-!            ofn%lpstrFile   = loc(szFile)
-!            ofn%nMaxFile    = len(szFile)   ! Get the number of characters
-!            ofn%lpstrFilter = loc(szFilter)
-!            ofn%nFilterIndex = 1
-!            ofn%lpstrFileTitle = 0
-!            ofn%nMaxFileTitle = 0
-!            ofn%lpstrInitialDir = 0
-!            ofn%lpstrDefExt = loc("sav"C)
-!            ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
-!            
-!            if (GetSaveFileName(ofn)) then
-!                ! Set file name
-!                fileInfo%filename = szFile(1:INDEX(szFile, CHAR(0)) - 1) ! Forces fortran to go until null char and not treat null char as okay
-!                ! Open file. File handle returned in fileInfo
-!                if (openModelFile(fileInfo, .true., hDlg) /= 0) return
-!                ! ires = 0 is success
-!
-!                ! Writes current state of model and plots, etc. to file specified by the user
-!                bres = WriteCurrentStateToFile(hDlg, fileInfo, welford, .true.) ! .true. means close file handle after write.
-!                ! bres = .true. is success
-!            endif
-!        end subroutine SaveModelState
-!    
-!        SUBROUTINE LoadModelState(hDlg, welford, closeFile)
-!            use ifwinty    ! or equivalent win32 module
-!            use ifwin      ! for GetSaveFileName and constants
-!            use ModelModule, only: ReadSavedCurrentStateFromFile
-!            use ModelTypesModule, only: gModRealParams, gModIntParams, FileStruct, WelfordType, gDataType
-!            use PlotModule, only: gPlotConfig
-!            use UtilitiesModule, only: openModelFile
-!
-!            implicit none
-!            
-!            integer(HANDLE), intent(in) :: hDlg
-!            type(WelfordType), intent(inout) :: welford(20)
-!            LOGICAL, intent(in) :: closeFile
-!            
-!            type(T_OPENFILENAME) :: ofn
-!            character(260)       :: szFile = ""C  ! Uses the C-string extension to null the buffer 
-!            character(100)       :: szFilter    = "Model Save Files (*.sav)"C// "*.sav"C // ""C
-!
-!            LOGICAL :: bres
-!            integer :: ires
-!            type(FileStruct) :: fileInfo
-!
-!            ! Clear and set structure size
-!            ofn%lpstrCustomFilter = 0
-!            ofn%nMaxCustFilter    = 0
-!            ofn%lpstrFileTitle    = 0
-!            ofn%nMaxFileTitle     = 0
-!            ofn%lpstrInitialDir   = 0
-!            ofn%lpstrTitle        = 0
-!            ofn%lCustData         = 0
-!            ofn%lpfnHook          = 0
-!            ofn%lpTemplateName    = 0
-!
-!            ofn%lStructSize = sizeof(ofn)
-!            ofn%hwndOwner   = hDlg  ! Parent dialog handle
-!            ofn%lpstrFile   = loc(szFile)
-!            ofn%nMaxFile    = len(szFile)   ! Get the number of characters
-!            ofn%lpstrFilter = loc(szFilter)
-!            ofn%nFilterIndex = 1
-!            ofn%lpstrFileTitle = 0
-!            ofn%nMaxFileTitle = 0
-!            ofn%lpstrInitialDir = 0
-!            ofn%lpstrDefExt = loc("sav"C)
-!            ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
-!            !ofn%Flags = IANY([OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
-!            if (GetOpenFileName(ofn)) then
-!                ! Set file name
-!                fileInfo%filename = szFile(1:INDEX(szFile, CHAR(0)) - 1) ! Forces fortran to go until null char and not treat null char as okay
-!                ! Open file. File handle returned in fileInfo
-!                if (openModelFile(fileInfo, .true., hDlg) /= 0) return
-!                ! ires = 0 is success
-!
-!                ! Loads current state of model and plots, etc. to file specified by the user
-!                bres = ReadSavedCurrentStateFromFile(hDlg, fileInfo, welford, closeFile, gModRealParams, gModIntParams, gPlotConfig, gDataType%Y)
-!                ! bres = .true. is success
-!            else
-!                bres = .false.
-!            endif
-!            
-!        end subroutine LoadModelState
-        
+! =============================== WINDOWS FILE ROUTINES
+        function GetUserSelectedSaveName(hDlg, fileInfo) result(bres)
+            use ifwinty    ! or equivalent win32 module
+            use ifwin      ! for GetSaveFileName and constants
+            use ModelParamsModule, only: FileStruct
+
+            implicit none
+            
+            integer(HANDLE), intent(in) :: hDlg
+            type(FileStruct), intent(inout) :: fileInfo
+            
+            type(T_OPENFILENAME) :: ofn
+            character(270)       :: szFile = ""C  ! Uses the C-string extension to null the buffer
+                                                  ! shown to user          for win32 api
+            character(100)       :: szFilter    = "Model save Files (*.sav)"C// "*.sav"C // ""C
+
+            LOGICAL :: bres
+
+            bres = .true.
+
+            ! Clear and set structure size
+            ofn%lpstrCustomFilter = 0
+            ofn%nMaxCustFilter    = 0
+            ofn%lpstrFileTitle    = 0
+            ofn%nMaxFileTitle     = 0
+            ofn%lpstrInitialDir   = 0
+            ofn%lpstrTitle        = 0
+            ofn%lCustData         = 0
+            ofn%lpfnHook          = 0
+            ofn%lpTemplateName    = 0
+
+            ofn%lStructSize = sizeof(ofn)
+            ofn%hwndOwner   = hDlg  ! Parent dialog handle
+            ofn%lpstrFile   = loc(szFile)
+            ofn%nMaxFile    = len(szFile)   ! Get the number of characters
+            ofn%lpstrFilter = loc(szFilter)
+            ofn%nFilterIndex = 1
+            ofn%lpstrFileTitle = 0
+            ofn%nMaxFileTitle = 0
+            ofn%lpstrInitialDir = 0
+            ofn%lpstrDefExt = loc("sav"C)
+            ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
+            
+            if (GetSaveFileName(ofn)) then
+                ! Set file name
+                fileInfo%filename = szFile(1:INDEX(szFile, CHAR(0)) - 1) ! Forces fortran to go until null char and not treat null char as okay
+            else
+                bres = .false.
+            endif
+        end function GetUserSelectedSaveName
+    
+        function GetNameOfUserSelectedFile(hDlg, fileInfo) result(bres)
+            use ifwinty    ! or equivalent win32 module
+            use ifwin      ! for GetSaveFileName and constants
+            use ModelParamsModule, only: FileStruct
+
+            implicit none
+            
+            integer(HANDLE), intent(in) :: hDlg
+            type(FileStruct), intent(inout) :: fileInfo
+            
+            type(T_OPENFILENAME) :: ofn
+            character(270)       :: szFile = ""C  ! Uses the C-string extension to null the buffer 
+            character(100)       :: szFilter    = "Model Save Files (*.sav)"C// "*.sav"C // ""C
+
+            LOGICAL :: bres
+            integer :: ires
+
+            bres = .true.
+
+            ! Clear and set structure size
+            ofn%lpstrCustomFilter = 0
+            ofn%nMaxCustFilter    = 0
+            ofn%lpstrFileTitle    = 0
+            ofn%nMaxFileTitle     = 0
+            ofn%lpstrInitialDir   = 0
+            ofn%lpstrTitle        = 0
+            ofn%lCustData         = 0
+            ofn%lpfnHook          = 0
+            ofn%lpTemplateName    = 0
+
+            ofn%lStructSize = sizeof(ofn)
+            ofn%hwndOwner   = hDlg  ! Parent dialog handle
+            ofn%lpstrFile   = loc(szFile)
+            ofn%nMaxFile    = len(szFile)   ! Get the number of characters
+            ofn%lpstrFilter = loc(szFilter)
+            ofn%nFilterIndex = 1
+            ofn%lpstrFileTitle = 0
+            ofn%nMaxFileTitle = 0
+            ofn%lpstrInitialDir = 0
+            ofn%lpstrDefExt = loc("sav"C)
+            ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
+            !ofn%Flags = IANY([OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
+            if (GetOpenFileName(ofn)) then
+                ! Set file name
+                fileInfo%filename = trim(szFile(1:INDEX(szFile, CHAR(0)) - 1)) ! Forces fortran to go until null char and not treat null char as okay
+            else
+                bres = .false.
+            endif
+        end function GetNameOfUserSelectedFile
+
 end module DialogHelpersModule

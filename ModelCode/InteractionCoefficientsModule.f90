@@ -152,7 +152,7 @@ module InteractionCoefficientsModule
         !! @returns numOfIntCoeffs: which is the number of interaction coefficients. If the
         !!          value returned is -1, there are too many and one should use the transform method
         function computeInteractionCoefficients(RN, KMX2, LMX2, flag) result(numOfIntCoeffs)
-            use ModelParamsModule, only: PI, SQRT2
+            use ConstantsModule, only: PI, SQRT2
 
             implicit none
 
@@ -375,7 +375,7 @@ module InteractionCoefficientsModule
         !! @returns status: -1 if the interaction coefficients are not used and the transform method is being used
         !!                     0 if successful
         function AllocateCintArrays() result(status)
-        use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams
+            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams
 
             ! Local variables
             INTEGER :: totalSize, status, ITOT, currentNoOfInteractions

@@ -22,9 +22,6 @@ module InitVariablesDialogModule
 
             use ifwinty
             use ifwin
-            !use kernel32
-            !use user32
-            !use gdi32
 
             use NlevelQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
             use iso_c_binding

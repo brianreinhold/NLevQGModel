@@ -22,9 +22,6 @@ module SettingsDialogModule
 
             use ifwinty
             use ifwin
-            use kernel32
-            use user32
-            use gdi32
 
             use NlevelQGModelGlobals, only: ghInstance, ghModelControlDlg, ghwndMain, ghSettingsDlg, LogMessage, CenterWindow
             use iso_c_binding

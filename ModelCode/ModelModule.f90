@@ -14,10 +14,8 @@ module ModelModule
     public :: DoDADY
     public :: STERMS
     public :: TTERMS
-    !public :: InverseTransform      ! Not used anymore
     public :: PROFIL
     public :: PICK
-    public :: TRANS
 
     contains
 
@@ -26,11 +24,10 @@ module ModelModule
         !> user values. It also does some further idiot checking like the scaling parameters not being zero.
         function InitModelWithModelControlVals() result(errorCode)
             use ConstantsModule, only: ZONAL_MEAN_FLOW, ERR_SCALING_PARAMETER_ZERO, ZLEVEL_1
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModPlotParams, gModScalingParams, gModIntParams, gModRealParams, gUserSettings
             use InteractionCoefficientsModule, only: computeInteractionCoefficients
-            !use FFT991Module, only: SET99
             implicit none
             
             ! Local variables
@@ -292,21 +289,7 @@ module ModelModule
                                         !    gVertArr%SIG, gHorzArr%AKL, gStatsArr%EK, gStatsArr%APE, gStatsArr%RKE)
                                         !----------------------------------------------Variance computations:
                                         IF(gUserSettings%statsOption .EQ. STATS_OPT_VAR) THEN
-                                            DO N = 1, gModIntParams%NLEV
-                                                CALL PICK(gHorzArr%DAT, gHorzArr%PS, N, gModIntParams%IV1)
-                                                CALL TRANS(G2_pool, gHorzArr%DAT, gHorzArr%WRK, gHorzArr%TRX, gHorzArr%TMP)
-                                                CALL PICK(gHorzArr%DAT, gHorzArr%PS, N, gModIntParams%IV2)
-                                                CALL TRANS(G3_pool, gHorzArr%DAT, gHorzArr%WRK, gHorzArr%TRX, gHorzArr%TMP)
-                                                JXS = 0
-                                                DO K = 1, gCurrentDims%IYH
-                                                    DO I = 1, gCurrentDims%IXMAX1
-                                                        JYS = JXS + I
-                                                        gStatsArr%V1(JYS, N) = gStatsArr%V1(JYS, N) + G2_pool(JYS) * G2_pool(JYS)
-                                                        gStatsArr%V2(JYS, N) = gStatsArr%V2(JYS, N) + G3_pool(JYS) * G3_pool(JYS)
-                                                    END DO
-                                                    JXS = JXS + gCurrentDims%KX
-                                                END DO
-                                            END DO
+                                                ! Doing nothing now
                                         ENDIF ! End variance:
                                     ENDIF ! End stats:
                                     !---------------------------------------------- Check for convergence:
@@ -766,11 +749,10 @@ module ModelModule
         SUBROUTINE NONLIN(FS, A, B)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, FORWARD_TRANSFORM, SQRT2, SQRT22
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, G1_pool
             use InteractionCoefficientsModule, only: gCintArr
             use NlevelQGModelGlobals, only: LogMessage
-            !use FFT991Module, only: FFT991
 
             implicit none
 
@@ -892,10 +874,10 @@ module ModelModule
         !! @param A The first term in the Jacobian
         !! @param B The second term in the Jacobian
         SUBROUTINE ComputeJacobianByTransform(FS, A, B)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams
-            use Fftw3HelpersModule
+            use Fftw3HelpersModule   ! This just gives the location of the 'fftw3.f03' file which is in the directory of the module. Not sure how.
 
             implicit none
             include 'fftw3.f03'
@@ -1014,7 +996,7 @@ module ModelModule
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         !!          Since this is the d/dx part of the Jacobian calculation the az(l) derivative is 0.
         subroutine DoDADX(A)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModRealParams, gModIntParams
             use Fftw3HelpersModule
@@ -1061,7 +1043,7 @@ module ModelModule
         !> Does the transform of the d/dy part of the Jacobian calculation. The result is placed in gHorzArr%G2.
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         subroutine DODADY(A)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT2
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModRealParams, gModIntParams
@@ -1125,7 +1107,7 @@ module ModelModule
             use ModelParamsModule, only: gUserSettings, gModIntParams
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ArrayDimensionsModule, only: gCurrentDims
-            
+
             implicit none
 
             REAL EkmanMixingLower, EkmanMixingUpper, EkmanFromAbove, EkmanFromBelow, DPS
@@ -1174,7 +1156,7 @@ module ModelModule
         SUBROUTINE TTERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             
             REAL, DIMENSION(gModIntParams%NLEV) :: R_Upper, R_Lower
 
@@ -1222,7 +1204,6 @@ module ModelModule
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams
-            !use ModelParamsModule
 
             implicit none
             !--------------------------------------------------------------
@@ -1349,74 +1330,9 @@ module ModelModule
             ENDIF
         END subroutine PICK
 
-        SUBROUTINE TRANS(G, DT, WK, TX, TM)
-            use ConstantsModule, only: FORWARD_TRANSFORM, SQRT22
-            use ArrayDimensionsModule
-            use ModelParamsModule, only: gModIntParams
-            
-            !-------------------------------------------------Variables passed
-            !  G,TM=Grid point array of output data
-            !  WK space array for FFT991
-            !  DT data array to transform
-            !  TX,TY=Trig arrays
-            !-------------------------------------------Data arrays:
-            REAL*4 DT(1)
-            !-------------------------------------------Transform data TY=TX(ITRXD+1):
-            REAL, intent(inout) :: G(:), WK(:), TX(:), TM(:)
-            
-            ! local variables            
-            INTEGER :: I, I1, K, K21, L, L21, L22, ITY
-
-            !-------------------------------------Convert resolution to INTEGER*4:
-
-            ITY = gCurrentDims%ITRXD + 1
-            G = 0.0     ! CALL RZERO(G, gCurrentDims%KX * gCurrentDims%LY)
-            TM = 0.0    ! CALL RZERO(TM, gCurrentDims%LY)
-            !------------------------------------ Load the spectral components into GRID1:
-            L21 = 1
-            DO L = 1, gModIntParams%LMAX2
-                L21 = L21 + 2
-                TM(L21) = SQRT22 * DT(L)    ! SQRT22 defined in ModelParamsModule
-            END DO
-            I = gModIntParams%LMAX2
-            !---------------------------------------Start data in 4th row:
-            K21 = 3 * gCurrentDims%KX + 1
-            DO K = 1, gModIntParams%KMAX2
-                K21 = K21 + 2
-                L22 = K21
-                DO L = 1, gModIntParams%JY1
-                    !--------------------------------------- I keeps count of the wave components:
-                    I = I + 1
-                    G(L22)= -DT(I) / 2.
-                    I = I + 1
-                    G(L22 + 1) = DT(I) / 2.
-                    L22 = L22 + 2 * gCurrentDims%KX
-                END DO
-            !----------------------------------------Skip 1 row (the cosy row)
-            END DO
-            !----------------------------------------------------------------------------
-            !  Transform the eigenfunctions into grid point space; The x-transforms first:
-            !  knowing that all the cosy components are zero
-
-            !CALL FFT991(G((3 * gCurrentDims%KX + 1) :), WK, TX, gCurrentDims%IFX, 1, 2 * gCurrentDims%KX, gCurrentDims%IXMAX, gModIntParams%LMAX2, FORWARD_TRANSFORM)
-            !CALL FFT991(G, WK, TX(ITY :), gCurrentDims%IFY, gCurrentDims%KX, 1, gCurrentDims%IYMAX, gCurrentDims%IXMAX, FORWARD_TRANSFORM)
-            !-----------------------------------------------  Now do the zonal components:
-            !CALL FFT991(TM, WK, TX(ITY:), gCurrentDims%IFY, 1, gCurrentDims%LY, gCurrentDims%IYMAX, 1, FORWARD_TRANSFORM)
-            !--------------------  Add the results to G: (Only half for plotting, however)
-            I1 = 0
-            DO L = 1, gCurrentDims%IYH
-                DO K = 1, gCurrentDims%IXMAX
-                    G(K + I1) = G(K + I1) + TM(L)
-                END DO
-                G(gCurrentDims%IXMAX1 + I1) = G(I1 + 1)
-                !--------------------------------------------Move to next row:
-                I1 = I1 + gCurrentDims%KX
-            END DO
-        END
-
         !******************************************** Subroutine QG for Amp-G values:
         SUBROUTINE ComputeGQ()      !(DAT,PS,DPI,GQ,GQA,PSA,PSS)
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only : gHorzArr, gVertArr, gStatsArr
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings
             

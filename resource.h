@@ -43,7 +43,7 @@
 #define IDC_STATIC_LEVELS               1044
 #define IDC_BUTTON_LOAD_SAVED_FLOW      1045
 #define IDC_BUTTON_EXIT_VERTICAL        1045
-#define IDC_BUTTON_RUN_MOVIE            1046
+#define IDC_BUTTON_RUN_MODEL            1046
 #define IDC_EDIT1                       1046
 #define IDC_EDIT_VERTICAL               1046
 #define IDC_EDIT_HORZ                   1046
