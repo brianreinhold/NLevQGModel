@@ -57,7 +57,7 @@ module ConstantsModule
     !============================================================ PLOTTING =========================================================
                                                     !----- Is Temperature indicator:
                                                     ! This sequence is to 'match' the current variable to be displayed when
-                                                    ! the user presses the 'field' key that gets entered into IPLT1, IPLT2, IPLT3
+                                                    ! the user presses the 'field' key that gets entered into field1, field2, IPLT3
                                                     ! for example, a value 1 is VORTICITY (see the Constants module). Value
                                                     ! 3 is temperature and thus the list below is set to .TRUE. for 'index' 3.
     logical, parameter :: isTemperature(28) = [.FALSE., .FALSE., .TRUE., .FALSE., .TRUE., .FALSE., .FALSE., .FALSE., .FALSE., .TRUE., .TRUE., &
@@ -69,20 +69,23 @@ module ConstantsModule
     integer, parameter :: MAP_OVERLAY_2 = 2
     integer, parameter :: MAP_OVERLAY_3 = 3
     
-                                                    ! Options for the types of displays for variable MPLOT
+                                                    ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAPS = 0          ! Classic weather maps at various levels
-    integer, parameter :: LAT_PRES_CROSS_SEC = 1    ! Latitude-pressure cross section at a selected 'latitude'
-    integer, parameter :: HOV_DIAG_AT_LAT = 2       ! Hovmoller diagram at specified 'latitude' and level
-    integer, parameter :: LONG_PRES_CROSS_SEC = 3   ! Latitude-pressure (meridional) cross section at a slected 'longitude'
-    integer, parameter :: HOV_DIAG_AT_LONG = 4      ! Hovmoller diagram at specified 'longitude' and level
-    integer, parameter :: PHASE_SPACE = 5           ! Phase space diagram
-    integer, parameter :: WAVE_AMP_TIME_SERIES = 6  ! Time series of a spectral wave ampltude at given levels
-    integer, parameter :: WAVE_PHASE_TIME_SERIES = 7! Time series of a spectral wave phase at given levels
-    integer, parameter :: WEATHER_STN = 8           ! Time series of a field at a particular point (lat-lon)
+    integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
+    integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
+    integer, parameter :: HOV_DIAG_AT_LAT = 3       ! Hovmoller diagram at specified 'latitude' and level
+    integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LONG = 4   ! Latitude-pressure (meridional) cross section at a slected 'longitude'
+    integer, parameter :: HOV_DIAG_AT_LONG = 5      ! Hovmoller diagram at specified 'longitude' and level
+    integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
+    integer, parameter :: WAVE_AMP_TIME_SERIES = 7  ! Time series of a spectral wave ampltude at given levels
+    integer, parameter :: WAVE_PHASE_TIME_SERIES = 8! Time series of a spectral wave phase at given levels
+    integer, parameter :: WEATHER_STN = 9           ! Time series of a field at a particular point (lat-lon)
+    integer, parameter :: NO_PLOT = 10              ! Skip plotting (good for speed)
     
-                                                    ! Display options for variables IPLT1, IPLT2, IPLT3
+                                                    ! Display options for variables field1, field2, IPLT3
                                                     ! Also used for the scale factor array 'gPlotScales' below
                                                     ! Options 1-17 are for 2D contour maps
+    integer, parameter :: FIELD_START = 1
     integer, parameter :: VORTICITY  = 1            ! Vorticity in 10**-5/s
     integer, parameter :: HEIGHT  = 2               ! Height in meters
     integer, parameter :: TEMPERATURE  = 3          ! Temperature in Centigrade
@@ -99,9 +102,10 @@ module ConstantsModule
     integer, parameter :: HGT_FORCING = 14          ! Mean streamfunction (height) forcing in m
     integer, parameter :: OROG_HGT_TEND = 15        ! Height tendencies from ororgraphy in m/day'/
     integer, parameter :: OROGRAPHY = 16            ! Bottom orography in meters
-    integer, parameter :: PLOT_OFF = 17             ! Plotting off
+    integer, parameter :: PLOTTING_OFF = 17         ! Plotting off
     
                                                     ! Options 18-25 are for graphs (where points are plotted as a function of time) only
+    integer, parameter :: FIELD_GRAPH_START = 18
     integer, parameter :: TOT_HGT_TEND_GRAF = 18    ! Total Height tendencies in m/day
     integer, parameter :: TOT_TEMP_TEND_GRAF = 19   ! Total temperature tendencies in C/day
     integer, parameter :: MEAN_HGT_TEND_GRAF = 20   ! Mean height tendencies in m/day

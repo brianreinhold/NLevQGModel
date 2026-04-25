@@ -18,19 +18,21 @@ module ModelControlDialogModule
             use ifwinty
             use ifwin
 
-            use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, LogMessage, WriteMessageBox, CenterWindow
+            use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, ghwndMain, LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
 
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile
             use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
                                    ReadSaveFile, SaveModelState
-            use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, LAT_PRES_CROSS_SEC, PLOT_OFF, TEMPERATURE, TOT_HGT_TEND_GRAF, INVALID
+            use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, FIELD_START, FIELD_GRAPH_START, &
+                           SECONDS_PER_DAY, CORIOLIS_INVERSE
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
             use InitVariablesDialogModule, only: InitVariablesDlgProc
             use UtilitiesModule, only: openModelFile
+            use PlotModule, only: ClearScreen, gElapsedTime
 
             implicit none
             
@@ -120,6 +122,7 @@ module ModelControlDialogModule
                     !! Map type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps and phase space combo'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at latitude X '//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at latitude X'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at longitude Y'//char(0)))
@@ -129,36 +132,38 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Wave-phase time series'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))
 
-                    ! Initialize the MPLOT combo box
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%MPLOT, UINT_PTR), 0)
+                    ! Initialize the plotType combo box
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%plotType, UINT_PTR), 0)
 
                     !! Fields 1, 2, 3
                     ! These are made difficult as the quantities that can be displayed depend upon
-                    ! the type of plot MPLOT. For map-type plots, there can be three fields. For time
+                    ! the type of plot plotType. For map-type plots, there can be three fields. For time
                     ! series plots, field2 and field3 are ignored.
-                    ! If MPLOT is a map type, we load field1 with map options, otherwise we load with 
+                    ! If plotType is a map type, we load field1 with map options, otherwise we load with 
                     ! time series options. Fields 2 and 3 are always loaded with map options.
-                    ! When MPLOT changes, we have to check and see if we have switched between time series
+                    ! When plotType changes, we have to check and see if we have switched between time series
                     ! and maps or vice versa, and if so we reload FIELD1 with the appropriate options.
                     ! This is done in 'reloadComboBoxFields'
-                    bret = reloadComboBoxFields(hDlg, gModIntParams%MPLOT, IDC_COMBO_FIELD1)
+                    bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
                     bret = reloadComboBoxFields(hDlg, WEATHER_MAPS, IDC_COMBO_FIELD2)   ! Always load with map options
                     bret = reloadComboBoxFields(hDlg, WEATHER_MAPS, IDC_COMBO_FIELD3)   ! Always load with map options
                     ! initialize FIELD1
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
-                    if (gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG) then
-                        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT1 - 1, UINT_PTR), 0) ! Silly cast avoids warning.Still runs without it
-                    else
-                        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT1 - 18, UINT_PTR), 0)
-                    end if
+                    !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0) ! Silly cast avoids warning.Still runs without it
+                    !else
+                    !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_GRAPH_START, UINT_PTR), 0)
+                    !end if
                     ! initialize FIELD2
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT2 - 1, UINT_PTR), 0)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG)) ! Cast for logical to INTEGER(BOOL) to avoid warning
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field2 - FIELD_START, UINT_PTR), 0)
+                    ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
+                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! Cast for logical to INTEGER(BOOL) to avoid warning
                     ! initialize FIELD3
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT3 - 1, UINT_PTR), 0)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG))
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT3 - FIELD_START, UINT_PTR), 0)
+                    ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
+                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
 
                     !! Model type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MODEL_TYPE)
@@ -272,43 +277,43 @@ module ModelControlDialogModule
                             ! We need this offset to map the combo box indicies with our indicies. Combo
                             ! box indicies begin with 0, our begin with 1 for maps and 18 for time series
                             addOffset = 1
-                            if (gModIntParams%MPLOT .GT. HOV_DIAG_AT_LONG) addOffset = PLOT_OFF + 1
+                            if (gModIntParams%plotType .GT. HOV_DIAG_AT_LONG) addOffset = NO_PLOT + 1
                             select case(IAND(wParam, Z'FFFF'))
                                 ! The tricky thing here is if the user changes the plot type from map
                                 ! to time series or vice versa. Then we have to load different options
                                 ! into the field1 dropdown and disable or enable the other two combo boxes.
                                 ! It gets messy.
                                 case (IDC_COMBO_MAP_TYPE)
-                                    previousMPLOT = gModIntParams%MPLOT
-                                    gModIntParams%MPLOT = GetComboIndex(hDlg, IDC_COMBO_MAP_TYPE) ! These are zero based
-                                    ! Did MPLOT change from maps to time series?
-                                    ! MPLOT <= 4 is map MPLOT > 4 is time series
-                                    if ((gModIntParams%MPLOT .GT. HOV_DIAG_AT_LONG .AND. previousMPLOT .LE. HOV_DIAG_AT_LONG) .OR. &
-                                        (gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG .AND. previousMPLOT .GT. HOV_DIAG_AT_LONG)) Then
+                                    previousMPLOT = gModIntParams%plotType
+                                    gModIntParams%plotType = GetComboIndex(hDlg, IDC_COMBO_MAP_TYPE) ! These are zero based
+                                    ! Did plotType change from maps to time series?
+                                    ! plotType <= 4 is map plotType > 4 is time series
+                                    if ((gModIntParams%plotType .GT. HOV_DIAG_AT_LONG .AND. previousMPLOT .LE. HOV_DIAG_AT_LONG) .OR. &
+                                        (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG .AND. previousMPLOT .GT. HOV_DIAG_AT_LONG)) Then
                                         ! We need to change the contents of what is in the COMBO_FIELD1 dropdown
                                         ! Field2 and Field3 can only be used with maps and will be enabled/disabled appropriately
                                         hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
                                         ! This loads the new set of options (clearing the old first)
-                                        bret = reloadComboBoxFields(hDlg, gModIntParams%MPLOT, IDC_COMBO_FIELD1)
+                                        bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
                                         ! Set a new default value for the field since the existing one is for time series
-                                        if (gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG) then
-                                            gModIntParams%IPLT1 = TEMPERATURE
-                                            bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT1 - 1, UINT_PTR), 0)
-                                        else
-                                            gModIntParams%IPLT1 = TOT_HGT_TEND_GRAF
-                                            ! The 17 is for getting by PLOT_OFF which is the first field
-                                            bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT1 - 17, UINT_PTR), 0)
-                                        end if
+                                        !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
+                                            gModIntParams%field1 = TEMPERATURE
+                                            bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0)
+                                        !else
+                                        !    gModIntParams%field1 = TOT_HGT_TEND_GRAF
+                                        !    ! This is for getting by NO_PLOT which is the first field in the graphs options (check this)
+                                        !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - NO_PLOT, UINT_PTR), 0)
+                                        !end if
                                         ! Enable or disable as the case may be
                                         hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG))
+                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
                                         hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%MPLOT .LE. HOV_DIAG_AT_LONG))
+                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
                                     end if
                                 case (IDC_COMBO_FIELD1)
-                                    gModIntParams%IPLT1 = GetComboIndex(hDlg, IDC_COMBO_FIELD1) + addOffset
+                                    gModIntParams%field1 = GetComboIndex(hDlg, IDC_COMBO_FIELD1) + addOffset
                                 case (IDC_COMBO_FIELD2)
-                                    gModIntParams%IPLT2 = GetComboIndex(hDlg, IDC_COMBO_FIELD2) + addOffset
+                                    gModIntParams%field2 = GetComboIndex(hDlg, IDC_COMBO_FIELD2) + addOffset
                                 case (IDC_COMBO_FIELD3)
                                     gModIntParams%IPLT3 = GetComboIndex(hDlg, IDC_COMBO_FIELD3) + addOffset
                                 case (IDC_COMBO_MODEL_TYPE)
@@ -409,7 +414,15 @@ module ModelControlDialogModule
                             ! Non dimensionalized in the following function
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             ret = InitModelWithModelControlVals()
+                            bret = EnableWindow(hDlg, .FALSE.)
+                            gElapsedTime%dimensionalTime = 4.0 * CORIOLIS_INVERSE * gModRealParams%DELT / SECONDS_PER_DAY
+                            gElapsedTime%timeSteps = 0
+                            call ClearScreen()
+                            bret = SetFocus(ghwndMain)
                             ret = StartTimeLoop()
+                            ! Note this will eventually be moved into the F10 handler of the graphics window procedure
+                            bret = SetActiveWindow(hDlg)
+                            bret = EnableWindow(hDlg, .TRUE.)
                             paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
                             paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
                             paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
@@ -578,7 +591,7 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Current number levels", gModIntParams%NLEV)
             call AddListViewRow(hList, "Number of integration cycles", gModIntParams%ICYC)
             call AddListViewRow(hList, "Number of time steps", gModIntParams%ISTEP)
-            call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%MOUT) 
+            call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
             call AddListViewRow(hList, "Zonal wave for time series and phase space plots", gModIntParams%JX)
             call AddListViewRow(hList, "Meridional wave for time series and phase space plots", gModIntParams%JY)
             call AddListViewRow(hList, "Level of time series and phase space plots", gModIntParams%LEVP)
@@ -663,7 +676,7 @@ module ModelControlDialogModule
                 case (4)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%ISTEP, .TRUE.)
                 case (5)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%MOUT, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%outputInterval, .TRUE.)
                 case (6)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX, .TRUE.)
                 case (7)
@@ -747,7 +760,7 @@ module ModelControlDialogModule
                 case (4)
                     gModIntParams%ISTEP = newValue
                 case (5)
-                    gModIntParams%MOUT = newValue
+                    gModIntParams%outputInterval = newValue
                 case (6)
                     gModIntParams%JX = newValue
                 case (7)
@@ -769,7 +782,7 @@ module ModelControlDialogModule
             end select
         end subroutine readIntDataFromEditBox
 
-        function reloadComboBoxFields(hDlg, MPLOT, comboId) result(bret)
+        function reloadComboBoxFields(hDlg, plotType, comboId) result(bret)
             use ifwinty
             use user32      ! For SendMessage
             use ConstantsModule, only: HOV_DIAG_AT_LONG
@@ -777,7 +790,7 @@ module ModelControlDialogModule
             implicit none
 
             integer(HANDLE), intent(in) :: hDlg
-            integer, intent(in) :: MPLOT
+            integer, intent(in) :: plotType
             integer, intent(in) :: comboId
 
             integer(BOOL) :: bret
@@ -787,7 +800,7 @@ module ModelControlDialogModule
             bret = SendDlgItemMessage(hDlg, comboId, CB_RESETCONTENT, 0, 0)
             ! Get handle to combo box
             hCombo = GetDlgItem(hDlg, comboID)
-            if (MPLOT .LE. HOV_DIAG_AT_LONG) then
+            !if (plotType .LE. HOV_DIAG_AT_LONG) then
                 ! Load with map options
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vorticity in 10**-5/s'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height in meters'//char(0)))
@@ -806,9 +819,8 @@ module ModelControlDialogModule
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height tendencies from ororgraphy in m/day'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Bottom orography in meters'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Plotting off'//char(0)))
-            else
+            !else
                 ! Load with time series options
-                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Plotting off'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Total Height tendencies in m/day'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Total temperature tendencies in C/day'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Mean height tendencies in m/day'//char(0)))
@@ -816,7 +828,7 @@ module ModelControlDialogModule
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Phase diff in deg between height and temperature wave'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Growth rate of a wave in e-folds per day'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Amplitude ratio of temperature to Strmfnct of a wave'//char(0)))
-            end if
+            !end if
         end function reloadComboBoxFields
 
 end module ModelControlDialogModule

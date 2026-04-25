@@ -86,10 +86,10 @@ module ModelParamsModule
         integer :: NLEV     ! NLEV is the current number of vertical levels in the model (may be <= Settings%maxLevels)
         integer :: ICYC     ! ICYC is the number of cycles to run the model for
         integer :: ISTEP    ! ISTEP is the number of steps to run the model for in each cycle
-        integer :: MOUT     ! MOUT is the number of steps between model outputs
-        integer :: MPLOT    ! MPLOT is the type of output to display (horizontal maps, hovmoller, vertical cross sections, etc)
-        integer :: IPLT1    ! IPLT1 is the first plot field overlay to display (e.g. vorticity, height, temperature, etc)
-        integer :: IPLT2    ! IPLT2 is the second plot field overlay to display (e.g. vorticity, height, temperature, etc)
+        integer :: outputInterval     ! outputInterval is the number of steps between model outputs
+        integer :: plotType    ! plotType is the type of output to display (horizontal maps, hovmoller, vertical cross sections, etc)
+        integer :: field1    ! field1 is the first plot field overlay to display (e.g. vorticity, height, temperature, etc)
+        integer :: field2    ! field2 is the second plot field overlay to display (e.g. vorticity, height, temperature, etc)
         integer :: IPLT3    ! IPLT3 is the third plot field overlay to display (e.g. vorticity, height, temperature, etc)
         integer :: JX       ! JX is the zonal wavenumber to plot in graphs)
         integer :: JY       ! JY is the meridional wavenumber to plot in graphs
@@ -170,8 +170,8 @@ module ModelParamsModule
     type :: PlotControls
         integer :: activePlotMap    ! Three possible fields can be displayed on a map. The 'active' one is the field that can
                                     ! be changed by the user with the 'field' key. The other two are inactive and will not change
-                                    ! These fields are given by IPLT1, IPLT2, IPLT3
-                                    ! 1 = IPLT1 is active, 2 = IPLT2 is active, 3 = IPLT3 is active 
+                                    ! These fields are given by field1, field2, IPLT3
+                                    ! 1 = field1 is active, 2 = field2 is active, 3 = IPLT3 is active 
         integer :: togglePlotDir    ! Sets toggle direction for graphics display selections. There are toggles that change level,
                                     ! wavenumber, etc. and this determines if the toggle goes up (set to 1) or down (set to zero)
         integer :: plotTempType     ! Indicates what type of temperature is displayed, standard or potential. Takes on two values
@@ -193,7 +193,7 @@ module ModelParamsModule
         real :: dissipation
         real :: longestWave
         real :: heights
-        real :: timeStep
+        real :: timeScale
         real :: temperatureScale
         real :: CORIOLIS
     end type ScaleFactors
@@ -220,7 +220,7 @@ module ModelParamsModule
             use ConstantsModule, only: CORIOLIS, CORIOLIS_INVERSE, SECONDS_PER_DAY, PI, CHANNEL_WIDTH, GRAVITY, &
                    VORTICITY, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                    OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, &
-                   HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, PLOT_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
+                   HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, NO_PLOT, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
                    MEAN_TEMP_TEND_GRAF, HGT_WAVE_SPEED_GRAF, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, AMPLITUDE_RATIO_GRAF
 
             implicit none
@@ -233,7 +233,7 @@ module ModelParamsModule
             !-------------------------------Scaling for heights L*L*f*f/g in meters:
             gScaleFactors%heights = (CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS * CORIOLIS) / GRAVITY  ! 2748.764
             !-------------------------------Scaling for time step 4/(60*f) in minutes:
-            gScaleFactors%timeStep = CORIOLIS_INVERSE / 15.                 ! 646.4681
+            gScaleFactors%timeScale = CORIOLIS_INVERSE / 15.                 ! 646.4681
             !-------------------------------Scaling for the temperature field in deg C:
             gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS    ! 2.6121725E+08
             gScaleFactors%CORIOLIS = CORIOLIS
@@ -277,7 +277,7 @@ module ModelParamsModule
             !---------------------------Orographic heights in meters (depends upon DP(1)):
             gPlotScales(OROGRAPHY) = 1.
             !---------------------------No Plot:
-            gPlotScales(PLOT_OFF) = 1.
+            gPlotScales(NO_PLOT) = 1.
             !------------------------------------Height tendencies for balance of forces
             gPlotScales(TOT_HGT_TEND_GRAF) = gPlotScales(TOT_HGT_TEND)
             !------------------------------------Temp tendencies for balance of forces

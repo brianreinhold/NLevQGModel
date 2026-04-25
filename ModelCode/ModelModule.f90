@@ -76,6 +76,7 @@ module ModelModule
             use iso_c_binding
             use Fftw3HelpersModule, only: test_transforms
             use UtilitiesModule, only: openModelFile
+            use PlotModule, only: outputPlot
             use, intrinsic :: ieee_arithmetic
 
             implicit none
@@ -119,7 +120,7 @@ module ModelModule
             ! case nothing is varied.
             IF(ICONV .GT. 2) ICONV = 3
             !-------------------------------Compute spin up time steps:
-            ISPIN = INT(gModRealParams%SPINUP * 1440. / (gScaleFactors%timeStep * gModRealParams%DELT))
+            ISPIN = INT(gModRealParams%SPINUP * 1440. / (gScaleFactors%timeScale * gModRealParams%DELT))
             !===============================================================Set up file
             ! If we are doing a series of runs where we vary the parameters we need to create a file
             ! to save the results of each run
@@ -207,7 +208,7 @@ module ModelModule
                         PAMPP = 0.
                     END IF
                     !--------------------------------------------- Start of original integrations:
-                    !ITIME = INT(TIME) / gModIntParams%MOUT   ! I cannot figure out where this time value is set. Does not appear to be used.
+                    !ITIME = INT(TIME) / gModIntParams%outputInterval   ! I cannot figure out where this time value is set. Does not appear to be used.
                     !---------------------------------------------------- Initialize plot window:
 
 
@@ -279,7 +280,7 @@ module ModelModule
                                 !
                                 IF(NCYC4 .EQ. 1) THEN
                                     !---------------------------------------------- Selecting when to output data:
-                                    !if (MOD(KSTEP - 1, gModIntParams%MOUT) == 0) call PlotData()
+                                    if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) call outputPlot()
 
                                     !-----------------------------------------Compute mean fields:
                                     IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
@@ -368,8 +369,8 @@ module ModelModule
                                 B1 = B1 - RDD
                                 A1 = A1 - RDD
                             END DO !==============================================================End of N-cycle:
-                            write(msg, '(A, I4, A, (F10.6, 1X), A, *(F10.6, 1X))') ' KSTEP=', KSTEP, ': ', gHorzArr%PS(1, (gModIntParams%NLEV/2 + 1)), ' ', (gHorzArr%PS(i, (gModIntParams%NLEV/2 + 1)), i = 1 + gModIntParams%LMAX2, gCurrentDims%ITOT, 2 * gModIntParams%LMAX2)
-                            call LogMessage("Values: " // msg)
+                            !write(msg, '(A, I4, A, (F10.6, 1X), A, *(F10.6, 1X))') ' KSTEP=', KSTEP, ': ', gHorzArr%PS(1, (gModIntParams%NLEV/2 + 1)), ' ', (gHorzArr%PS(i, (gModIntParams%NLEV/2 + 1)), i = 1 + gModIntParams%LMAX2, gCurrentDims%ITOT, 2 * gModIntParams%LMAX2)
+                            !call LogMessage("Values: " // msg)
                         END DO ! Inner loop ISTEP done
                     END DO ! Outer loop ICYCL done   Total number of time steps = ISTEP * ICYCL 
                     call LogMessage("Time loop done")

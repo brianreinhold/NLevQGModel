@@ -91,7 +91,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !---------------------------Set active variable to first
             gPlotControls%activePlotMap = MAP_OVERLAY_1   ! Three possible fields can be displayed on a map. The 'active' one is the field that can
                                             ! be changed by the user with the 'field' key. The other two are inactive and will not change
-                                            ! These fields are given by gModIntParams%IPLT1, IPLT2, IPLT3
+                                            ! These fields are given by gModIntParams%field1, field2, IPLT3
             !---------------------------Set toggle direction for graphics display selections to plus
             gPlotControls%togglePlotDir = 1
             !---------------------------Set temperature view to Potential temperature:
@@ -642,7 +642,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end function CheckModelResolutions
 
         function CheckModParams() result(errorCode)
-            use ConstantsModule, only: WAVE_AMP_TIME_SERIES, PHASE_SPACE, MEAN_TEMP_TEND_GRAF, AMPLITUDE_RATIO_GRAF, VORTICITY, PLOT_OFF, OROGRAPHY
+            use ConstantsModule, only: WAVE_AMP_TIME_SERIES, PHASE_SPACE, MEAN_TEMP_TEND_GRAF, AMPLITUDE_RATIO_GRAF, VORTICITY, NO_PLOT, OROGRAPHY
             use ModelParamsModule, only: gModRealParams, gModIntParams, gModPlotParams
 
             integer :: errorCode
@@ -681,18 +681,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if(gModIntParams%LEVP .LT. 0) gModIntParams%LEVP = 0
 
             !-------------------------------------------Field or variable type ranges
-            I2 = PLOT_OFF
+            I2 = NO_PLOT
             ! If the type of plot is PHASE_SPACE = 5, WAVE_AMP_TIME_SERIES = 6  WAVE_PHASE_TIME_SERIES = 7, WEATHER_STN = 8
-            IF(gModIntParams%MPLOT .GE. PHASE_SPACE) I2 = MEAN_TEMP_TEND_GRAF     ! Not sure why we picked this field to assure the IPLT1
-            IF(gModIntParams%MPLOT .EQ. WAVE_AMP_TIME_SERIES) I2 = AMPLITUDE_RATIO_GRAF
-            IF(gModIntParams%IPLT1 .LE. 0) gModIntParams%IPLT1 = I2
-            IF(gModIntParams%IPLT1 .GT. I2) gModIntParams%IPLT1 = VORTICITY
+            IF(gModIntParams%plotType .GE. PHASE_SPACE) I2 = MEAN_TEMP_TEND_GRAF     ! Not sure why we picked this field to assure the field1
+            IF(gModIntParams%plotType .EQ. WAVE_AMP_TIME_SERIES) I2 = AMPLITUDE_RATIO_GRAF
+            IF(gModIntParams%field1 .LE. 0) gModIntParams%field1 = I2
+            IF(gModIntParams%field1 .GT. I2) gModIntParams%field1 = VORTICITY
 
-            !---------------------------------------------IPLT2,IPLT3:
-            IF(gModIntParams%IPLT2 .GT. PLOT_OFF) gModIntParams%IPLT2 = VORTICITY
-            IF(gModIntParams%IPLT3 .GT. PLOT_OFF) gModIntParams%IPLT3 = VORTICITY
-            IF(gModIntParams%IPLT2 .LT. VORTICITY) gModIntParams%IPLT2 = PLOT_OFF
-            IF(gModIntParams%IPLT3 .LT. VORTICITY) gModIntParams%IPLT3 = PLOT_OFF
+            !---------------------------------------------field2,IPLT3:
+            IF(gModIntParams%field2 .GT. NO_PLOT) gModIntParams%field2 = VORTICITY
+            IF(gModIntParams%IPLT3 .GT. NO_PLOT) gModIntParams%IPLT3 = VORTICITY
+            IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = NO_PLOT
+            IF(gModIntParams%IPLT3 .LT. VORTICITY) gModIntParams%IPLT3 = NO_PLOT
 
             !---------------------------------------------NUMBX, NUMBY:
             IF(gModIntParams%NUMBX .LT. 1) gModIntParams%NUMBX = 1
@@ -1131,7 +1131,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> fields.
         SUBROUTINE SetDefaults()
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
-                OROG_HGT_TEND, HGT_FORCING, PLOT_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
+                OROG_HGT_TEND, HGT_FORCING, NO_PLOT, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
@@ -1164,7 +1164,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         ! These parameters are dimensionalized and then non dimensionalized
             ! Dimensionalize for input
             ! IF(RN.GT.0.)RN=gScaleFactors%longestWave/RN
-            ! DELT=DELT*gScaleFactors%timeStep
+            ! DELT=DELT*gScaleFactors%timeScale
             ! BETA=4.*BETA
             ! XPOS=XPOS*RAD_TO_DEGREES
             ! YPOS=YPOS*RAD_TO_DEGREES
@@ -1172,7 +1172,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! RN=gScaleFactors%longestWave/RN
             !--------------------------------Recompute interactions if needed:
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
-            ! DELT=DELT/gScaleFactors%timeStep
+            ! DELT=DELT/gScaleFactors%timeScale
             ! BETA=BETA/4.
             ! XPOS=XPOS/RAD_TO_DEGREES
             ! YPOS=YPOS/RAD_TO_DEGREES
@@ -1180,7 +1180,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%isDimensionalized = .FALSE.
             gModRealParams%RN = gScaleFactors%longestWave/28000.
             gModRealParams%BETA = .25
-            gModRealParams%DELT = 90./gScaleFactors%timeStep
+            gModRealParams%DELT = 90./gScaleFactors%timeScale
             gModRealParams%ZHGT = 900.
             gModRealParams%ZHGT2 = 950.
             gModRealParams%ZHGT3 = 500.
@@ -1218,7 +1218,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / gPlotScales(OROG_HGT_TEND)
             gModScalingParams%VR(OROGRAPHY) = 100.0 / (90.0 * 11.0)
             gModScalingParams%VR(HGT_FORCING) = 60.0 / gPlotScales(HGT_FORCING)
-            gModScalingParams%VR(PLOT_OFF) = 1.0 / gPlotScales(PLOT_OFF)
+            gModScalingParams%VR(NO_PLOT) = 1.0 / gPlotScales(NO_PLOT)
         !------------------------------Graphs only forces:
             gModScalingParams%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
             gModScalingParams%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
@@ -1239,9 +1239,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  NLEV the number of vertical levels
         !  ICYC the number of cycles of time steps ISTEP
         !  ISTEP the number of time steps in a cycle
-        !  MOUT is the number of time steps between outputs
-        !  MPLOT is the type of plot
-        !  IPLT1,IPLT2 the quantity to plot to the graphic screen
+        !  outputInterval is the number of time steps between outputs
+        !  plotType is the type of plot
+        !  field1,field2 the quantity to plot to the graphic screen
         !  JX and JY are the wave#s of quant to plot to phase space/time series diagram
         !  NUMBX,NUMBY are the number of maps in the x, y directions
         !  modelType: tells what type of model to be run. One of STANDARD_NLEVEL, BAROCLINIC_STRUCTS, ZONAL_MEAN_FLOWS
@@ -1269,11 +1269,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%NLEV = gUserSettings%maxLevels
             gModIntParams%ICYC = 1
             gModIntParams%ISTEP = 5840
-            gModIntParams%MOUT = 4 
-            gModIntParams%MPLOT = WEATHER_MAPS
-            gModIntParams%IPLT1 = TEMPERATURE
-            gModIntParams%IPLT2 = HEIGHT
-            gModIntParams%IPLT3 = PLOT_OFF
+            gModIntParams%outputInterval = 4 
+            gModIntParams%plotType = WEATHER_MAPS
+            gModIntParams%field1 = TEMPERATURE
+            gModIntParams%field2 = HEIGHT
+            gModIntParams%IPLT3 = NO_PLOT
             gModIntParams%JX = 1
             gModIntParams%JY = 1
             gModIntParams%LEVP = 0
@@ -1285,8 +1285,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%JX1 = gModIntParams%KMAX2
             gModIntParams%JY1 = gModIntParams%LMAX2
         !----------------------------------------------Stats variables:
-            gModIntParams%IV1 = gModIntParams%IPLT1
-            gModIntParams%IV2 = gModIntParams%IPLT2
+            gModIntParams%IV1 = gModIntParams%field1
+            gModIntParams%IV2 = gModIntParams%field2
             gModIntParams%IPRM1 = 1
             gModIntParams%IPRM2 = 8
             gModIntParams%ITER1 = 1
@@ -1339,10 +1339,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             !------------------------------Set 'previous' plot quantity:
             DO I = 1,5
-                gModIntParams%MP(I) = gModIntParams%IPLT1
+                gModIntParams%MP(I) = gModIntParams%field1
                 !-----------------------------Set graphs (plus reset one map!)
-                gModIntParams%MP(I + 4) = gModIntParams%IPLT1
-                gModIntParams%MP(I + 9) = gModIntParams%IPLT2
+                gModIntParams%MP(I + 4) = gModIntParams%field1
+                gModIntParams%MP(I + 9) = gModIntParams%field2
                 gModIntParams%MP(I + 14) = gModIntParams%IPLT3
             END DO
         END SUBROUTINE SetDefaults
@@ -1358,7 +1358,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (gModRealParams%isDimensionalized) return
 
             IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
-            gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeStep
+            gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeScale
             gModRealParams%BETA = 4. * gModRealParams%BETA
             gModRealParams%XPOS = gModRealParams%XPOS * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%YPOS = gModRealParams%YPOS * RAD_TO_DEGREES ! Convert to degrees for display
@@ -1380,7 +1380,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModRealParams%RN .GT. 0.) gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
             !--------------------------------Recompute interactions if needed:
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
-            gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeStep
+            gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeScale
             gModRealParams%BETA = gModRealParams%BETA / 4.
             gModRealParams%XPOS = gModRealParams%XPOS / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%YPOS = gModRealParams%YPOS / RAD_TO_DEGREES ! Restore to radians
