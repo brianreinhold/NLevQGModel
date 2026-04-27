@@ -103,8 +103,8 @@ module ConstantsModule
     integer, parameter :: OROG_HGT_TEND = 15        ! Height tendencies from ororgraphy in m/day'/
     integer, parameter :: OROGRAPHY = 16            ! Bottom orography in meters
     integer, parameter :: PLOTTING_OFF = 17         ! Plotting off
-    
-                                                    ! Options 18-25 are for graphs (where points are plotted as a function of time) only
+
+    ! Options 18-25 are for graphs (where points are plotted as a function of time) only
     integer, parameter :: FIELD_GRAPH_START = 18
     integer, parameter :: TOT_HGT_TEND_GRAF = 18    ! Total Height tendencies in m/day
     integer, parameter :: TOT_TEMP_TEND_GRAF = 19   ! Total temperature tendencies in C/day

@@ -213,8 +213,20 @@ module ModelParamsModule
     type(FileStruct) :: gSensFile
     type(ScaleFactors) :: gScaleFactors
 
+    ! Labels for the plots
+    type :: FieldLabels
+        character(len=:), allocatable :: s
+    end type
+    
+    type(FieldLabels) :: gFieldLabels(PLOT_SCALES_SIZE)
+
     !-----------------------------------------------------------------  Constants:
     real :: gPlotScales(PLOT_SCALES_SIZE)      ! Scale factors and scaling ratios. Constants give size of the arrays
+
+    ! The array below indicates whether the variable is a temperature type and will need the gVertArr%A(n) for scaling
+    LOGICAL :: gIsTemperature(PLOT_SCALES_SIZE) = [.FALSE., .FALSE., .TRUE., .FALSE., .TRUE., .FALSE., .FALSE., .FALSE., .FALSE., .TRUE., &
+                                                  .TRUE., .TRUE., .TRUE., .FALSE., .FALSE., .FALSE., .FALSE., .FALSE., .TRUE., .FALSE., &
+                                                  .TRUE., .FALSE., .FALSE., .FALSE., .FALSE.]
 
     contains
 
@@ -224,8 +236,11 @@ module ModelParamsModule
                    OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, &
                    HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
                    MEAN_TEMP_TEND_GRAF, HGT_WAVE_SPEED_GRAF, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, AMPLITUDE_RATIO_GRAF
+            use NLevQGModelGlobals, only: LogMessage
 
             implicit none
+            
+            character(64) :: valueStr
 
             !-------------------------------Scaling for dissipation (in days):
             !  Non dimensionalize: FK(nondimensional) = 1/[coriolis * secondsPerDay * FK(dimensional)]
@@ -239,7 +254,12 @@ module ModelParamsModule
             !-------------------------------Scaling for the temperature field in deg C:
             gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS    ! 2.6121725E+08
             gScaleFactors%CORIOLIS = CORIOLIS
-
+            
+            write(valueStr, '(A, ES26.17)') "Heights Scale in m: ", gScaleFactors%heights
+            call LogMessage(valueStr)
+            write(valueStr, '(A, ES26.17)') "Temperature Scale deg C (needs A(n)): ", gScaleFactors%temperatureScale
+            call LogMessage(valueStr)
+            
             !-------------------------------Scale factors for the plotted quantities:
             !  Plot order of 2-D: VOR, PS, TH, WW, TF, S, T, FS, ADS, ADT
             !  Plot order of 1-D: ADO, TOP, SF
@@ -254,10 +274,14 @@ module ModelParamsModule
             gPlotScales(TEMPERATURE) = gScaleFactors%temperatureScale
             !---------------------------Vertical velocity (omega) in mb/hr:
             gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480
+            write(valueStr, '(A, ES26.17)') "Omega Scale mb/hr: ", gPlotScales(VERTICAL_WIND)
+            call LogMessage(valueStr)
             !---------------------------Temperature forcing in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
             !---------------------------Total height tendencies m/day:
             gPlotScales(TOT_HGT_TEND) = gPlotScales(HEIGHT) * CORIOLIS * SECONDS_PER_DAY
+            write(valueStr, '(A, ES26.17)') "Height tendency Scale m/day: ", gPlotScales(VERTICAL_WIND)
+            call LogMessage(valueStr)
             !---------------------------Vorticity advection + beta effect:
             gPlotScales(ADV_BETA_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Vorticity tendencies from omega:
@@ -296,6 +320,12 @@ module ModelParamsModule
             gPlotScales(GROWTH_RATE_GRAF) = 1.
             !------------------------------Amplitude ratio
             gPlotScales(AMPLITUDE_RATIO_GRAF) = 1.
+            
+            gFieldLabels(VORTICITY)%s =  "Vorticity in 10**-5/s"
+            gFieldLabels(HEIGHT)%s =  "Height in meters"
+            gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
+
+
         end subroutine initConstants
     
 

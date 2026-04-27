@@ -38,11 +38,11 @@ module PlotModule
     
     integer(kind=4), parameter :: WX_STN_HEIGHT_COLOR = Z'00FF6400'           ! RGB(0, 100, 255)
     integer(kind=4), parameter :: WX_STN_TEMP_COLOR = Z'000064FF'             ! RGB(255, 100,0)
-    
-    integer(kind=4), parameter :: PHASE_SPACE1_LEAD_COLOR = Z'00FFFF00'       ! RGB(0, 255, 255)
-    integer(kind=4), parameter :: PHASE_SPACE1_COLOR = Z'00FF6400'            ! RGB(0, 100, 255)
-    integer(kind=4), parameter :: PHASE_SPACE2_LEAD_COLOR = Z'0000FFFF'       ! RGB(255, 255, 0)
-    integer(kind=4), parameter :: PHASE_SPACE2_COLOR = Z'000064FF'            ! RGB(255, 100,0)
+
+    integer(kind=4), parameter :: PHASE_SPACE1_LEAD_COLOR = Z'0000FFFF'
+    integer(kind=4), parameter :: PHASE_SPACE1_COLOR = Z'000064FF'
+    integer(kind=4), parameter :: PHASE_SPACE2_LEAD_COLOR = Z'00FFFF00'
+    integer(kind=4), parameter :: PHASE_SPACE2_COLOR = Z'00FF6400'
     
     integer(kind=4), parameter :: STD_DEV_HEIGHT_COLOR = Z'00FF0000'          ! RGB(0, 0, 255)
     integer(kind=4), parameter :: STD_DEV_TEMP_COLOR = Z'000088FF'            ! RGB(255, 136, 0)
@@ -85,7 +85,7 @@ module PlotModule
     end type PlotConfig
     
     type :: PhaseSpace
-        LOGICAL :: isInitialized    ! Indicates that this structure has been initialized and is ready to use
+        LOGICAL :: isInitialized = .FALSE.    ! Indicates that this structure has been initialized and is ready to use when true
         real, pointer :: x(:)       ! Points to the variable to be plotted on the x-axis at a certain level
         real, pointer :: y(:)       ! Points to the varibale to be plotted on the y-axis at a certain level
         real :: xScale              ! The scaling factor needed to make the quantity plotting along x dimensional. Includes the 2 or SQRT(2) factor
@@ -95,12 +95,12 @@ module PlotModule
         ! Then comes the cos component of the first zonal wavenumber followed by the sin component of the first zonal wavenumber
         ! for the first meridional mode for all meridional modes. For example, cosnxsiny, sinnxsiny, cosnxsin2y, sinnxsin2y, 
         ! cosnxsin3y, sinnxsin3y, ... cosnxsinLMAX2y, sinnxsinLMAX2y, cos2nxsiny, sin2nxsiny, ..., cosn2sinLMAX2y, sin2nxsinLMAX2y
-        ! To get the index for the component along the x-axis we have gModIntParams%zonalWavenumber and gModIntParams%meridWavenumber.
-        ! xIndex = gModIntParama
         integer :: xIndex       ! index in array (ITOT) for the field to be plotted along the x-axis
         integer :: yIndex       ! index in array (ITOT) for the field to be plotted along the y-axis
+        integer :: field        ! The field being plotted. Field ranges from 1 (VORTICITY) to 15 (OROG_HGT_TEND)
         integer(4) :: colorLead ! Color of the point when first plotted
         integer(4) :: color     ! Color of the point next time
+        integer(4) :: gDCcolor  ! Reverse byte order do use in GDC calls. DIB sections use reverse order
         integer :: xcenter      ! x-Coordinate of the origin on the screen
         integer :: ycenter      ! y-coordinate of the origin on the screen
 
@@ -219,12 +219,16 @@ module PlotModule
 
 
             if (gModIntParams%plotType == PHASE_SPACE) then
-                gPhaseSpace1%colorLead = PHASE_SPACE1_LEAD_COLOR
-                gPhaseSpace1%color = PHASE_SPACE1_COLOR
-                if (gModIntParams%field1 < PLOTTING_OFF) call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace1)
-                gPhaseSpace1%colorLead = PHASE_SPACE2_LEAD_COLOR
-                gPhaseSpace1%color = PHASE_SPACE2_COLOR
-                if (gModIntParams%field2 < PLOTTING_OFF) call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2)
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    gPhaseSpace1%colorLead = PHASE_SPACE1_LEAD_COLOR
+                    gPhaseSpace1%color = PHASE_SPACE1_COLOR
+                    call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace1)
+                endif
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    gPhaseSpace2%colorLead = PHASE_SPACE2_LEAD_COLOR
+                    gPhaseSpace2%color = PHASE_SPACE2_COLOR
+                    call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2)
+                endif
             endif
             if (gModIntParams%plotType == WEATHER_STN) then
             endif
@@ -240,12 +244,15 @@ module PlotModule
         subroutine initializePhaseSpaceType(field, phaseSpaceType)
             use NLevQGModelGlobals, only: gBitMapInfo
             use ConstantsModule, only: SQRT2
-            use ModelParamsModule, only: gModIntParams, gPlotScales, gModScalingParams
+            use ModelParamsModule, only: gModIntParams, gPlotScales, gModScalingParams, gIsTemperature
+            use ModelFieldsModule, only: gVertArr
 
             IMPLICIT NONE
 
             integer, intent(in) :: field
-            type(PhaseSpace), intent(out) :: phaseSpaceType
+            type(PhaseSpace), intent(inout) :: phaseSpaceType
+            
+            phaseSpaceType%field = field
             
             ! In phase space we plot the cosknxsinly component along one axis and sinknxsinly component along the other axis.
             ! In our 1-d expression of the k,l components all the zonal modes come first. THere are gModeIntParams%LMAX2 of these modes.
@@ -262,9 +269,13 @@ module PlotModule
                 phaseSpaceType%xIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
                                         2 * gModIntParams%LMAX2 * (gModIntParams%zonalWavenumber - 1) + & ! Puts us at the start of the Kth zonal wave
                                         2 * (gModIntParams%meridWavenumber - 1)
-                phaseSpaceType%xScale = REAL(min(gBitMapInfo%height, gBitMapInfo%width))
-                phaseSpaceType%xScale = 2.0 * gModScalingParams%VR(field)
-                phaseSpaceType%xScale = 2.0 * gPlotScales(field)  ! gModScalingParams%VR(field)
+                !phaseSpaceType%xScale = REAL(min(gBitMapInfo%height, gBitMapInfo%width))
+                !phaseSpaceType%xScale = 2.0 * gModScalingParams%VR(field)
+                if (gIsTemperature(field)) then
+                    phaseSpaceType%xScale = 2.0 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                else
+                    phaseSpaceType%xScale = 2.0 * gPlotScales(field)
+                endif
             else
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
                 phaseSpaceType%xIndex = gModIntParams%meridWavenumber
@@ -276,7 +287,11 @@ module PlotModule
                 phaseSpaceType%yIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
                                         2 * gModIntParams%LMAX2 * (gModIntParams%sinZonal - 1) + & ! Puts us at the start of the Kth zonal wave
                                         2 * (gModIntParams%sinMerid - 1) + 1
-                phaseSpaceType%yScale = 2.0 * gPlotScales(field)
+                if (gIsTemperature(field)) then
+                    phaseSpaceType%yScale = 2.0 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                else
+                    phaseSpaceType%yScale = 2.0 * gPlotScales(field)
+                endif
             else
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
                 phaseSpaceType%yIndex = gModIntParams%meridWavenumber
@@ -289,11 +304,12 @@ module PlotModule
             call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
             phaseSpaceType%xcenter = gBitMapInfo%width / 2
             phaseSpaceType%ycenter = gBitMapInfo%height / 2
+            phaseSpaceType%gDCcolor = IOR(ISHFT(IAND(phaseSpaceType%color, Z'000000FF'), 16), & ! R: bit 0 -> 16
+                        IOR(IAND(phaseSpaceType%color, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
+                        ISHFT(IAND(phaseSpaceType%color, Z'00FF0000'), -16))) ! B: bit 16 -> 0
             phaseSpaceType%isInitialized = .TRUE.
 
         end subroutine initializePhaseSpaceType
-
-
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -807,13 +823,10 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
 
             INTEGER ::      x_pix, y_pix, iret
-            integer ::      prev_xh = 0, prev_yh = 0, prev_xt = 0, prev_yt = 0, x_center, y_center
-            save  prev_xh, prev_yh, prev_xt, prev_yt
-            REAL ::         xc, yc, scale, facx, facy
+            REAL ::         xc, yc
             TYPE(T_RECT) :: rect
             INTEGER(4), POINTER :: pixelArray(:, :)
-            integer(4) :: colorLead, color
-            
+
             xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
             yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
 

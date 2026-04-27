@@ -1139,6 +1139,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
                 gModScalingParams, gModPlotParams, gModSensParams, gPlotScales
+            use NLevQGModelGlobals, only: LogMessage
+
+            implicit none
+            
+            character(64) :: valueStr
 
             INTEGER I, I1, J, J1
             
@@ -1211,6 +1216,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModScalingParams%VR(VORTICITY) = 1.0 / gPlotScales(VORTICITY)
         !---------------------------------------- (Gives 60m contours for L=5000km/PI)
             gModScalingParams%VR(HEIGHT) = 60.0 / gPlotScales(HEIGHT)
+            write(valueStr, '(A, ES26.17)') "Height Scale 60 m contours: ", gModScalingParams%VR(HEIGHT)
+            call LogMessage(valueStr)
             gModScalingParams%VR(TEMPERATURE) = 5.0 / gPlotScales(TEMPERATURE)
             gModScalingParams%VR(VERTICAL_WIND) = 5.0 / gPlotScales(VERTICAL_WIND)
             gModScalingParams%VR(TEMP_FORCING) = gModScalingParams%VR(TEMPERATURE)
@@ -1571,8 +1578,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 RL = RU
             END DO
             gVertArr%A(gModIntParams%NLEV) = CP * gVertArr%PV(gModIntParams%NLEV)**KAPPA / (CORIOLIS * gVertArr%PP(1)**KAPPA)
-            !--------------------------------Set aside root scale factor:
-                !AT = gVertArr%A(1)      ! We'll figure this out later. This is some kind of item for plotting
             !--------------------------------Compute sigma profile AND nondimensionalize:
 
             R = gVertArr%PP(1) / gScaleFactors%temperatureScale
