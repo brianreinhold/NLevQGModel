@@ -2,7 +2,7 @@
 !  Global data, parameters, and structures 
 !****************************************************************************
 
-module NlevelQGModelGlobals
+module NLevQGModelGlobals
     use ifwinty
     use iso_c_binding
 

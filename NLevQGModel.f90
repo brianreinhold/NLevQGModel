@@ -4,29 +4,29 @@
 ! If a module has an error, any module that uses that module will also have an error.
 ! We are only considering modules that we have written, not intel, fortran intrinsics, or win32
 ! So here are a list of the modules and their dependencies (if any) as of 2026/4/21
-! NlevelQGModelGlobals: None
+! NLevQGModelGlobals: None
 ! ArrayDimensionsModule: None
 ! ConstantsModule: None
-! fftw3HelpersModule: None if test code is excluded. Otherwise: ArrayDimensionsModule, ModelParamsModule, NlevelQGModelGlobals
+! fftw3HelpersModule: None if test code is excluded. Otherwise: ArrayDimensionsModule, ModelParamsModule, NLevQGModelGlobals
 ! ModelParamsModule: ConstantsModule
 ! InteractionCoefficientsModule: ConstantsModule, ModelParamsModule
 ! UtilitiesModule: ConstantsModule, ModelParamsModule
 ! ModelFieldsModule: ConstantsModule, ArrayDimensionsModule, ModelParamsModule
-! SetupModule: ConstantsModule, ArrayDimensionsModule, NlevelQGModelGlobals, fftwsHelpersModule, ModelParamsModule, ModelFieldsModule,
+! SetupModule: ConstantsModule, ArrayDimensionsModule, NLevQGModelGlobals, fftwsHelpersModule, ModelParamsModule, ModelFieldsModule,
 !              InteractionCoefficientsModule, UtilitiesModule
 ! ModelModule: ConstantsModule, ArrayDimensionsModule, ModelFieldsModule, ModelParamsModule, InteractionCoefficientsModule, SetupModule,
-!              NlevelQGModelGlobals, fftw3HelpersModule, UtilitiesModule,
+!              NLevQGModelGlobals, fftw3HelpersModule, UtilitiesModule,
 ! DialogHelpers Module: None
 ! DialogProcInterfacesModule: None
-! InitVariablesDialogModule: NlevelQGModelGlobals, ArrayDimensionsModule, ConstantsModule, UtilitiesModule, DialogHelpersModule, 
+! InitVariablesDialogModule: NLevQGModelGlobals, ArrayDimensionsModule, ConstantsModule, UtilitiesModule, DialogHelpersModule, 
 !                            ModelParamsModule, KeyboardHooksModule, ModelFieldsModule, SetUpModule
-! VerticalParamsDialogModule: NlevelQGModelGlobals, ConstantsModule, UtilitiesModule, DialogHelpersModule, ModelParamsModule, 
+! VerticalParamsDialogModule: NLevQGModelGlobals, ConstantsModule, UtilitiesModule, DialogHelpersModule, ModelParamsModule, 
 !                             KeyboardHooksModule, ModelFieldsModule, SetUpModule
-! KeyboardHooksModule: NlevelQGModelGlobals, DlgProcInterfacesModule, SetUpModule, ModelModule, ModelParamsModule, DialogHelpersModule
-! ModelControlDlgProc: NlevelQGModelGlobals, ModelParamsModule, SetUpModule, ConstantsModule, KeyboardHooksModule, ModelModule, 
+! KeyboardHooksModule: NLevQGModelGlobals, DlgProcInterfacesModule, SetUpModule, ModelModule, ModelParamsModule, DialogHelpersModule
+! ModelControlDlgProc: NLevQGModelGlobals, ModelParamsModule, SetUpModule, ConstantsModule, KeyboardHooksModule, ModelModule, 
 !                      DialogHelpersModule, VerticalParamsDialogModule, InitVariablesDialogModule, UtilitiesModule
-! SettingsDialogModule: NlevelQGModelGlobals, DialogHelpersModule, ModelParamsModule, ModelControlDialogModule, KeyboardHooksModule
-! NLevQGModel: NlevelQGModelGlobals, DlgProcInterfacesModule, ModelParamsModule, UtilitiesModule
+! SettingsDialogModule: NLevQGModelGlobals, DialogHelpersModule, ModelParamsModule, ModelControlDialogModule, KeyboardHooksModule
+! NLevQGModel: NLevQGModelGlobals, DlgProcInterfacesModule, ModelParamsModule, UtilitiesModule
 !
 ! Model defines the streamfunction at the center of the N levels and the temperature at the interface between the levels
 ! Thus PSI(n + 1) - PSI(n) = TH(n + .5)
@@ -61,7 +61,7 @@ function WinMain( hInstance, hPrevInstance, lpszCmdLine, nCmdShow )
     use kernel32
     use gdi32
     
-    use NlevelQGModelGlobals, only: ghInstance, ghModule, ghWndMain, gBitMapInfo, ghLogMain, ghSettingsDlg, WriteMessageBox, SIZEOFAPPNAME, &
+    use NLevQGModelGlobals, only: ghInstance, ghModule, ghWndMain, gBitMapInfo, ghLogMain, ghSettingsDlg, WriteMessageBox, SIZEOFAPPNAME, &
                                     LogMessage, StartTimer
     use WndProcInterfacesModule, only: MainWndProc, LogWndProc
     use DlgProcInterfacesModule, only: SettingsDlgProc
@@ -273,7 +273,7 @@ integer(LRESULT) function LogWndProc ( hWnd, mesg, wParam, lParam )
     use user32
     use gdi32               ! For DeleteObject()
     use ifport              ! For GetLastError()
-    use NlevelQGModelGlobals, only: gFont, ghLogList, ghInstance, ghLogMain, WriteMessageBox, SIZEOFAPPNAME
+    use NLevQGModelGlobals, only: gFont, ghLogList, ghInstance, ghLogMain, WriteMessageBox, SIZEOFAPPNAME
     use iso_c_binding
     
     implicit none
@@ -423,7 +423,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
     use ifwin       ! For GetCurrentThreadId
     use user32
-    use NlevelQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
+    use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState
     use ModelParamsModule, only: gNLevFile

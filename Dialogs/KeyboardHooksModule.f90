@@ -49,7 +49,7 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, LogMessage
+            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, LogMessage
             use DlgProcInterfacesModule, only: ModelControlDlgProc
             
             implicit none
@@ -158,7 +158,7 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NlevelQGModelGlobals, only: ghModelControlDlg, LogMessage
+            use NLevQGModelGlobals, only: ghModelControlDlg, LogMessage
             use SetUpModule, only: CheckModelControlChanges
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams
@@ -295,7 +295,7 @@ module KeyboardHooksModule
             !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NlevelQGModelGlobals, only: ghVerticalParamsDlg, LogMessage
+            use NLevQGModelGlobals, only: ghVerticalParamsDlg, LogMessage
 
             implicit none
 
@@ -390,7 +390,7 @@ module KeyboardHooksModule
             !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NlevelQGModelGlobals, only: ghInitVariablesDlg, LogMessage
+            use NLevQGModelGlobals, only: ghInitVariablesDlg, LogMessage
             use ModelFieldsModule, only: gHorzArr
             
             implicit none

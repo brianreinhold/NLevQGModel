@@ -23,7 +23,7 @@ module InitVariablesDialogModule
             use ifwinty
             use ifwin
 
-            use NlevelQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
+            use NLevQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
             use iso_c_binding
 
             use ArrayDimensionsModule, only: gCurrentDims

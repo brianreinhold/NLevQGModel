@@ -72,7 +72,7 @@ module ModelModule
             use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
             use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation
             use InteractionCoefficientsModule
-            use NlevelQGModelGlobals, only: ghwndMain, LogMessage
+            use NLevQGModelGlobals, only: ghwndMain, LogMessage
             use iso_c_binding
             use Fftw3HelpersModule, only: test_transforms
             use UtilitiesModule, only: openModelFile
@@ -753,7 +753,7 @@ module ModelModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, G1_pool
             use InteractionCoefficientsModule, only: gCintArr
-            use NlevelQGModelGlobals, only: LogMessage
+            use NLevQGModelGlobals, only: LogMessage
 
             implicit none
 

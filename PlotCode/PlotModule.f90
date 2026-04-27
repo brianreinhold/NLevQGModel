@@ -39,10 +39,10 @@ module PlotModule
     integer(kind=4), parameter :: WX_STN_HEIGHT_COLOR = Z'00FF6400'           ! RGB(0, 100, 255)
     integer(kind=4), parameter :: WX_STN_TEMP_COLOR = Z'000064FF'             ! RGB(255, 100,0)
     
-    integer(kind=4), parameter :: PHASE_SPACE_LEAD_HEIGHT_COLOR = Z'00FFFF00' ! RGB(0, 255, 255)
-    integer(kind=4), parameter :: PHASE_SPACE_HEIGHT_COLOR = Z'00FF6400'      ! RGB(0, 100, 255)
-    integer(kind=4), parameter :: PHASE_SPACE_LEAD_TEMP_COLOR = Z'0000FFFF'   ! RGB(255, 255, 0)
-    integer(kind=4), parameter :: PHASE_SPACE_TEMP_COLOR = Z'000064FF'        ! RGB(255, 100,0)
+    integer(kind=4), parameter :: PHASE_SPACE1_LEAD_COLOR = Z'00FFFF00'       ! RGB(0, 255, 255)
+    integer(kind=4), parameter :: PHASE_SPACE1_COLOR = Z'00FF6400'            ! RGB(0, 100, 255)
+    integer(kind=4), parameter :: PHASE_SPACE2_LEAD_COLOR = Z'0000FFFF'       ! RGB(255, 255, 0)
+    integer(kind=4), parameter :: PHASE_SPACE2_COLOR = Z'000064FF'            ! RGB(255, 100,0)
     
     integer(kind=4), parameter :: STD_DEV_HEIGHT_COLOR = Z'00FF0000'          ! RGB(0, 0, 255)
     integer(kind=4), parameter :: STD_DEV_TEMP_COLOR = Z'000088FF'            ! RGB(255, 136, 0)
@@ -82,7 +82,34 @@ module PlotModule
         LOGICAL :: drawLines        ! Whether to draw connecting lines in time series plots
         real :: rcos(32)            ! Cheap FFT for basis functions for x-direction
         real :: rsin(32)            ! Cheap FFT for basis functions for y-direction
-    end type PlotConfig 
+    end type PlotConfig
+    
+    type :: PhaseSpace
+        LOGICAL :: isInitialized    ! Indicates that this structure has been initialized and is ready to use
+        real, pointer :: x(:)       ! Points to the variable to be plotted on the x-axis at a certain level
+        real, pointer :: y(:)       ! Points to the varibale to be plotted on the y-axis at a certain level
+        real :: xScale              ! The scaling factor needed to make the quantity plotting along x dimensional. Includes the 2 or SQRT(2) factor
+        real :: yScale              ! The scaling factor needed to make the quantity plotting along y dimensional. Includes the 2 or SQRT(2) factor
+        ! In phase space we plot the cosknxsinly component along one axis and sinknxsinly component along the other axis.
+        ! In our 1-d expression of the components all the zonal modes come first. THere are gModeIntParams%LMAX2 of these modes.
+        ! Then comes the cos component of the first zonal wavenumber followed by the sin component of the first zonal wavenumber
+        ! for the first meridional mode for all meridional modes. For example, cosnxsiny, sinnxsiny, cosnxsin2y, sinnxsin2y, 
+        ! cosnxsin3y, sinnxsin3y, ... cosnxsinLMAX2y, sinnxsinLMAX2y, cos2nxsiny, sin2nxsiny, ..., cosn2sinLMAX2y, sin2nxsinLMAX2y
+        ! To get the index for the component along the x-axis we have gModIntParams%zonalWavenumber and gModIntParams%meridWavenumber.
+        ! xIndex = gModIntParama
+        integer :: xIndex       ! index in array (ITOT) for the field to be plotted along the x-axis
+        integer :: yIndex       ! index in array (ITOT) for the field to be plotted along the y-axis
+        integer(4) :: colorLead ! Color of the point when first plotted
+        integer(4) :: color     ! Color of the point next time
+        integer :: xcenter      ! x-Coordinate of the origin on the screen
+        integer :: ycenter      ! y-coordinate of the origin on the screen
+
+        ! This will be set to the position plotted x_pix, y_pix. x_pix, y_pix will be computed from the current values. We do not
+        ! need to keep those. x_pix, y_pix will be plotted with color 'colorLead'. In the routine, prev_x, prev_y will be plotted
+        ! with color 'color'. Then it will be set to x_pix, y_pix. 
+        integer :: prev_x = 0
+        integer :: prev_y = 0 
+    end type PhaseSpace
 
     type :: TimeSeriesBuffer
         REAL(4), ALLOCATABLE :: data_buffer(:)
@@ -103,6 +130,8 @@ module PlotModule
     type(ElapsedTime) gElapsedTime
 
     type(PlotConfig) :: gPlotConfig
+    type(PhaseSpace) :: gPhaseSpace1
+    type(PhaseSpace) :: gPhaseSpace2
     type(TimeSeriesBuffer) :: gHeightTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gTempTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer
@@ -156,7 +185,115 @@ module PlotModule
         END SUBROUTINE Interpolate2D
     END INTERFACE
 
+    INTERFACE
+        MODULE SUBROUTINE DrawCartesianAxes(invalidate)
+                LOGICAL, INTENT(IN)  :: invalidate
+        END SUBROUTINE DrawCartesianAxes
+    END INTERFACE
+
+    INTERFACE
+        MODULE SUBROUTINE labelPlotsAndDisplayTime(invalidate)
+                LOGICAL, INTENT(IN)  :: invalidate
+        END SUBROUTINE labelPlotsAndDisplayTime
+    END INTERFACE
+
+    INTERFACE
+        MODULE SUBROUTINE DrawLegendItem(hdc, x, y, color, label)
+            USE IFWINTY, ONLY: HANDLE
+            INTEGER(HANDLE), intent(in) :: hdc
+            INTEGER, intent(in) :: x, y, color
+            CHARACTER(len=*), intent(in) :: label
+        END SUBROUTINE DrawLegendItem
+    END INTERFACE
+
     contains
+
+!=========================================== INITIALIZE PLOT
+        ! Sets up the various plot structures to initialize fields that only need to be set once
+        ! during a model run. The user might be able to change some parameters while the model is
+        ! running that could require that this routine be called again.
+        subroutine initializePlot()
+            use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, SQRT2, PLOTTING_OFF
+            use ModelParamsModule, only: gModIntParams, gPlotScales
+            IMPLICIT NONE
+
+
+            if (gModIntParams%plotType == PHASE_SPACE) then
+                gPhaseSpace1%colorLead = PHASE_SPACE1_LEAD_COLOR
+                gPhaseSpace1%color = PHASE_SPACE1_COLOR
+                if (gModIntParams%field1 < PLOTTING_OFF) call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace1)
+                gPhaseSpace1%colorLead = PHASE_SPACE2_LEAD_COLOR
+                gPhaseSpace1%color = PHASE_SPACE2_COLOR
+                if (gModIntParams%field2 < PLOTTING_OFF) call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2)
+            endif
+            if (gModIntParams%plotType == WEATHER_STN) then
+            endif
+            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+            end if
+            if (gModIntParams%plotType == HOV_DIAG_AT_LONG)then
+            endif
+            if (gModIntParams%plotType == PHASE_AND_MAP) then 
+            endif
+        
+        end subroutine initializePlot
+        
+        subroutine initializePhaseSpaceType(field, phaseSpaceType)
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ConstantsModule, only: SQRT2
+            use ModelParamsModule, only: gModIntParams, gPlotScales, gModScalingParams
+
+            IMPLICIT NONE
+
+            integer, intent(in) :: field
+            type(PhaseSpace), intent(out) :: phaseSpaceType
+            
+            ! In phase space we plot the cosknxsinly component along one axis and sinknxsinly component along the other axis.
+            ! In our 1-d expression of the k,l components all the zonal modes come first. THere are gModeIntParams%LMAX2 of these modes.
+            ! Then comes the cos component of the first zonal wavenumber followed by the sin component of the first zonal wavenumber
+            ! for the first meridional mode for all meridional modes. For example, cosnxsiny, sinnxsiny, cosnxsin2y, sinnxsin2y, 
+            ! cosnxsin3y, sinnxsin3y, ... cosnxsinLMAX2y, sinnxsinLMAX2y, cos2nxsiny, sin2nxsiny, ..., cosn2sinLMAX2y, sin2nxsinLMAX2y
+            ! Get the indicies in the varaible arrays to be plotted:
+            ! To get the index for the component along the x-axis we have gModIntParams%zonalWavenumber and gModIntParams%meridWavenumber
+            ! provided by the user. For the index along the y-axis we have gModIntParams%sinZonal and gModIntParams%sinMerid.
+                
+            ! If the user specifies a zonal wavenumber for the cosine part greater than zero
+            if (gModIntParams%zonalWavenumber .GT. 0) then
+                ! This gets the index for cosknx sinly component
+                phaseSpaceType%xIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
+                                        2 * gModIntParams%LMAX2 * (gModIntParams%zonalWavenumber - 1) + & ! Puts us at the start of the Kth zonal wave
+                                        2 * (gModIntParams%meridWavenumber - 1)
+                phaseSpaceType%xScale = REAL(min(gBitMapInfo%height, gBitMapInfo%width))
+                phaseSpaceType%xScale = 2.0 * gModScalingParams%VR(field)
+                phaseSpaceType%xScale = 2.0 * gPlotScales(field)  ! gModScalingParams%VR(field)
+            else
+                ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
+                phaseSpaceType%xIndex = gModIntParams%meridWavenumber
+                phaseSpaceType%xScale = SQRT2 * gPlotScales(field)
+            endif
+            ! If the user specifies a zonal wavenumber for the sine part greater than zero
+            if (gModIntParams%sinZonal .GT. 0) then
+                ! This gets the index for cosknx sinly component
+                phaseSpaceType%yIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
+                                        2 * gModIntParams%LMAX2 * (gModIntParams%sinZonal - 1) + & ! Puts us at the start of the Kth zonal wave
+                                        2 * (gModIntParams%sinMerid - 1) + 1
+                phaseSpaceType%yScale = 2.0 * gPlotScales(field)
+            else
+                ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
+                phaseSpaceType%yIndex = gModIntParams%meridWavenumber
+                phaseSpaceType%yScale = SQRT2 * gPlotScales(field)
+            endif
+            ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
+            call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
+                
+            ! Now get the variable to be plotted along the y-axis. That will be gModIntParams%field1. 
+            call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
+            phaseSpaceType%xcenter = gBitMapInfo%width / 2
+            phaseSpaceType%ycenter = gBitMapInfo%height / 2
+            phaseSpaceType%isInitialized = .TRUE.
+
+        end subroutine initializePhaseSpaceType
+
+
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -202,7 +339,8 @@ module PlotModule
     ! PHASE SPACE ----------------------
             if (gModIntParams%plotType == PHASE_SPACE) then
                 call labelPlotsAndDisplayTime(.true.)
-                !if(usesHeight) call plotPhaseSpace(Y, (.NOT. usesTemperature), HEIGHT)
+                if(gModIntParams%field1 .NE. NO_PLOT) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == NO_PLOT)
+                if(gModIntParams%field2 .NE. NO_PLOT) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
                 !if(usesTemperature) call plotPhaseSpace(Y, .true., TEMPERATURE)
             end if
 
@@ -408,434 +546,6 @@ module PlotModule
         !    end do
         !end subroutine createGrid
 
-        subroutine DrawCartesianAxes(invalidate)
-            USE IFWINA
-            use ConstantsModule, only: HEIGHT, TEMPERATURE, PHASE_SPACE, PHASE_AND_MAP
-            use NlevelQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelParamsModule, only: gModIntParams
-            implicit none
-        
-            ! Arguments
-            logical,    intent(in) :: invalidate  ! Force redraw flag
-        
-            ! Local variables
-            integer(4) :: x_len       ! Length of X-axis in pixels
-            integer(4) :: y_len       ! Length of Y-axis in pixels
-            INTEGER(BOOL) :: bret
-            integer(4) :: i                        !tick_size = 5           ! Size of tick marks in pixels
-            real       :: interval
-        
-            integer(HANDLE) :: hOldPen, hAxisPen
-            type(T_POINT) :: oldPoint
-            type(CartesianData) :: cartData
-            
-            ! For labels
-            character(len=16) :: label
-            integer(4) :: x_anchor, y_anchor, y_pos, x_pos
-            type(T_SIZE) :: sz
-            
-            logical :: usesHeight
-            logical :: usesTemperature
-            
-            usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-            usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-            
-            if (gModIntParams%plotType == PHASE_SPACE) then
-                cartData%x_origin  = gBitMapInfo%width / 2  ! X-coordinate of origin in pixels
-                cartData%y_origin  = gBitMapInfo%height / 2  ! Y-coordinate of origin in pixels
-                x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
-                y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
-            else if (gModIntParams%plotType == PHASE_AND_MAP) then
-                cartData%x_origin  = 3 * gBitMapInfo%width / 4  ! X-coordinate of origin in pixels
-                cartData%y_origin  = 3 * gBitMapInfo%height / 4  ! Y-coordinate of origin in pixels
-                x_len     = gBitMapInfo%width / 2       ! Length of X-axis in pixels
-                y_len     = gBitMapInfo%height / 2       ! Length of Y-axis in pixels
-            endif
-            
-            ! 1. Create 2nd pen 1 pixel thick and select it
-            hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
-            hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        
-            ! 2. Calculate pixel step for ticks (using the shorter axis for scaling)
-            cartData%tick_step_px = float(min(x_len, y_len)) / 20.0
-        
-            ! This ensures the grid fills the entire x_len and y_len provided
-            cartData%num_ticks_x = int((x_len / 2.0) / cartData%tick_step_px)
-            cartData%num_ticks_y = int((y_len / 2.0) / cartData%tick_step_px)
-        
-            ! --- Draw Vertical Grid Lines (X-axis ticks) ---
-            do i = -cartData%num_ticks_x, cartData%num_ticks_x
-                if (i == 0) cycle  ! skip central axis
-                ! Move to top of x_len/y_len box, draw to bottom
-                bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%y_origin - y_len / 2, oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%y_origin + y_len / 2)
-            end do
-        
-            ! --- Draw Horizontal Grid Lines (Y-axis ticks) ---
-            do i = -cartData%num_ticks_y, cartData%num_ticks_y
-                if (i == 0) cycle ! skip central axis
-                ! Move to left side, draw to right side
-                bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin - x_len / 2, int(cartData%y_origin + i * cartData%tick_step_px), oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin + x_len / 2, int(cartData%y_origin + i * cartData%tick_step_px))
-            end do
-        
-            ! 3. Do labels
-            ! The interval is specified as 2 * range / 20 (which simplifies to range / 10)
-            !if (usesHeight) then
-            !    interval = REAL(2 * gPlotConfig%contHghtsSeries) / 20.0
-            !    call labelCartesianAxes(cartData, interval, .true.)
-            !endif
-            !if (usesTemperature) then
-            !    interval = REAL(2 * gPlotConfig%contTempsSeries) / 20.0            
-            !    call labelCartesianAxes(cartData, interval, .false.)
-            !endif
-        
-            ! 4. Cleanup: Restore old pen and delete the one created
-            hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-            bret = DeleteObject(hAxisPen)
-        
-            !  Now to draw the main axes.
-            ! 5. Create and select a pen 2 pixels thick. Do main axes last so they are on top
-            hAxisPen = CreatePen(PS_SOLID, 2, RGB(50, 50, 50))
-            hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        
-            ! 6. Draw X-axis
-            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin - (x_len / 2), cartData%y_origin, oldPoint)
-            bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin + (x_len / 2), cartData%y_origin)
-        
-            ! 7. Draw Y-axis
-            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin, cartData%y_origin - (y_len / 2), oldPoint)
-            bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin, cartData%y_origin + (y_len / 2))
-        
-            ! 8. Cleanup: Restore old pen and delete the one created
-            hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-            bret = DeleteObject(hAxisPen)
-        
-            ! 9. Redraw if requested
-            if(invalidate) then
-                ! Invalidate the window rectangle to trigger a redraw
-                bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-                bret = UpdateWindow(ghwndMain)
-            endif
-        
-        end subroutine DrawCartesianAxes
-        
-        !subroutine labelCartesianAxes(cartData, interval, useBottomLeft)
-        !    USE IFWINA
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !
-        !    implicit none
-        !    
-        !    type(CartesianData), intent(in) :: cartData
-        !    real, intent(in) :: interval
-        !    logical, intent(in) :: useBottomLeft
-        !
-        !    integer(bool) :: bret
-        !    ! For labels
-        !    character(len=16) :: label
-        !    integer(4) :: x_anchor, y_anchor, y_pos, x_pos, i
-        !    type(T_SIZE) :: sz
-        !
-        !    ! Now doing labels. Make the background transparent
-        !    bret = SetBkMode(gBitMapInfo%hMemDC, TRANSPARENT)
-        !    bret = SetTextColor(gBitMapInfo%hMemDC, RGB(90, 90, 90)) ! dark text
-        !
-        !    ! --- Label the Y-Axis values ---
-        !
-        !    if (useBottomLeft) then
-        !        ! Anchor: To the right of the first 'y axis' (left-most vertical grid line)
-        !        x_anchor = cartData%x_origin + (-cartData%num_ticks_x) * int(cartData%tick_step_px)
-        !    else
-        !        ! Anchor: To the left of the last 'y axis' (right-most vertical grid line)
-        !        x_anchor = cartData%x_origin + (cartData%num_ticks_x - 1) * int(cartData%tick_step_px)
-        !    endif
-        !
-        !    do i = -cartData%num_ticks_y, cartData%num_ticks_y, 2
-        !        write(label, '(F8.2)') (real(interval * i))
-        !        y_pos = cartData%y_origin - int(i * cartData%tick_step_px) ! Top-down: subtract to go "up"
-        !
-        !        ! Get label dimensions to vertically center it on the tick
-        !        bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
-        !
-        !        ! Draw 5 pixels to the right of the first vertical grid line
-        !        bret = TextOut(gBitMapInfo%hMemDC, x_anchor + 5, y_pos - (sz%cy / 2), &
-        !                      trim(label), len_trim(label))
-        !    end do
-        !
-        !    ! --- Label the X-Axis values ---
-        !    if (useBottomLeft) then
-        !        ! Anchor: Above the last 'x axis' (bottom-most horizontal grid line)
-        !        y_anchor = cartData%y_origin + (cartData%num_ticks_y) * int(cartData%tick_step_px)
-        !    else
-        !        ! Anchor: Below the first 'x axis' (top-most horizontal grid line)
-        !        y_anchor = cartData%y_origin - (cartData%num_ticks_y - 1) * int(cartData%tick_step_px)
-        !    endif
-        !
-        !    do i = -cartData%num_ticks_x, cartData%num_ticks_x, 2
-        !        write(label, '(F8.2)') (real(interval * i ))
-        !        x_pos = cartData%x_origin + int(i * cartData%tick_step_px)
-        !
-        !        bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
-        !
-        !        ! Draw 5 pixels above the bottom-most horizontal grid line
-        !        bret = TextOut(gBitMapInfo%hMemDC, x_pos - (sz%cx / 2), y_anchor - sz%cy - 5, &
-        !                      trim(label), len_trim(label))
-        !    end do
-        !end subroutine labelCartesianAxes
-
-        !> This routine draws horizontal (east-west latitude) and vertical 
-        !> (north-south longitude) lines in a grid for the weather maps. 
-        !> But it only draws them on the top half of the screen 
-        !> where the weather map is plotted.
-        !! @param: invalidate - if set to true the screen is redrawn.
-        !!         The option is present as the caller may do the redraw
-        !subroutine DrawGridLines(invalidate)
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    use IFWBASE ! Contains RGB macro
-        !    USE IFWINTY
-        !    USE IFWINA
-        !    USE USER32
-        !
-        !    IMPLICIT NONE
-        !
-        !    LOGICAL, intent(in) :: invalidate
-        !
-        !    INTEGER(BOOL) :: bret            
-        !    integer(HANDLE) :: hOldPen, hAxisPen
-        !    integer :: I
-        !    type(T_POINT) :: oldPoint
-        !    
-        !    ! 1. Create and select a pen
-        !    hAxisPen = CreatePen(PS_SOLID, 2, RGB(50, 50, 50))
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        !
-        !    ! 2. Draw latitude horizonal lines
-        !    do I = 4, 1, -1
-        !        ! Move to the start of the line: X=0, Y=calculated height
-        !        bret = MoveToEx(gBitMapInfo%hMemDC, 0, I * gBitMapInfo%height / 8, oldPoint)
-        !        ! Draw to the end of the line: X=width, Y=calculated height
-        !        bret = LineTo(gBitMapInfo%hMemDC, gBitMapInfo%width, I * gBitMapInfo%height / 8)
-        !    end do
-        !    ! 3. Draw Longitude lines
-        !    do I = 1, 8
-        !        bret = MoveToEx(gBitMapInfo%hMemDC, I * gBitMapInfo%width / 8, 0, oldPoint)
-        !        bret = LineTo(gBitMapInfo%hMemDC, I * gBitMapInfo%width / 8, gBitMapInfo%height / 2)
-        !    end do
-        !
-        !    ! 4. Cleanup: Restore old pen and delete the one created
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-        !    bret = DeleteObject(hAxisPen)
-        !
-        !    if(invalidate) then
-        !        ! Invalidate the window rectangle to trigger a redraw
-        !        bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-        !        bret = UpdateWindow(ghwndMain)
-        !    endif
-        !end subroutine DrawGridLines
-
-        !> This routine draws vertical (longitudinal) lines for the
-        !> latitudinal hovmoller plot. Remember that the latitudinal
-        !> Hovmoller plots the values along a specified east-west
-        !> latitude as a function of time where time is along the y-axis
-        !> so the plot comes from the top. These lines show the longitude
-        !> positions on the latitudinal line.
-        !! @param: invalidate - if set to true the screen is redrawn.
-        !!         The option is present as the caller may do the redraw
-        !subroutine DrawVerticalLines(invalidate)
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    use IFWBASE ! Contains RGB macro
-        !    
-        !    USE IFWINTY
-        !    USE IFWINA
-        !    USE USER32
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    LOGICAL, intent(in) :: invalidate
-        !    
-        !    INTEGER(BOOL) :: bret            
-        !    integer(HANDLE) :: hOldPen, hAxisPen
-        !    integer(4) :: I, x_coord, offset
-        !    type(T_POINT) :: oldPoint
-        !    real :: value
-        !    character(len=32) :: labelText
-        !    character(len=16) :: units
-        !
-        !    ! 2. Create and select a pen (Black, 2 pixels wide)
-        !    hAxisPen = CreatePen(PS_SOLID, 1, RGB(50, 50, 50))
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        !    
-        !    ! Align text so the coordinate (x,y) is the top-left of the text
-        !    bret = SetTextColor(gBitMapInfo%hMemDC, RGB(50, 50, 50))
-        !    bret = SetTextAlign(gBitMapInfo%hMemDC, IOR(TA_LEFT, TA_TOP))
-        !    bret = SetBkMode(gBitMapInfo%hMemDC, TRANSPARENT)
-        !
-        !    ! 4. Draw Longitude lines
-        !    do I = 1, 9
-        !        bret = MoveToEx(gBitMapInfo%hMemDC, I * gBitMapInfo%width / 8, 0, oldPoint)
-        !        bret = LineTo(gBitMapInfo%hMemDC, I * gBitMapInfo%width / 8, gBitMapInfo%height)
-        !        
-        !        x_coord = (I - 1) * gBitMapInfo%width / 8
-        !        value = real((I - 1)) * 45.0 !360.0 / 8
-        !        labelText = ""
-        !        ! This 'T8' forces the units to start at the 8th character of the string
-        !        write(labelText, '(F6.2, T8, A)') value, CHAR(176)//"lon"
-        !        ! TextOut(hdc, x, y, string, length)
-        !        ! Placing label at X=5 pixels from the left edge
-        !        if (I .EQ. 9) x_coord = x_coord - 25
-        !        bret = TextOut(gBitMapInfo%hMemDC, x_coord, 5, labelText, len_trim(labelText))
-        !    end do
-        !
-        !    ! 5. Cleanup: Restore old pen and delete the one created
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-        !    bret = DeleteObject(hAxisPen)
-        !
-        !    if (invalidate) then
-        !        ! Invalidate the window rectangle to trigger a redraw
-        !        bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-        !        bret = UpdateWindow(ghwndMain)
-        !    endif
-        !
-        !end subroutine DrawVerticalLines
-
-        !> This routine draws horizonal (latitudinal) lines for the
-        !> longitudinal hovmoller plot. Remember that the longitudinal
-        !> Hovmoller plots the values along a specified north-south
-        !> longitude as a function of time where time is along the x-axis
-        !> so the plot comes from the left. These lines show the latitude
-        !> positions on the longitudinal line.
-        !! @param: invalidate - if set to true the screen is redrawn.
-        !!         The option is present as the caller may do the redraw somewhere else
-        !! @param: labelsOnLeft - when true, the labels are drawn on the left side of the plot, otherwise they are drawn on t
-        !! @param: color - ABGR color value of the labels
-        !subroutine DrawHorizontalLines(invalidate, labelsOnLeft, isHeight, color)
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, HOV_DIAG_AT_LONG, HOV_DIAG_RMSE, WEATHER_STN, ENERGY_TIME_SERIES, STATISTICS, MODEL
-        !    use ModelTypesModule, only: gDataType
-        !    use IFWBASE ! Contains RGB macro
-        !    
-        !    USE IFWINTY
-        !    USE IFWINA
-        !    USE USER32
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    LOGICAL, intent(in) :: invalidate
-        !    LOGICAL, intent(in) :: labelsOnLeft
-        !    LOGICAL, intent(in) :: isHeight
-        !    INTEGER(4), intent(in) :: color
-        !
-        !    INTEGER(BOOL) :: bret
-        !    integer(HANDLE) :: hOldPen, hAxisPen
-        !    integer(4) :: I, Y_coord, offset, X_coord
-        !    integer :: N    ! Number of horizonatal lines
-        !    type(T_POINT) :: oldPoint
-        !    real :: value, topValue
-        !    character(len=32) :: labelText
-        !    character(len=16) :: units
-        !
-        !    real :: logMin, logMax, logRange, logVal
-        !
-        !    ! 2. Create and select a pen (dark gray, 1 pixels wide)
-        !    hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        !    
-        !    ! Align text so the coordinate (x,y) is the top-left of the text
-        !    bret = SetTextColor(gBitMapInfo%hMemDC, color)
-        !    bret = SetTextAlign(gBitMapInfo%hMemDC, IOR(TA_LEFT, TA_TOP))
-        !    bret = SetBkMode(gBitMapInfo%hMemDC, TRANSPARENT)
-        !
-        !    ! 4. Draw horizontal lines
-        !    N = 9
-        !    if (gModIntParams%plotType == WEATHER_STN .OR. gModIntParams%plotType == STATISTICS) then
-        !        if (isHeight) then
-        !            topValue = gPlotConfig%contHghtsSeries
-        !            units = " m"
-        !        else
-        !            topValue = gPlotConfig%contTempsSeries
-        !            units = CHAR(176)//"C"
-        !        endif
-        !    else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
-        !        units = CHAR(176)//"lat"
-        !    else if (gModIntParams%plotType == ENERGY_TIME_SERIES) then
-        !        if (gDataType%dataSource == MODEL) then
-        !            topValue = gPlotConfig%contKESeries
-        !            units = "J/kg"
-        !        else ! TODO: Make logrithmic
-        !            ! LOGARITHMIC SCALING for RMSE
-        !            if (isHeight) then
-        !                topValue = REAL(gPlotConfig%contHghtsSeries)
-        !                units = "m"
-        !            else
-        !                topValue = REAL(gPlotConfig%contTempsSeries)
-        !                units = CHAR(176)//"C"
-        !            end if
-        !            logMax = log10(topValue)
-        !            logMin = logMax - REAL(gPlotConfig%logfloor)  ! Displays gPlotConfig%logfloor orders of magnitude (e.g., 100 to 0.001)
-        !            logRange = logMax - logMin
-        !            N = 19
-        !        endif
-        !    else if (gModIntParams%plotType == HOV_DIAG_RMSE) then
-        !        N = 10
-        !    endif
-        !    offset = 10
-        !    if (labelsOnLeft) then
-        !        X_coord = 5
-        !    else
-        !        X_coord = gBitMapInfo%width - 100
-        !    endif
-        !    ! Draw the horizontal lines for the y-axis values
-        !    do I = 1, N
-        !        Y_coord = (I - 1) * gBitMapInfo%height / (N - 1)
-        !        ! Move to the start of the line: X=0, Y=calculated height
-        !        bret = MoveToEx(gBitMapInfo%hMemDC, 0, I * gBitMapInfo%height / (N - 1), oldPoint)
-        !        ! Draw to the end of the line: X=width, Y=calculated height
-        !        bret = LineTo(gBitMapInfo%hMemDC, gBitMapInfo%width, I * gBitMapInfo%height / (N - 1))
-        !        labelText = ""
-        !        if (gModIntParams%plotType == ENERGY_TIME_SERIES .and. gDataType%dataSource /= MODEL) then
-        !            ! Back-calculate the value for the label: 
-        !            ! Mapping pixel space [0, height] back to [logMax, logMin]
-        !            logVal = logMax - (real(I - 1)/real(N - 1)) * logRange
-        !            value = 10.0**logVal
-        !            ! This 'T13' forces the units to start at the 13th character of the string
-        !            write(labelText, '(E11.4, T13, A)') value, trim(units)
-        !        else if (gModIntParams%plotType == HOV_DIAG_RMSE) then
-        !            write(labelText, '(A, I2)') "Spectral comp: ", (11 - I)
-        !        else
-        !            ! 2. Draw the label (assuming latitude is calculated based on I)
-        !            if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
-        !                value = 90. - real((I - 1)) * 90.0 / real((N - 1))
-        !            else if (gModIntParams%plotType == WEATHER_STN) then
-        !                value = topValue - real((I - 1)) * topValue * .25   ! Here the assumption is that there are N lines and the screen height is cut up
-        !                                                                    ! into N-1 sections, but the 0 value is at the center. So if the topValue is 600
-        !                                                                    ! the lower value is -600. So 600 is cut up into (N-1)/2 positive sections. For
-        !                                                                    ! N = 9 that is 4 positive and 4 negative sections. 1/4 = .25.
-        !            else if (gModIntParams%plotType == STATISTICS) then       ! Positive only. Here for N=9 that is 8 positive sections. 1/8 = .125
-        !                value = topValue - real((I - 1)) * topValue * .125
-        !            else if (gModIntParams%plotType == ENERGY_TIME_SERIES) then
-        !                value = topValue - real((I - 1)) * topValue * .125  ! Positive only
-        !            end if
-        !            ! This 'T12' forces the units to start at the 12th character of the string
-        !            write(labelText, '(F10.3, T12, A)') value, trim(units)
-        !        end if
-        !        ! TextOut(hdc, x, y, string, length)
-        !        ! Placing label at X=5 pixels from the left edge
-        !        if (I .EQ. N) offset = -15
-        !        bret = TextOut(gBitMapInfo%hMemDC, X_coord, Y_coord + offset, labelText, len_trim(labelText))
-        !    end do
-        !
-        !    ! 5. Cleanup: Restore old pen and delete the one created
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-        !    bret = DeleteObject(hAxisPen)
-        !
-        !    if (invalidate) then
-        !        ! Invalidate the window rectangle to trigger a redraw
-        !        bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-        !        bret = UpdateWindow(ghwndMain)
-        !    endif
-        !
-        !end subroutine DrawHorizontalLines
-
         !> This function gets the value of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
         !! @param  mouse_y: the y-ccordinate value of the mouse cursor
@@ -930,170 +640,12 @@ module PlotModule
         !    
         !end function getYValues
 
-        !> This subroutine labels what the current plot is.
-        !> TODO: Make a legend to show what field the colors are for the time series
-        !! @param: invalidate - when true, the screen is forced to update.
-        subroutine labelPlotsAndDisplayTime(invalidate)
-            USE IFWINTY
-            USE IFWINA
-            use ConstantsModule, only: WEATHER_MAPS, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
-                HEIGHT, TEMPERATURE, wp
-            use NlevelQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelParamsModule, only: gModIntParams
-
-            implicit none
-            
-            LOGICAL, intent(in) :: invalidate
-
-            INTEGER(BOOL) :: bret
-            integer(HANDLE) :: hOldPen, hAxisPen, hBrush
-            character(len=32) :: labelText
-            character(len=128) :: elapsedTime
-            integer(4) :: I, Y_coord, X_coord, actualBgColor, Y_temp, X_temp
-
-            ! 2. Create and select a pen (Black, 2 pixels wide)
-            if (gModIntParams%plotType == HOV_DIAG_AT_LAT .OR. gModIntParams%plotType == HOV_DIAG_AT_LONG) then
-                bret = SetTextColor(gBitMapInfo%hMemDC, RGB(60, 60, 60))
-                X_coord = 25
-            else 
-                bret = SetTextColor(gBitMapInfo%hMemDC, RGB(100, 100, 100))
-                X_coord = 200
-            endif
-            
-            ! Align text so the coordinate (x,y) is the top-left of the text
-            bret = SetTextAlign(gBitMapInfo%hMemDC, IOR(TA_LEFT, TA_TOP))
-
-            Y_coord = gBitMapInfo%height - 100
-            !if (gModIntParams%plotType == STATISTICS) then
-            !    labelText = "Running Mean Standard Deviation:"
-            !    Y_temp = Y_coord + 20
-            !    call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, STD_DEV_HEIGHT_COLOR, "Heights standard deviation")
-            !    Y_temp = Y_temp + 20 ! Step down for next item
-            !    call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, STD_DEV_TEMP_COLOR, "Temperature standard deviation")
-            !end if
-            if (gModIntParams%plotType == WEATHER_STN) then
-                labelText = "Weather Station time series:"
-                Y_temp = Y_coord + 20
-                call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, WX_STN_HEIGHT_COLOR, "Height")
-                Y_temp = Y_temp + 20 ! Step down for next item
-                call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, WX_STN_TEMP_COLOR, "Temperature")
-            endif
-            if (gModIntParams%plotType == WEATHER_MAPS) labelText = "Weather map:"
-            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) labelText = "Hovmoller diagram at Latitude:"
-            if (gModIntParams%plotType == HOV_DIAG_AT_LONG) labelText = "Hovmoller diagram at Longitude:"
-            !if (gModIntParams%plotType == HOV_DIAG_RMSE) then
-            !    if (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT) then
-            !        labelText = "RMSEM height spectrum: "
-            !    else if (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE) then
-            !        labelText = "RMSEM temperature spectrum: "
-            !    endif
-            !endif
-            if (gModIntParams%plotType == PHASE_AND_MAP .OR. gModIntParams%plotType == PHASE_SPACE) then
-                if (gModIntParams%plotType == PHASE_AND_MAP) then
-                    labelText = "Weather map and Phase Space:"
-                else
-                    labelText = "Phase Space:"
-                endif
-                Y_temp = Y_coord + 20
-                call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, PHASE_SPACE_HEIGHT_COLOR, "Height")
-                Y_temp = Y_temp + 20 ! Step down for next item
-                call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, PHASE_SPACE_TEMP_COLOR, "Temperature")
-            endif
-            !if (gModIntParams%plotType == ENERGY_TIME_SERIES) then
-            !    if (gDataType%dataSource == MODEL) then
-            !        labelText = "Energy time series:"
-            !        Y_temp = Y_coord + 20
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, KE_COLOR, "Kinetic Energy")
-            !        Y_temp = Y_temp + 20 ! Step down for next item
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, APE_COLOR, "Potential Energy")
-            !        Y_temp = Y_temp + 20 ! Step down for next item
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, TOTAL_ENERGY_COLOR, "Total Energy")
-            !
-            !    else if (gDataType%dataSource == FILE) then
-            !        labelText = "Root Mean square error:"
-            !        Y_temp = Y_coord + 20
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, RMSE_HEIGHT_COLOR, "RMSE height")
-            !        Y_temp = Y_temp + 22
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, RMSE_TEMP_COLOR, "RMSE temp")
-            !    else
-            !        labelText = "Ensemble set RMSE and spread:"
-            !        Y_temp = Y_coord + 20
-            !        X_temp = X_coord
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, RMSE_HEIGHT_COLOR, "RMSE height")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, RMSEM_HEIGHT_COLOR, "RMSEM height")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, SPRD_HEIGHT_COLOR, "SPRD height")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, BFIT_HEIGHT_COLOR, "SPRD height best-fit")
-            !        Y_temp = Y_temp + 22
-            !        X_temp = X_coord
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, RMSE_TEMP_COLOR, "RMSE temp")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, RMSEM_TEMP_COLOR, "RMSEM temp")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, SPRD_TEMP_COLOR, "SPRD temp")
-            !        X_temp = X_temp + 130
-            !        call DrawLegendItem(gBitMapInfo%hMemDC, X_temp, Y_temp, BFIT_TEMP_COLOR, "SPRD temp best-fit")
-            !
-            !        ![RGB(0, 255, 0), RGB(255, 85, 0), RGB(0, 0, 255), RGB(119, 85, 119), RGB(0, 221, 221), RGB(255, 170, 0), RGB(0, 170, 119), RGB(200, 0, 0)]
-            !    end if
-            !endif
-            if (gModIntParams%plotType == NO_PLOT) labelText = "Skipping Plot:"
-            
-            elapsedTime = ""
-            write(elapsedTime, '(A, I8, A, F7.2, A)') trim(labelText) // " Time: ", gElapsedTime%years, " yrs  ", gElapsedTime%days, " days"
-            ! Remove leading/trailing blanks if necessary
-            elapsedTime = adjustl(elapsedTime)
-            
-            actualBgColor = GetPixel(gBitMapInfo%hMemDC, X_coord, Y_coord)
-
-            ! Use that sampled color to set the DC's background color
-
-            I = SetBkColor(gBitMapInfo%hMemDC, actualBgColor) ! I is the old background color
-            bret = SetBkMode(gBitMapInfo%hMemDC, OPAQUE)
-
-            bret = TextOut(gBitMapInfo%hMemDC, X_coord, Y_coord, elapsedTime, len_trim(elapsedTime))
-            if (invalidate) then
-                bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-                bret = UpdateWindow(ghwndMain)
-            endif
-
-        end subroutine labelPlotsAndDisplayTime
-        
-        subroutine DrawLegendItem(hdc, x, y, color, label)
-            USE IFWINTY
-            USE IFWINA
-            implicit none
-
-            integer(HANDLE), intent(in) :: hdc
-            integer, intent(in) :: x, y, color
-            character(len=*), intent(in) :: label
-
-            integer(HANDLE) :: hBrush, hOldBrush
-            integer(BOOL) :: bret
-
-            ! 1. Draw the colored box
-            hBrush = CreateSolidBrush(color)
-            hOldBrush = SelectObject(hdc, hBrush)
-            ! Draws a 15x10 pixel color swatch
-            bret = Rectangle(hdc, x, y + 2, x + 15, y + 12) 
-    
-            ! 2. Draw the text label next to the box
-            bret = TextOut(hdc, x + 20, y, trim(label), len_trim(label))
-
-            ! Clean up
-            bret = SelectObject(hdc, hOldBrush)
-            bret = DeleteObject(hBrush)
-        end subroutine DrawLegendItem
-
         subroutine ClearScreen()
             USE IFWINTY
             USE GDI32
             USE USER32
             use IFWBASE ! Contains RGB macro
-            use NlevelQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ConstantsModule, only: WEATHER_MAPS, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
                 HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
                 HEIGHT, TEMPERATURE, wp
@@ -1162,6 +714,7 @@ module PlotModule
 
         end subroutine ClearScreen
 
+        ! Clears the time series buffers
         subroutine clearBuffer(timeSeriesBuf)
             implicit none
 
@@ -1172,141 +725,119 @@ module PlotModule
             timeSeriesBuf%head_idx = 0.
             timeSeriesBuf%count = 0
         end subroutine clearBuffer
-        !
-        !subroutine initializePlot()
-        !    use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, SPECTRAL_DISTRIBUTION, HEIGHT, TEMPERATURE
-        !    IMPLICIT NONE
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !    
-        !    if (gModIntParams%plotType == PHASE_SPACE .OR. gModIntParams%plotType == SPECTRAL_DISTRIBUTION) call DrawCartesianAxes(.true.)
-        !    if (gModIntParams%plotType == WEATHER_STN) then
-        !        call DrawHorizontalLines(.true., .true., usesHeight, #00323232)
-        !        call DrawHorizontalLines(.true., .true., usesTemperature, #00323232)
-        !    endif
-        !    if (gModIntParams%plotType == HOV_DIAG_AT_LAT) call DrawVerticalLines(.true.)
-        !    if (gModIntParams%plotType == HOV_DIAG_AT_LONG) call DrawHorizontalLines(.true., .true., .false., #00323232) ! isHeight is not used
-        !    if (gModIntParams%plotType == PHASE_AND_MAP) then 
-        !        call DrawCartesianAxes(.false.)
-        !        call DrawGridLines(.true.)
-        !    endif
-        !
-        !end subroutine initializePlot
 
-        !subroutine plotPhaseSpace(Y, invalidate, option)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, PHASE_AND_MAP, wp
-        !    use ModelTypesModule, only: scaleHeights, scaleTemps, sqrt2
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !
-        !    USE IFWINTY
-        !    USE GDI32
-        !    USE USER32
-        !    USE IFWBASE ! For RGB
-        !    USE, INTRINSIC :: ISO_C_BINDING
-        !
-        !    ! Windows (0,0) is the top-left corner and the range is 
-        !
-        !    IMPLICIT NONE
-        !
-        !    real(wp), intent(in) :: Y(:)
-        !    LOGICAL, intent(in) :: invalidate
-        !    integer, intent(in) :: option
-        !
-        !    INTEGER ::      x_pix, y_pix, iret
-        !    integer ::      prev_xh = 0, prev_yh = 0, prev_xt = 0, prev_yt = 0, x_center, y_center
-        !    save  prev_xh, prev_yh, prev_xt, prev_yt
-        !    REAL ::         xc, yc, scale, facx, facy
-        !    TYPE(T_RECT) :: rect
-        !    INTEGER(4), POINTER :: pixelArray(:, :)
-        !    integer(4) :: colorLead, color
-        !
-        !    facx = 2.0
-        !    facy = 2.0
-        !    if (gPlotConfig%phaseSpaceXaxis == 1 .OR. &
-        !        gPlotConfig%phaseSpaceXaxis == 4) facx = sqrt2
-        !    if (gPlotConfig%phaseSpaceYaxis == 1 .OR. &
-        !        gPlotConfig%phaseSpaceYaxis == 4) facy = sqrt2
-        !    if (option == HEIGHT) then
-        !        if (gPlotConfig%phaseSpaceXaxis < 11) Xc = facx * REAL(Y(gPlotConfig%phaseSpaceXaxis) * scaleHeights)
-        !        if (gPlotConfig%phaseSpaceYaxis < 11) Yc = facy * REAL(Y(gPlotConfig%phaseSpaceYaxis) * scaleHeights)
-        !    else if (option == TEMPERATURE) then
-        !        if (gPlotConfig%phaseSpaceXaxis < 11) Xc = facx * REAL(Y(gPlotConfig%phaseSpaceXaxis + 10) * scaleTemps)
-        !        if (gPlotConfig%phaseSpaceYaxis < 11) Yc = facy * REAL(Y(gPlotConfig%phaseSpaceYaxis + 10) * scaleTemps)
-        !    end if
-        !    ! Special surface flow case
-        !    if (gPlotConfig%phaseSpaceXaxis == 11) Xc = sqrt2 * REAL(Y(1) - Y(11)) * scaleHeights
-        !    if (gPlotConfig%phaseSpaceYaxis == 11) Yc = sqrt2 * REAL(Y(1) - Y(11)) * scaleHeights
-        !
-        !    ! Assume axes range from - range to + range in the smallest dimension
-        !    if (option == HEIGHT) then
-        !        scale = REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / REAL(2 * gPlotConfig%contHghtsSeries)
-        !    else if (option == TEMPERATURE) then
-        !        scale = REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / REAL(2 * gPlotConfig%contTempsSeries)
-        !    endif
-        !
-        !    x_center = gBitMapInfo%width / 2
-        !    y_center = gBitMapInfo%height / 2
-        !    if (gModIntParams%plotType == PHASE_AND_MAP) then
-        !        x_center = 3 * gBitMapInfo%width / 4
-        !        y_center = 3 * gBitMapInfo%height / 4
-        !        scale = scale / 2.0
-        !    endif
-        !    x_pix = x_center  + INT(xc * scale)
-        !    y_pix = y_center - INT(yc * scale)
-        !
-        !    ! Maps pixelArray to the DIBSection
-        !    CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
-        !    ! 3. Draw the pixel
-        !    if (option == HEIGHT) then
-        !        colorLead = PHASE_SPACE_LEAD_HEIGHT_COLOR
-        !        
-        !        !! The events here are a little CONFUSING!!!
-        !        !! NOTE that the color specified here is for the TEMPERATURE and not the heights. That is because we have
-        !        !! two passes to plot a phase space point AND a lead color. So what gets plotted in the first pass is the lead color
-        !        !! for the current field and the position of the lead color of the previous call gets plotted with the color for the
-        !        !! other field.
-        !        !! Lets get concrete. On the first call with a new plot (prev_xh, prev_yh) are both 0. THese are 'saved' variables.
-        !        !! So if it is for a height plot, what will get drawn into the pixelArray (the DIB section) is the color of the OTHER
-        !        !! field (temperature) at (prev_xh + 1, prev_yh + 1), the + 1 because win32 is 0-based and fortran is 1-based. Then the 
-        !        !! current position (x_pix, y_pix) is saved into (prev_xh, prev_yh) and the lead color for heights is drawn at the current
-        !        !! position. That's it for this pass.
-        !        !! On the next pass (temperature), the point (prev_xh + 1, prev_yh + 1) will be set to the color of the OTHER field, in this
-        !        !! case heights. That will overwrite the lead color previously plotted. The sequence continues as above and the temperature
-        !        !! lead color is drawn at the current position.
-        !        !! So for the height sequence, the lead height color is drawn at the current position and lead temperature color is replaced
-        !        !! with the temperature color at the saved position. Vice versa for the temperature sequence. 
-        !        !! We would not need this weird sequencing if we did not have a lead color!
-        !
-        !        color = PHASE_SPACE_TEMP_COLOR
-        !        pixelArray(prev_xh + 1, prev_yh + 1) = color
-        !        if (x_pix < 0) x_pix = 0
-        !        if (y_pix < 0) y_pix = 0
-        !        if (x_pix >= gBitMapInfo%width) x_pix = gBitMapInfo%width - 1
-        !        if (y_pix >= gBitMapInfo%height) y_pix = gBitMapInfo%height - 1
-        !        prev_xh = x_pix
-        !        prev_yh = y_pix
-        !    else if (option == TEMPERATURE) then
-        !        colorLead = PHASE_SPACE_LEAD_TEMP_COLOR
-        !        color = PHASE_SPACE_HEIGHT_COLOR
-        !        pixelArray(prev_xt + 1, prev_yt + 1) = color
-        !        if (x_pix < 0) x_pix = 0
-        !        if (y_pix < 0) y_pix = 0
-        !        if (x_pix >= gBitMapInfo%width) x_pix = gBitMapInfo%width - 1
-        !        if (y_pix >= gBitMapInfo%height) y_pix = gBitMapInfo%height - 1
-        !        prev_xt = x_pix
-        !        prev_yt = y_pix
-        !    endif
-        !    pixelArray(x_pix + 1, y_pix + 1) = colorLead
-        !    if (invalidate) then
-        !        iret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
-        !        iret = UpdateWindow(ghwndMain)
-        !    endif
-        !
-        !end subroutine plotPhaseSpace
+
+        ! Helper to point to the arrays containing the user-selected field to  plot
+        subroutine loadFields(ptr, field, level)
+            use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
+                OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
+                OROG_HGT_TEND, OROGRAPHY
+
+            use ModelFieldsModule, only: gHorzArr
+            
+            implicit none
+            
+            real, pointer, intent(out) :: ptr(:)
+            integer, intent(in)        :: field
+            integer, intent(in)        :: level
+
+            select case (field)
+                case(VORTICITY)             ! Vorticity in 10**-5/s
+                    ptr => gHorzArr%PS(:, level)      ! PS is the streamfunction spectral components
+
+                case(HEIGHT)                ! Height in meters
+                    ptr => gHorzArr%PS(:, level)      ! PS is the streamfunction spectral components
+
+                case(TEMPERATURE)           ! Temperature in Centigrade
+                    ptr => gHorzArr%TH(:, level)      ! TH(ITOT,maxLevels) is the temperature spectral components
+
+                case(VERTICAL_WIND)         ! Vertical wind in mb/hr or mm/sec
+                    ptr => gHorzArr%WW(:, level)      ! WW(ITOT,maxLevels) is the omega spectral components
+                    
+                case(TEMP_FORCING)          ! Temperature driving (forcing) - Radiative relaxation temperature in Centigrade
+                    ptr => gHorzArr%TF(:, level)      ! TF(ITOT,maxLevels) is the thermal forcing field
+
+                case(TOT_HGT_TEND)          ! Total Height tendency in meters/day
+                    ptr => gHorzArr%FS(:, level)      ! FS(ITOT,maxLevels) is the total streamfunction tendency
+
+                case(ADV_BETA_HGT_TEND)     ! Height tendencies in m/day from Advection plus beta
+                    ptr => gHorzArr%ADS(:, level)     ! ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+
+                case(OMEGA_HGT_TEND)        ! Height tendencies in m/day from omega (dp/dt)
+                    ptr => gHorzArr%WS(:, level)      ! WS(ITOT,maxLevels) is the omega forcing on the streamfunction
+
+                case(DIABATIC_HGT_TEND)     ! Height tendencies in m/day from Diabatic effects (like dissipation)
+                    ptr => gHorzArr%S(:, level)       ! S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
+
+                case(TOT_TEMP_TEND)         ! Total temperture tendencies in C/day
+                    ptr => gHorzArr%FT(:, level)      ! FT(ITOT,maxLevels) is the temperature tendency
+
+                case(ADV_TEMP_TEND)         ! Temperature tendencies in C/day from advection
+                    ptr => gHorzArr%ADT(:, level)     ! ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+
+                case(OMEGA_TEMP_TEND)       ! Temperature tendencies in C/day from omega
+                    ptr => gHorzArr%WT(:, level)      ! WT(ITOT,maxLevels) is the omega forcing on the temperature
+
+                case(DIABATIC_TEMP_TEND)    ! Temperature tendencies in C/day from Diabatic effects
+                    ptr => gHorzArr%T(:, level)       ! T(ITOT,maxLevels) is the diabatic forcing on the temperature
+
+                case(HGT_FORCING)           ! Mean streamfunction (height) forcing in m
+                    ptr => gHorzArr%SF(:, level)      ! SF(ITOT,maxLevels) is the Barotropic momentum forcing field
+                    
+                case(OROG_HGT_TEND)         ! Height tendencies from ororgraphy in m/day
+
+            end select
+        end subroutine loadFields
+
+
+        subroutine plotPhaseSpace(phaseSpaceType, invalidate)
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+
+            USE IFWINTY
+            USE GDI32
+            USE USER32
+            USE IFWBASE ! For RGB
+            USE, INTRINSIC :: ISO_C_BINDING
+
+            ! Windows (0,0) is the top-left corner and the range is 
+
+            IMPLICIT NONE
+
+            type(PhaseSpace), intent(inout) :: phaseSpaceType
+            LOGICAL, intent(in) :: invalidate
+
+            INTEGER ::      x_pix, y_pix, iret
+            integer ::      prev_xh = 0, prev_yh = 0, prev_xt = 0, prev_yt = 0, x_center, y_center
+            save  prev_xh, prev_yh, prev_xt, prev_yt
+            REAL ::         xc, yc, scale, facx, facy
+            TYPE(T_RECT) :: rect
+            INTEGER(4), POINTER :: pixelArray(:, :)
+            integer(4) :: colorLead, color
+            
+            xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
+            yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
+
+            x_pix = phaseSpaceType%xcenter  + INT(xc)   ! Note screen coordinates are 0-based.
+            y_pix = phaseSpaceType%ycenter - INT(yc)
+            if (x_pix < 0) x_pix = 0
+            if (y_pix < 0) y_pix = 0
+            if (x_pix >= gBitMapInfo%width) x_pix = gBitMapInfo%width - 1
+            if (y_pix >= gBitMapInfo%height) y_pix = gBitMapInfo%height - 1
+            ! Maps pixelArray to the DIBSection
+            CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
+            ! 3. Draw the lead pixel
+            pixelArray(x_pix + 1, y_pix + 1) = phaseSpaceType%colorLead
+            ! 4. Draw the previous pixel
+            pixelArray(phaseSpaceType%prev_x + 1, phaseSpaceType%prev_y + 1) = phaseSpaceType%color
+            ! 5. Set the previous pixel to the current pixel
+            phaseSpaceType%prev_x = x_pix
+            phaseSpaceType%prev_y = y_pix
+            if (invalidate) then
+                iret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
+                iret = UpdateWindow(ghwndMain)
+            endif
+
+        end subroutine plotPhaseSpace
 
         !> This routine plots the time series of a 'weather station' at a selected lat/lon
         !> coordinate. It computes the value from the spectral coefficients times the associated
@@ -1324,21 +855,21 @@ module PlotModule
         !    real(wp), intent(in) :: Y(:)
         !
         !    ! --- Variable Declarations ---
-        !    REAL :: VALUE, VALUET, RLON, RLAT, scale, scalet, radx, rady, U, V, rn, wind_dir
+        !    REAL :: VALUE, VALUET, hovLon, hovLat, scale, scalet, radx, rady, U, V, rn, wind_dir
         !
         !    real :: mask(10), s_y, s_2y, c_y, c_2y
         !    real :: s_x, c_x, s_2x, c_2x
         !    LOGICAL :: usesHeight, usesTemperature
         !
-        !    RLON = REAL(gPlotConfig%stn_longitude)
-        !    RLAT = REAL(gPlotConfig%stn_latitude)
+        !    hovLon = REAL(gPlotConfig%stn_longitude)
+        !    hovLat = REAL(gPlotConfig%stn_latitude)
         !    !if (gPlotConfig%field == HEIGHT)
         !    scale = gBitMapInfo%Height / REAL(2 * gPlotConfig%contHghtsSeries)
         !    !if (gPlotConfig%field == TEMPERATURE)
         !    scalet = gBitMapInfo%Height / REAL(2 * gPlotConfig%contTempsSeries)
         !    rn = real(gModRealParams%RN)
-        !    radx = RLON * PI / 180.
-        !    rady = RLAT * PI / 90.
+        !    radx = hovLon * PI / 180.
+        !    rady = hovLat * PI / 90.
         !
         !    ! 1. Pre-calculate trig ONCE
         !    s_x = SIN(radx)

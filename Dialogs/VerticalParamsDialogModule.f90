@@ -23,7 +23,7 @@ module VerticalParamsDialogModule
             use ifwinty
             use ifwin
 
-            use NlevelQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
+            use NLevQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
             use ConstantsModule, only: REAL_TO_ASCII

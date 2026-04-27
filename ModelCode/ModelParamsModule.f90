@@ -58,14 +58,14 @@ module ModelParamsModule
         REAL :: DELT    !  DELT is the length of the time step
         
         ! Graphics
-        REAL :: ZHGT    !  ZHGT is the height of the model to be displayed in the first map
-        REAL :: ZHGT2   !  ZHGT2 is the height of the model to be displayed in the second map overlay       
-        REAL :: ZHGT3   !  ZHGT3 is the height of the model to be displayed in the third map overlay
-        REAL :: RLAT    !  RLAT is the latitude of the Hovmoller and vertical structure cross section plot     
-        REAL :: RLON    !  RLON is the longitude of the Hovmoller and vertical structure cross section plot
-        REAL :: XPOS    !  XPOS,YPOS is the position of the selected point in the model
-        REAL :: YPOS    !   for plots of data like weather station plots
-        REAL :: BOT     !  BOT,TPP is the pressure range to be displayed in coross section sections
+        REAL :: field1Level !  field1Level is the height of the model to be displayed in the first map
+        REAL :: field2Level !  field2Level is the height of the model to be displayed in the second map overlay       
+        REAL :: field3Level !  field3Level is the height of the model to be displayed in the third map overlay
+        REAL :: hovLat      !  hovLat is the latitude of the Hovmoller and vertical structure cross section plot     
+        REAL :: hovLon      !  hovLon is the longitude of the Hovmoller and vertical structure cross section plot
+        REAL :: lonXPoint   !  lonXPoint,latYPoint is the position of ae selected (longitude, latitude) point in
+        REAL :: latYPoint   !  the model for plots of data like the weather station
+        REAL :: BOT     !  BOT,TPP is the pressure range to be displayed in cross section sections
         REAL :: TPP
 
         ! model (not graphics) related
@@ -80,38 +80,40 @@ module ModelParamsModule
         REAL :: EFOLD
     END TYPE ModelRealParams
 
-    type :: ModelIntParams  ! originally from ICN(1-29) equivalence in NPARAM.f90
-        integer :: KMAX2    ! The current maximum number of zonal waves in the model (may be <= Settings%maxZonalWaves)
-        integer :: LMAX2    ! The current maximum number of meridional waves in the model (may be <= Settings%maxMeridWaves)
-        integer :: NLEV     ! NLEV is the current number of vertical levels in the model (may be <= Settings%maxLevels)
-        integer :: ICYC     ! ICYC is the number of cycles to run the model for
-        integer :: ISTEP    ! ISTEP is the number of steps to run the model for in each cycle
+    type :: ModelIntParams      ! originally from ICN(1-29) equivalence in NPARAM.f90
+        integer :: KMAX2        ! The current maximum number of zonal waves in the model (may be <= Settings%maxZonalWaves)
+        integer :: LMAX2        ! The current maximum number of meridional waves in the model (may be <= Settings%maxMeridWaves)
+        integer :: NLEV         ! NLEV is the current number of vertical levels in the model (may be <= Settings%maxLevels)
+        integer :: ICYC         ! ICYC is the number of cycles to run the model for
+        integer :: ISTEP        ! ISTEP is the number of steps to run the model for in each cycle
         integer :: outputInterval     ! outputInterval is the number of steps between model outputs
-        integer :: plotType    ! plotType is the type of output to display (horizontal maps, hovmoller, vertical cross sections, etc)
-        integer :: field1    ! field1 is the first plot field overlay to display (e.g. vorticity, height, temperature, etc)
-        integer :: field2    ! field2 is the second plot field overlay to display (e.g. vorticity, height, temperature, etc)
-        integer :: IPLT3    ! IPLT3 is the third plot field overlay to display (e.g. vorticity, height, temperature, etc)
-        integer :: JX       ! JX is the zonal wavenumber to plot in graphs)
-        integer :: JY       ! JY is the meridional wavenumber to plot in graphs
-        integer :: LEVP     ! LEVP is the level to plot in graphs (JX, JY, and LEVP together determine the where the given field is being plotted))
-        integer :: NUMBX    ! NUMBX is the number of (2-d) maps to plot in the x-direction on the screen
-        integer :: NUMBY    ! NUMBY is the number of (2-d) maps to plot in the y-direction on the screen
+        integer :: plotType     ! plotType is the type of output to display (horizontal maps, hovmoller, vertical cross sections, etc)
+        integer :: field1       ! field1 is the first plot field overlay to display (e.g. vorticity, height, temperature, etc)
+        integer :: field2       ! field2 is the second plot field overlay to display (e.g. vorticity, height, temperature, etc)
+        integer :: field3       ! field3 is the third plot field overlay to display (e.g. vorticity, height, temperature, etc)
+        integer :: zonalWaveNumber  ! zonalWavenumber is the zonal wavenumber to plot in graphs OR the zonal wavenumber of the 
+                                    ! component to plot along the x-axis of phase space
+        integer :: meridWavenumber  ! meridWavenumber is the meridional wavenumber to plot in graphs OR the meridional wavenumber
+                                    ! of the component to plot along the x-axis of phase space
+        integer :: LEVP         ! LEVP is the level to plot in graphs and phase space
+        integer :: sinZonal     ! sinZonal is the zonal wavenumber of the component to plot along the y-axis of phase space
+        integer :: sinMerid     ! sinMerid is the meridional wavenumber of the component to plot along the y-axis of phase space
         integer :: modelType    ! Model type (1 = standard  2 = GQ initial value model (zonal fields held constant))
-        integer :: JX0      ! JX0 is the lower range of the zonal wavenumbers being displayed in the two-d plots
-        integer :: JY0      ! JY0 is the lower range of the meridional wavenumbers being displayed in the two-d plots
-        integer :: JX1      ! JX1 is the upper range of the zonal wavenumbers being displayed in the two-d plots
-        integer :: JY1      ! JY1 is the upper range of the meridional wavenumbers being displayed in the two-d plots
-        integer :: IV1      ! Parameter 1 to take the variance of 
-        integer :: IV2      ! Parameter 2 to take the variance of
-        integer :: IPRM1    ! Believe that this is a model parameter to increment in the sensitivity runs
-        integer :: IPRM2    ! Believe that this is a model parameter to increment in the sensitivity runs
-        integer :: ITER1    ! This is the number of iterations to make of parameter 1 in sensitivity runs
-        integer :: ITER2    ! This is the number of iterations to make of parameter 2 in sensitivity runs
-                            ! If both ITER1 and ITER2 are set to 1, then there is only one run.
+        integer :: JX0          ! JX0 is the lower range of the zonal wavenumbers being displayed in the two-d plots
+        integer :: JY0          ! JY0 is the lower range of the meridional wavenumbers being displayed in the two-d plots
+        integer :: JX1          ! JX1 is the upper range of the zonal wavenumbers being displayed in the two-d plots
+        integer :: JY1          ! JY1 is the upper range of the meridional wavenumbers being displayed in the two-d plots
+        integer :: IV1          ! Parameter 1 to take the variance of 
+        integer :: IV2          ! Parameter 2 to take the variance of
+        integer :: IPRM1        ! Believe that this is a model parameter to increment in the sensitivity runs
+        integer :: IPRM2        ! Believe that this is a model parameter to increment in the sensitivity runs
+        integer :: ITER1        ! This is the number of iterations to make of parameter 1 in sensitivity runs
+        integer :: ITER2        ! This is the number of iterations to make of parameter 2 in sensitivity runs
+                                ! If both ITER1 and ITER2 are set to 1, then there is only one run.
         integer :: KMODE
         integer :: LMODE
         integer :: IADD
-        integer :: MP(20) ! MP is the array of previous plot parameters
+        integer :: MP(20)   ! MP is the array of previous plot parameters
         integer :: JHOV     ! JHOV indicates whether a multiple-line time series graph shall be plotted as a 'sideways' hovmoller
                             ! For example, an n-level time series of a wave component amplitude can be plotted as N lines or
                             ! interpolated into a Hovmoller so all the values between each line are displayed.
@@ -170,8 +172,8 @@ module ModelParamsModule
     type :: PlotControls
         integer :: activePlotMap    ! Three possible fields can be displayed on a map. The 'active' one is the field that can
                                     ! be changed by the user with the 'field' key. The other two are inactive and will not change
-                                    ! These fields are given by field1, field2, IPLT3
-                                    ! 1 = field1 is active, 2 = field2 is active, 3 = IPLT3 is active 
+                                    ! These fields are given by field1, field2, field3
+                                    ! 1 = field1 is active, 2 = field2 is active, 3 = field3 is active 
         integer :: togglePlotDir    ! Sets toggle direction for graphics display selections. There are toggles that change level,
                                     ! wavenumber, etc. and this determines if the toggle goes up (set to 1) or down (set to zero)
         integer :: plotTempType     ! Indicates what type of temperature is displayed, standard or potential. Takes on two values
@@ -220,7 +222,7 @@ module ModelParamsModule
             use ConstantsModule, only: CORIOLIS, CORIOLIS_INVERSE, SECONDS_PER_DAY, PI, CHANNEL_WIDTH, GRAVITY, &
                    VORTICITY, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                    OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, &
-                   HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, NO_PLOT, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
+                   HGT_FORCING, OROG_HGT_TEND, OROGRAPHY, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, &
                    MEAN_TEMP_TEND_GRAF, HGT_WAVE_SPEED_GRAF, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, AMPLITUDE_RATIO_GRAF
 
             implicit none
@@ -277,7 +279,7 @@ module ModelParamsModule
             !---------------------------Orographic heights in meters (depends upon DP(1)):
             gPlotScales(OROGRAPHY) = 1.
             !---------------------------No Plot:
-            gPlotScales(NO_PLOT) = 1.
+            gPlotScales(PLOTTING_OFF) = 1.
             !------------------------------------Height tendencies for balance of forces
             gPlotScales(TOT_HGT_TEND_GRAF) = gPlotScales(TOT_HGT_TEND)
             !------------------------------------Temp tendencies for balance of forces

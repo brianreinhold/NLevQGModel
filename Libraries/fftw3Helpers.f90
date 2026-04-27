@@ -124,7 +124,7 @@ module Fftw3HelpersModule
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-            use NlevelQGModelGlobals, only: LogMessage
+            use NLevQGModelGlobals, only: LogMessage
 
             implicit none
 
@@ -291,7 +291,7 @@ module Fftw3HelpersModule
         subroutine logZonal(str)
             use ArrayDimensionsModule
             use ModelFieldsModule, only: gHorzArr
-            use NlevelQGModelGlobals, only: LogMessage
+            use NLevQGModelGlobals, only: LogMessage
             implicit none
             
             CHARacter(len=*), intent(in) :: str

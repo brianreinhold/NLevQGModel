@@ -23,7 +23,7 @@ module SettingsDialogModule
             use ifwinty
             use ifwin
 
-            use NlevelQGModelGlobals, only: ghInstance, ghModelControlDlg, ghwndMain, ghSettingsDlg, LogMessage, CenterWindow
+            use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghwndMain, ghSettingsDlg, LogMessage, CenterWindow
             use iso_c_binding
 
             use DialogHelpersModule, only: GetComboIndex, &

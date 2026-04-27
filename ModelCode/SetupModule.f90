@@ -68,7 +68,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: MAP_OVERLAY_1, POTENTIAL_TEMP, OMEGA, INVALID
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, &
                 gNLevFile, gPlotControls, gSensFile, initConstants
-            use NlevelQGModelGlobals, only: LogMessage, ghwndMain    ! For logging
+            use NLevQGModelGlobals, only: LogMessage, ghwndMain    ! For logging
             use ArrayDimensionsModule, only: gArrayDims, gCurrentDims
             use ModelFieldsModule, only: createHorzArr
             use Fftw3HelpersModule, only: setup_fftw_plans
@@ -91,7 +91,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !---------------------------Set active variable to first
             gPlotControls%activePlotMap = MAP_OVERLAY_1   ! Three possible fields can be displayed on a map. The 'active' one is the field that can
                                             ! be changed by the user with the 'field' key. The other two are inactive and will not change
-                                            ! These fields are given by gModIntParams%field1, field2, IPLT3
+                                            ! These fields are given by gModIntParams%field1, field2, field3
             !---------------------------Set toggle direction for graphics display selections to plus
             gPlotControls%togglePlotDir = 1
             !---------------------------Set temperature view to Potential temperature:
@@ -201,7 +201,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         !> **************************************************** SaveModelState
         function SaveModelState(fileData, deallocateFields) result(errorCode)
-            use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            use NLevQGModelGlobals, only: LogMessage    ! For logging
             use ModelParamsModule, only: FileStruct
             use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
             
@@ -239,7 +239,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         function ReadSaveFile(fileData) result(errorCode)
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gUserSettingsPrev, FileStruct
             use ModelFieldsModule, only: gVertArr
-            use NlevelQGModelGlobals, only: LogMessage
+            use NLevQGModelGlobals, only: LogMessage
             use kernel32            ! For windows system calls like GetLastError
             use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
 
@@ -313,8 +313,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to read from.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function ReadFileHeader(fileHandle) result(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gUserSettingsPrev
-            use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams, gUserSettingsPrev
+            use NLevQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
 
@@ -328,7 +328,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             REWIND(fileHandle)
 
             ! Read header
-            READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams
+            READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
+                gModSensParams, gModScalingParams
             if (errorCode .NE. 0) then
                 call LogMessage('File Header could not be read. Error message: '// errorMsg // ' Will need to invoke defaults ')
                 return
@@ -351,7 +352,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         FUNCTION ReadFileData(fileHandle) RESULT(errorCode)
             use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
             use InteractionCoefficientsModule, only: gCintArr
-            !use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            !use NLevQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
 
@@ -399,7 +400,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function WriteSensFileHeader(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams
             use ModelFieldsModule, only: gVertArr
             
             implicit none
@@ -412,7 +413,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             CHARACTER(LEN = 256) :: errorMsg
 
             ! Write data
-            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams
+            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
+                gModSensParams, gModScalingParams
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
                   gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
@@ -427,10 +429,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         FUNCTION WriteFileData(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams
             use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
             use InteractionCoefficientsModule, only: gCintArr
-            !use NlevelQGModelGlobals, only: LogMessage    ! For logging
+            !use NLevQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
 
@@ -449,7 +451,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             MIRI = 2147483647
 
             ! Write header data
-            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams
+            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, &
+                gModPlotParams, gModSensParams, gModScalingParams
             ! Write model arrays (since they are allocatable, we need to write each array indivually and not just the type gVertArr, etc.)
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
@@ -672,12 +675,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%JY0 .LT. 1) gModIntParams%JY0 = 1
 
             !------------------------------------------Wavenumber, level bounds
-            if(gModIntParams%JX .GT. gModIntParams%KMAX2) gModIntParams%JX = gModIntParams%KMAX2
-            if(gModIntParams%JY .GT. gModIntParams%LMAX2) gModIntParams%JY = gModIntParams%LMAX2
+            if(gModIntParams%zonalWavenumber .GT. gModIntParams%KMAX2) gModIntParams%zonalWavenumber = gModIntParams%KMAX2
+            if(gModIntParams%meridWavenumber .GT. gModIntParams%LMAX2) gModIntParams%meridWavenumber = gModIntParams%LMAX2
             if(gModIntParams%LEVP .GT. gModIntParams%NLEV) gModIntParams%LEVP = gModIntParams%NLEV
 
-            if(gModIntParams%JX .LT. -1) gModIntParams%JX = -1
-            if(gModIntParams%JY .LT. 0) gModIntParams%JY = 0
+            if(gModIntParams%zonalWavenumber .LT. 0) gModIntParams%zonalWavenumber = 0
+            if(gModIntParams%meridWavenumber .LT. 1) gModIntParams%meridWavenumber = 1
             if(gModIntParams%LEVP .LT. 0) gModIntParams%LEVP = 0
 
             !-------------------------------------------Field or variable type ranges
@@ -688,15 +691,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%field1 .LE. 0) gModIntParams%field1 = I2
             IF(gModIntParams%field1 .GT. I2) gModIntParams%field1 = VORTICITY
 
-            !---------------------------------------------field2,IPLT3:
+            !---------------------------------------------field2,field3:
             IF(gModIntParams%field2 .GT. NO_PLOT) gModIntParams%field2 = VORTICITY
-            IF(gModIntParams%IPLT3 .GT. NO_PLOT) gModIntParams%IPLT3 = VORTICITY
+            IF(gModIntParams%field3 .GT. NO_PLOT) gModIntParams%field3 = VORTICITY
             IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = NO_PLOT
-            IF(gModIntParams%IPLT3 .LT. VORTICITY) gModIntParams%IPLT3 = NO_PLOT
+            IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = NO_PLOT
 
-            !---------------------------------------------NUMBX, NUMBY:
-            IF(gModIntParams%NUMBX .LT. 1) gModIntParams%NUMBX = 1
-            IF(gModIntParams%NUMBY .LT. 1) gModIntParams%NUMBY = 1
+            !---------------------------------------------sinZonal, sinMerid:
+            IF(gModIntParams%sinZonal .LT. 0) gModIntParams%sinZonal = 0
+            IF(gModIntParams%sinMerid .LT. 1) gModIntParams%sinMerid = 1
 
             !---------------------------------------------JX0,JX1:
             IF(gModIntParams%JX0 .GT. gModIntParams%KMAX2) gModIntParams%JX0 = gModIntParams%KMAX2
@@ -1131,7 +1134,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> fields.
         SUBROUTINE SetDefaults()
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
-                OROG_HGT_TEND, HGT_FORCING, NO_PLOT, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
+                OROG_HGT_TEND, HGT_FORCING, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
@@ -1152,9 +1155,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  BETA is the beta parameter
         !  RN is the horizontal aspect ratio (channel zonal length / channel width)
         !  DELT is the length of the time step
-        !  ZHGT is the height of the model to be displayed
-        !  RLAT is the latitude of the Hovmoller and vertical structure plot
-        !  XPOS,YPOS is the position of the selected point in the model
+        !  field1Level is the height of the model to be displayed
+        !  hovLat is the latitude of the Hovmoller and vertical structure plot
+        !  lonXPoint,latYPoint is the position of the selected point in the model
         !  BOT,TPP is the pressure range to be displayed in X sections
         !  CONV is a convergence test for equilibrated solutions
         !  SPINUP is a spinup time toss amount for SENSIV runs
@@ -1166,28 +1169,28 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! IF(RN.GT.0.)RN=gScaleFactors%longestWave/RN
             ! DELT=DELT*gScaleFactors%timeScale
             ! BETA=4.*BETA
-            ! XPOS=XPOS*RAD_TO_DEGREES
-            ! YPOS=YPOS*RAD_TO_DEGREES
+            ! lonXPoint=lonXPoint*RAD_TO_DEGREES
+            ! latYPoint=latYPoint*RAD_TO_DEGREES
             ! Non dimensionalize
             ! RN=gScaleFactors%longestWave/RN
             !--------------------------------Recompute interactions if needed:
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
             ! DELT=DELT/gScaleFactors%timeScale
             ! BETA=BETA/4.
-            ! XPOS=XPOS/RAD_TO_DEGREES
-            ! YPOS=YPOS/RAD_TO_DEGREES
+            ! lonXPoint=lonXPoint/RAD_TO_DEGREES
+            ! latYPoint=latYPoint/RAD_TO_DEGREES
         !-------------------------------------------------Set user default parameters:
             gModRealParams%isDimensionalized = .FALSE.
             gModRealParams%RN = gScaleFactors%longestWave/28000.
             gModRealParams%BETA = .25
             gModRealParams%DELT = 90./gScaleFactors%timeScale
-            gModRealParams%ZHGT = 900.
-            gModRealParams%ZHGT2 = 950.
-            gModRealParams%ZHGT3 = 500.
-            gModRealParams%RLAT = PI/4.
-            gModRealParams%RLON = 0.
-            gModRealParams%XPOS = 0.
-            gModRealParams%YPOS = PI/4.
+            gModRealParams%field1Level = 900.
+            gModRealParams%field2Level = 950.
+            gModRealParams%field3Level = 500.
+            gModRealParams%hovLat = PI/4.
+            gModRealParams%hovLon = 0.
+            gModRealParams%lonXPoint = 0.
+            gModRealParams%latYPoint = PI/4.
             gModRealParams%BOT = 1000.
             gModRealParams%TPP = 0.
             gModRealParams%CONV = 0.
@@ -1218,7 +1221,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / gPlotScales(OROG_HGT_TEND)
             gModScalingParams%VR(OROGRAPHY) = 100.0 / (90.0 * 11.0)
             gModScalingParams%VR(HGT_FORCING) = 60.0 / gPlotScales(HGT_FORCING)
-            gModScalingParams%VR(NO_PLOT) = 1.0 / gPlotScales(NO_PLOT)
+            gModScalingParams%VR(PLOTTING_OFF) = 1.0 / gPlotScales(PLOTTING_OFF)
         !------------------------------Graphs only forces:
             gModScalingParams%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
             gModScalingParams%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
@@ -1242,8 +1245,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  outputInterval is the number of time steps between outputs
         !  plotType is the type of plot
         !  field1,field2 the quantity to plot to the graphic screen
-        !  JX and JY are the wave#s of quant to plot to phase space/time series diagram
-        !  NUMBX,NUMBY are the number of maps in the x, y directions
+        !  zonalWavenumber and meridWavenumber are the wave#s of quant to plot to phase space/time series diagram
+        !  sinZonal,sinMerid are the number of maps in the x, y directions
         !  modelType: tells what type of model to be run. One of STANDARD_NLEVEL, BAROCLINIC_STRUCTS, ZONAL_MEAN_FLOWS
         !  JX1,JY1 are the number of waves to retain in the 'at a point' plots
         !-------------------------------------------------------------ICN(31) values:
@@ -1273,12 +1276,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%plotType = WEATHER_MAPS
             gModIntParams%field1 = TEMPERATURE
             gModIntParams%field2 = HEIGHT
-            gModIntParams%IPLT3 = NO_PLOT
-            gModIntParams%JX = 1
-            gModIntParams%JY = 1
-            gModIntParams%LEVP = 0
-            gModIntParams%NUMBX = 1
-            gModIntParams%NUMBY = 2
+            gModIntParams%field3 = PLOTTING_OFF
+            gModIntParams%zonalWavenumber = 1
+            gModIntParams%meridWavenumber = 1
+            gModIntParams%LEVP = 1
+            gModIntParams%sinZonal = 1
+            gModIntParams%sinMerid = 1
             gModIntParams%modelType = STANDARD_NLEVEL
             gModIntParams%JX0 = 0
             gModIntParams%JY0 = 1
@@ -1343,13 +1346,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 !-----------------------------Set graphs (plus reset one map!)
                 gModIntParams%MP(I + 4) = gModIntParams%field1
                 gModIntParams%MP(I + 9) = gModIntParams%field2
-                gModIntParams%MP(I + 14) = gModIntParams%IPLT3
+                gModIntParams%MP(I + 14) = gModIntParams%field3
             END DO
         END SUBROUTINE SetDefaults
 
         !> Subroutine to dimensionalize the gModRealParams before displaying to the user
         !> Only three of the parameters are affected. DELT, BETA, RN
-        !> Two others XPOS, YPOS go to degrees in 'dimensional' form, otherwise they are in radians.
+        !> Two others lonXPoint, latYPoint go to degrees in 'dimensional' form, otherwise they are in radians.
         subroutine DimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
@@ -1360,16 +1363,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
             gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeScale
             gModRealParams%BETA = 4. * gModRealParams%BETA
-            gModRealParams%XPOS = gModRealParams%XPOS * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%YPOS = gModRealParams%YPOS * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%RLAT = gModRealParams%RLAT * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%RLON = gModRealParams%RLON * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%lonXPoint = gModRealParams%lonXPoint * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%latYPoint = gModRealParams%latYPoint * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%hovLat = gModRealParams%hovLat * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%hovLon = gModRealParams%hovLon * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
         end subroutine DimensionalizeModRealParams
 
         !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
         !> user has examined and or changed them. Only three of the parameters are affected. DELT, BETA, RN.
-        !> Two others XPOS, YPOS go to radians 'nondimensional' form, otherwise they are in degrees.
+        !> Two others lonXPoint, latYPoint go to radians 'nondimensional' form, otherwise they are in degrees.
         subroutine NonDimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
@@ -1382,10 +1385,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
             gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeScale
             gModRealParams%BETA = gModRealParams%BETA / 4.
-            gModRealParams%XPOS = gModRealParams%XPOS / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%YPOS = gModRealParams%YPOS / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%RLAT = gModRealParams%RLAT / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%RLON = gModRealParams%RLON / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%lonXPoint = gModRealParams%lonXPoint / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%latYPoint = gModRealParams%latYPoint / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%hovLat = gModRealParams%hovLat / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%hovLon = gModRealParams%hovLon / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
         end subroutine NonDimensionalizeModRealParams
         

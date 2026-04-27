@@ -57,7 +57,7 @@ module ConstantsModule
     !============================================================ PLOTTING =========================================================
                                                     !----- Is Temperature indicator:
                                                     ! This sequence is to 'match' the current variable to be displayed when
-                                                    ! the user presses the 'field' key that gets entered into field1, field2, IPLT3
+                                                    ! the user presses the 'field' key that gets entered into field1, field2, field3
                                                     ! for example, a value 1 is VORTICITY (see the Constants module). Value
                                                     ! 3 is temperature and thus the list below is set to .TRUE. for 'index' 3.
     logical, parameter :: isTemperature(28) = [.FALSE., .FALSE., .TRUE., .FALSE., .TRUE., .FALSE., .FALSE., .FALSE., .FALSE., .TRUE., .TRUE., &
@@ -82,7 +82,7 @@ module ConstantsModule
     integer, parameter :: WEATHER_STN = 9           ! Time series of a field at a particular point (lat-lon)
     integer, parameter :: NO_PLOT = 10              ! Skip plotting (good for speed)
     
-                                                    ! Display options for variables field1, field2, IPLT3
+                                                    ! Display options for variables field1, field2, field3
                                                     ! Also used for the scale factor array 'gPlotScales' below
                                                     ! Options 1-17 are for 2D contour maps
     integer, parameter :: FIELD_START = 1

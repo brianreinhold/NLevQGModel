@@ -18,21 +18,21 @@ module ModelControlDialogModule
             use ifwinty
             use ifwin
 
-            use NlevelQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, ghwndMain, LogMessage, WriteMessageBox, CenterWindow
+            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, ghwndMain, LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
 
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile
             use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
                                    ReadSaveFile, SaveModelState
-            use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, FIELD_START, FIELD_GRAPH_START, &
-                           SECONDS_PER_DAY, CORIOLIS_INVERSE
+            use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
+                                       FIELD_START, FIELD_GRAPH_START, SECONDS_PER_DAY, CORIOLIS_INVERSE
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
             use InitVariablesDialogModule, only: InitVariablesDlgProc
             use UtilitiesModule, only: openModelFile
-            use PlotModule, only: ClearScreen, gElapsedTime
+            use PlotModule, only: ClearScreen, initializePlot, gElapsedTime
 
             implicit none
             
@@ -157,13 +157,13 @@ module ModelControlDialogModule
                     ! initialize FIELD2
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field2 - FIELD_START, UINT_PTR), 0)
-                    ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! Cast for logical to INTEGER(BOOL) to avoid warning
+                    ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map or phase space)
+                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE)) ! Cast for logical to INTEGER(BOOL) to avoid warning
                     ! initialize FIELD3
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%IPLT3 - FIELD_START, UINT_PTR), 0)
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field3 - FIELD_START, UINT_PTR), 0)
                     ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
+                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! No three fields in phase space
 
                     !! Model type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MODEL_TYPE)
@@ -277,7 +277,7 @@ module ModelControlDialogModule
                             ! We need this offset to map the combo box indicies with our indicies. Combo
                             ! box indicies begin with 0, our begin with 1 for maps and 18 for time series
                             addOffset = 1
-                            if (gModIntParams%plotType .GT. HOV_DIAG_AT_LONG) addOffset = NO_PLOT + 1
+                            if (gModIntParams%plotType .GT. PHASE_SPACE) addOffset = FIELD_GRAPH_START
                             select case(IAND(wParam, Z'FFFF'))
                                 ! The tricky thing here is if the user changes the plot type from map
                                 ! to time series or vice versa. Then we have to load different options
@@ -306,7 +306,7 @@ module ModelControlDialogModule
                                         !end if
                                         ! Enable or disable as the case may be
                                         hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
+                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE))
                                         hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
                                         bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
                                     end if
@@ -315,7 +315,7 @@ module ModelControlDialogModule
                                 case (IDC_COMBO_FIELD2)
                                     gModIntParams%field2 = GetComboIndex(hDlg, IDC_COMBO_FIELD2) + addOffset
                                 case (IDC_COMBO_FIELD3)
-                                    gModIntParams%IPLT3 = GetComboIndex(hDlg, IDC_COMBO_FIELD3) + addOffset
+                                    gModIntParams%field3 = GetComboIndex(hDlg, IDC_COMBO_FIELD3) + addOffset
                                 case (IDC_COMBO_MODEL_TYPE)
                                     gModIntParams%ModelType = GetComboIndex(hDlg, IDC_COMBO_MODEL_TYPE)
                             end select
@@ -419,6 +419,7 @@ module ModelControlDialogModule
                             gElapsedTime%timeSteps = 0
                             call ClearScreen()
                             bret = SetFocus(ghwndMain)
+                            call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                             ret = StartTimeLoop()
                             ! Note this will eventually be moved into the F10 handler of the graphics window procedure
                             bret = SetActiveWindow(hDlg)
@@ -561,19 +562,19 @@ module ModelControlDialogModule
         
             integer(handle), intent(in) :: hlist
         
-            call addlistviewrowreal(hlist, "channel length in kilometers", [gModRealParams%rn], '(f10.4)')
-            call addlistviewrowreal(hlist, "beta parameter relative to 45 deg. latitude", [gModRealParams%beta], '(f10.4)')
-            call addlistviewrowreal(hlist, "time step length in minutes", [gModRealParams%delt], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the first quantity in mb", [gModRealParams%zhgt], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the second quantity in mb", [gModRealParams%zhgt2], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%zhgt3], '(f10.4)')
-            call addlistviewrowreal(hlist, "latitude of x-homoller and cross-sections", [gModRealParams%rlat], '(f10.4)')
-            call addlistviewrowreal(hlist, "longitude of y-homoller and cross-sections", [gModRealParams%rlon], '(f10.4)')
-            call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%xpos], '(f10.4)')
-            call addlistviewrowreal(hlist, "latitude of selected point for a weather station", [gModRealParams%ypos], '(f10.4)')
-            call addlistviewrowreal(hlist, "lowest level displayed in vertical cross sections", [gModRealParams%bot], '(f10.4)')
-            call addlistviewrowreal(hlist, "highest level displayed in vertical cross sections", [gModRealParams%tpp], '(f10.4)')
-            call addlistviewrowreal(hlist, "convergence test threshold for sensitivity runs", [gModRealParams%conv], '(f10.4)')
+            call addlistviewrowreal(hlist, "channel length in kilometers", [gModRealParams%RN], '(f10.4)')
+            call addlistviewrowreal(hlist, "beta parameter relative to 45 deg. latitude", [gModRealParams%BETA], '(f10.4)')
+            call addlistviewrowreal(hlist, "time step length in minutes", [gModRealParams%DELT], '(f10.4)')
+            call addlistviewrowreal(hlist, "pressure level of the first quantity in mb", [gModRealParams%field1Level], '(f10.4)')
+            call addlistviewrowreal(hlist, "pressure level of the second quantity in mb", [gModRealParams%field2Level], '(f10.4)')
+            call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%field3Level], '(f10.4)')
+            call addlistviewrowreal(hlist, "latitude of x-hovmoller and cross-sections", [gModRealParams%hovLat], '(f10.4)')
+            call addlistviewrowreal(hlist, "longitude of y-hovmoller and cross-sections", [gModRealParams%hovLon], '(f10.4)')
+            call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%lonXPoint], '(f10.4)')
+            call addlistviewrowreal(hlist, "latitude of selected point for a weather station", [gModRealParams%latYPoint], '(f10.4)')
+            call addlistviewrowreal(hlist, "lowest level displayed in vertical cross sections", [gModRealParams%BOT], '(f10.4)')
+            call addlistviewrowreal(hlist, "highest level displayed in vertical cross sections", [gModRealParams%TPP], '(f10.4)')
+            call addlistviewrowreal(hlist, "convergence test threshold for sensitivity runs", [gModRealParams%CONV], '(f10.4)')
         end subroutine loadrealitemsintolistview
 
         ! Just to simplify code parsing in the dialog procedure. Loading the
@@ -592,11 +593,11 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Number of integration cycles", gModIntParams%ICYC)
             call AddListViewRow(hList, "Number of time steps", gModIntParams%ISTEP)
             call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
-            call AddListViewRow(hList, "Zonal wave for time series and phase space plots", gModIntParams%JX)
-            call AddListViewRow(hList, "Meridional wave for time series and phase space plots", gModIntParams%JY)
+            call AddListViewRow(hList, "Zonal wave for time series x-axis phase space", gModIntParams%zonalWavenumber)
+            call AddListViewRow(hList, "Meridional wave for time series x-axis phase space", gModIntParams%meridWavenumber)
             call AddListViewRow(hList, "Level of time series and phase space plots", gModIntParams%LEVP)
-            call AddListViewRow(hList, "Number of maps to display in the x-direction", gModIntParams%NUMBX)
-            call AddListViewRow(hList, "Number of maps to display in the y-direction", gModIntParams%NUMBY)
+            call AddListViewRow(hList, "Zonal wave for y-axis phase space component", gModIntParams%sinZonal)
+            call AddListViewRow(hList, "Meridional wave for y-axis phase space", gModIntParams%sinMerid)
             call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%JX0)
             call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%JY0)
             call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%JX1)
@@ -625,19 +626,19 @@ module ModelControlDialogModule
                 case (2)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%DELT, str)
                 case (3)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%ZHGT, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field1Level, str)
                 case (4)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%ZHGT2, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field2Level, str)
                 case (5)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%ZHGT3, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field3Level, str)
                 case (6)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%RLAT, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLat, str)
                 case (7)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%RLON, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLon, str)
                 case (8)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%XPOS, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%lonXPoint, str)
                 case (9)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%YPOS, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%latYPoint, str)
                 case (10)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BOT, str)
                 case (11)
@@ -678,15 +679,15 @@ module ModelControlDialogModule
                 case (5)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%outputInterval, .TRUE.)
                 case (6)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%zonalWavenumber, .TRUE.)
                 case (7)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%meridWavenumber, .TRUE.)
                 case (8)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%LEVP, .TRUE.)
                 case (9)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%NUMBX, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinZonal, .TRUE.)
                 case (10)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%NUMBY, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinMerid, .TRUE.)
                 case (11)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX0, .TRUE.)
                 case (12)
@@ -718,19 +719,19 @@ module ModelControlDialogModule
                 case (2)
                     read(str, *, iostat = ios) gModRealParams%DELT
                 case (3)
-                    read(str, *, iostat = ios) gModRealParams%ZHGT
+                    read(str, *, iostat = ios) gModRealParams%field1Level
                 case (4)
-                    read(str, *, iostat = ios)  gModRealParams%ZHGT2
+                    read(str, *, iostat = ios)  gModRealParams%field2Level
                 case (5)
-                    read(str, *, iostat = ios)  gModRealParams%ZHGT3
+                    read(str, *, iostat = ios)  gModRealParams%field3Level
                 case (6)
-                    read(str, *, iostat = ios)  gModRealParams%RLAT
+                    read(str, *, iostat = ios)  gModRealParams%hovLat
                 case (7)
-                    read(str, *, iostat = ios)  gModRealParams%RLON
+                    read(str, *, iostat = ios)  gModRealParams%hovLon
                 case (8)
-                    read(str, *, iostat = ios)  gModRealParams%XPOS
+                    read(str, *, iostat = ios)  gModRealParams%lonXPoint
                 case (9)
-                    read(str, *, iostat = ios)  gModRealParams%YPOS
+                    read(str, *, iostat = ios)  gModRealParams%latYPoint
                 case (10)
                     read(str, *, iostat = ios)  gModRealParams%BOT
                 case (11)
@@ -762,15 +763,15 @@ module ModelControlDialogModule
                 case (5)
                     gModIntParams%outputInterval = newValue
                 case (6)
-                    gModIntParams%JX = newValue
+                    gModIntParams%zonalWavenumber = newValue
                 case (7)
-                    gModIntParams%JY = newValue
+                    gModIntParams%meridWavenumber = newValue
                 case (8)
                     gModIntParams%LEVP = newValue
                 case (9)
-                    gModIntParams%NUMBX = newValue
+                    gModIntParams%sinZonal = newValue
                 case (10)
-                    gModIntParams%NUMBY = newValue
+                    gModIntParams%sinMerid = newValue
                 case (11)
                     gModIntParams%JX0 = newValue
                 case (12)
@@ -812,9 +813,9 @@ module ModelControlDialogModule
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height tendencies from omega (dp/dt)'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height tendencies from Diabatic effects'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Total temperture tendencies in C/day'//char(0)))
-                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperture tendencies from advection'//char(0)))
-                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperture tendencies from omega'//char(0)))
-                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperture tendencies from diabatic effects'//char(0)))
+                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperature tendencies from advection'//char(0)))
+                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperature tendencies from omega'//char(0)))
+                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Temperature tendencies from diabatic effects'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Mean streamfunction (height) forcing in m'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height tendencies from ororgraphy in m/day'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Bottom orography in meters'//char(0)))
