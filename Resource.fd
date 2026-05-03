@@ -17,6 +17,7 @@
       integer, parameter :: IDC_USERSETTINGS = 1008
       integer, parameter :: IDC_COMBO_USERSETTINGS1 = 1013
       integer, parameter :: IDC_INTEGERVALUES = 1024
+      integer, parameter :: IDC_BUTTON_CLEAR_SCREEN = 1048
       integer, parameter :: IDC_BUTTON_LOAD_FROM_FILE = 1017
       integer, parameter :: IDC_STATIC_NEWT_COOLING = 1054
       integer, parameter :: IDC_EDIT1 = 1046
@@ -64,7 +65,6 @@
       integer, parameter :: IDC_LIST_TEMPERATURES = 1047
       integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
       integer, parameter :: IDC_BUTTON_MODEL_CONTROL = 1019
-      integer, parameter :: IDC_BUTTON_RUN_SEQUENTIALLY = 1048
       integer, parameter :: IDC_BUTTON_EXIT_SETTINGS = 1051
       integer, parameter :: IDC_LIST_INIT_STRM = 1062
       integer, parameter :: IDC_COMBO_FIELD2 = 1033

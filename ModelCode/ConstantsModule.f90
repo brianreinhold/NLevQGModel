@@ -32,6 +32,10 @@ module ConstantsModule
     integer, parameter :: FORWARD_TRANSFORM = 1     ! Do forward (spectral to grid) transform in FFT991 routine
     integer, parameter :: INVERSE_TRANSFORM = -1    ! Do inverse (grid to spectral) transform in FFT991 routine
     
+    integer, parameter :: STOPPED = 1               ! Model is stopped. Waiting for the user to start it. Restarting will start from scratch.
+    integer, parameter :: PAUSED  = 2               ! Model is paused. Waiting for the user to unpause.
+    integer, parameter :: RUNNING = 3               ! Model is running
+    
     integer, parameter :: ASCII_TO_REAL = 0         ! Flag to indicate convert a string to a real number in subroutine RealToAsciiToReal
     integer, parameter :: REAL_TO_ASCII = 1         ! Flag to indicate convert a real number to a string in subroutine RealToAsciiToReal
     
@@ -134,7 +138,7 @@ module ConstantsModule
     integer, parameter :: OMEGA = 0                 ! Plot vertical motion as omega (dp/dt)
     integer, parameter :: VERT_WIND = 1             ! Plot vertical motion as vertical wind (mm/sec)
     
-    integer, parameter :: INVALID = -1              ! Indicates and invalid value for a positive integer value, for example file handles
+    integer, parameter :: INVALID = -1              ! Indicates and invalid value for a positive integer value, or file handles
 
     !============================= PARAMETERS to vary in Sensitivity experiments
     integer, parameter :: SENS_CHANNEL_LENGTH           = 1 ! Vary the channel length

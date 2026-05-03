@@ -313,7 +313,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to read from.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function ReadFileHeader(fileHandle) result(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams, gUserSettingsPrev
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals, gUserSettingsPrev
             use NLevQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -329,7 +329,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Read header
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
-                gModSensParams, gModScalingParams
+                gModSensParams, gContourIntervals
             if (errorCode .NE. 0) then
                 call LogMessage('File Header could not be read. Error message: '// errorMsg // ' Will need to invoke defaults ')
                 return
@@ -376,7 +376,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%WRK, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
                   gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
                   gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
 
@@ -400,7 +400,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function WriteSensFileHeader(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals
             use ModelFieldsModule, only: gVertArr
             
             implicit none
@@ -414,7 +414,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Write data
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
-                gModSensParams, gModScalingParams
+                gModSensParams, gContourIntervals
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
                   gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
@@ -429,7 +429,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         FUNCTION WriteFileData(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gModScalingParams
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals
             use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
             use InteractionCoefficientsModule, only: gCintArr
             !use NLevQGModelGlobals, only: LogMessage    ! For logging
@@ -452,7 +452,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Write header data
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, &
-                gModPlotParams, gModSensParams, gModScalingParams
+                gModPlotParams, gModSensParams, gContourIntervals
             ! Write model arrays (since they are allocatable, we need to write each array indivually and not just the type gVertArr, etc.)
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
@@ -465,7 +465,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%WRK, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
                   gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
                   gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
 
@@ -645,7 +645,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end function CheckModelResolutions
 
         function CheckModParams() result(errorCode)
-            use ConstantsModule, only: WAVE_AMP_TIME_SERIES, PHASE_SPACE, MEAN_TEMP_TEND_GRAF, AMPLITUDE_RATIO_GRAF, VORTICITY, NO_PLOT, OROGRAPHY
+            use ConstantsModule, only: PHASE_SPACE, VORTICITY, HEIGHT, TEMPERATURE, PLOTTING_OFF, OROGRAPHY
             use ModelParamsModule, only: gModRealParams, gModIntParams, gModPlotParams
 
             integer :: errorCode
@@ -681,21 +681,21 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             if(gModIntParams%zonalWavenumber .LT. 0) gModIntParams%zonalWavenumber = 0
             if(gModIntParams%meridWavenumber .LT. 1) gModIntParams%meridWavenumber = 1
-            if(gModIntParams%LEVP .LT. 0) gModIntParams%LEVP = 0
+            if(gModIntParams%LEVP .LT. 1) gModIntParams%LEVP = 1
 
             !-------------------------------------------Field or variable type ranges
-            I2 = NO_PLOT
+            I2 = PLOTTING_OFF
             ! If the type of plot is PHASE_SPACE = 5, WAVE_AMP_TIME_SERIES = 6  WAVE_PHASE_TIME_SERIES = 7, WEATHER_STN = 8
-            IF(gModIntParams%plotType .GE. PHASE_SPACE) I2 = MEAN_TEMP_TEND_GRAF     ! Not sure why we picked this field to assure the field1
-            IF(gModIntParams%plotType .EQ. WAVE_AMP_TIME_SERIES) I2 = AMPLITUDE_RATIO_GRAF
-            IF(gModIntParams%field1 .LE. 0) gModIntParams%field1 = I2
-            IF(gModIntParams%field1 .GT. I2) gModIntParams%field1 = VORTICITY
+            !IF(gModIntParams%plotType .GE. PHASE_SPACE) I2 = MEAN_TEMP_TEND_GRAF     ! Not sure why we picked this field to assure the field1
+            !IF(gModIntParams%plotType .EQ. WAVE_AMP_TIME_SERIES) I2 = AMPLITUDE_RATIO_GRAF
+            IF(gModIntParams%field1 .LE. 0) gModIntParams%field1 = TEMPERATURE
+            IF(gModIntParams%field1 .GT. I2) gModIntParams%field1 = TEMPERATURE
 
             !---------------------------------------------field2,field3:
-            IF(gModIntParams%field2 .GT. NO_PLOT) gModIntParams%field2 = VORTICITY
-            IF(gModIntParams%field3 .GT. NO_PLOT) gModIntParams%field3 = VORTICITY
-            IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = NO_PLOT
-            IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = NO_PLOT
+            IF(gModIntParams%field2 .GT. PLOTTING_OFF) gModIntParams%field2 = HEIGHT
+            IF(gModIntParams%field3 .GT. PLOTTING_OFF) gModIntParams%field3 = HEIGHT
+            IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = PLOTTING_OFF
+            IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = PLOTTING_OFF
 
             !---------------------------------------------sinZonal, sinMerid:
             IF(gModIntParams%sinZonal .LT. 0) gModIntParams%sinZonal = 0
@@ -748,6 +748,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         end function CheckModParams 
 
+        !! prevRN is always non dimensional.
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gScaleFactors
@@ -784,8 +785,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
 
             call NonDimensionalizeModRealParams()    ! call DimensionalizeModRealParams() was done in the WM_INITIDIALOG method in the ModelControl Dialog
-            ! Also need to non-dimensionalize prevRN
-            prevRN = gScaleFactors%longestWave / prevRN
 
             if (prevZonalWaves .NE. gModIntParams%KMAX2 .OR. prevMeridWaves .NE. gModIntParams%LMAX2) boolHorzChange = .true.
             if (prevLevels .NE. gModIntParams%NLEV) boolVertChange = .true.
@@ -806,7 +805,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 
                 CALL ReshuffleArrays(gHorzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(5 * total + 1 : 6 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(13 * total + 1 : 14 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, itot_old, 1, itot_new, 1, gArrayDims%itot)
             !  !===================================================Reshuffle stats arrays:
@@ -954,6 +953,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IXMAX = gridPoints(I)
+                    if (arraySizes%IXMAX < 32) arraySizes%IXMAX = 32
                     EXIT
                 ENDIF
             END DO
@@ -961,6 +961,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IYMAX = gridPoints(I)
+                    if (arraySizes%IYMAX < 16) arraySizes%IXMAX = 16
                     EXIT
                 ENDIF
             END DO
@@ -1129,7 +1130,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         END SUBROUTINE CreatePerturbation
 
         !***************************************************** SetDefaults:
-        !> THis function sets default values to gModRealParams, gModIntParams, gModScalingParams,
+        !> THis function sets default values to gModRealParams, gModIntParams, gContourIntervals,
         !> gModPlotParams, and gModSensParams when there is no save file already containing these
         !> fields.
         SUBROUTINE SetDefaults()
@@ -1138,7 +1139,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
-                gModScalingParams, gModPlotParams, gModSensParams, gPlotScales
+                gContourIntervals, gModPlotParams, gModSensParams, gPlotScales
             use NLevQGModelGlobals, only: LogMessage
 
             implicit none
@@ -1212,36 +1213,58 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  YINT is the interval to draw a grid in y
         !  Plot order of 2-D: VOR,PS,TH,WW,TF,S,T,FS,ADS,ADT
         !  Plot order of 1-D: ADO,TOP,SF
-        !---------------------------------------- (Gives 60m contours for L=5000km/PI)
-            gModScalingParams%VR(VORTICITY) = 1.0 / gPlotScales(VORTICITY)
-        !---------------------------------------- (Gives 60m contours for L=5000km/PI)
-            gModScalingParams%VR(HEIGHT) = 60.0 / gPlotScales(HEIGHT)
-            write(valueStr, '(A, ES26.17)') "Height Scale 60 m contours: ", gModScalingParams%VR(HEIGHT)
-            call LogMessage(valueStr)
-            gModScalingParams%VR(TEMPERATURE) = 5.0 / gPlotScales(TEMPERATURE)
-            gModScalingParams%VR(VERTICAL_WIND) = 5.0 / gPlotScales(VERTICAL_WIND)
-            gModScalingParams%VR(TEMP_FORCING) = gModScalingParams%VR(TEMPERATURE)
+            
+ 
+            ! Vorticity in 10**-5/s
+            ! Height in meters
+            ! Temperature in Centigrade
+            ! Vertical wind in mb/hr or mm/sec
+            ! Temperature driving (forcing) - Radiative relaxation temperature in Centigrade
+            ! Total Height tendency in meters/day
+            ! height tendencies in m/day from advection plus beta
+            ! height tendencies in m/day from omega (dp/dt)
+            ! height tendencies in m/day from diabatic effects 
+            ! total temperture tendencies in c/day
+            ! temperature tendencies in c/day from advection
+            ! temperature tendencies in c/day from omega
+            ! temperature tendencies in c/day from diabatic effects
+            ! mean streamfunction (height) forcing in m
+            ! height tendencies from ororgraphy in m/day'/
+            ! bottom orography in meters
+            ! Plotting off
+
+            ! These give the contours specified when the variables are dimensionalized by the corresponding gPlotScales(j) element
+            ! Thus if I have PS(I, n) * gPlotScales(HEIGHT) this will give me th height in meters. Dividing by gContourIntervals%VR(HEIGHT)
+            ! will produce the value 0.0 to 1.0 for values between 0 and 60 meters and 1.0 to 2.0 for values between 60 and 120 meters.
+            ! From this we can assign integer color values for those level ranges, for example we will use color 0 for 0.0 to < 1.0 and
+            ! color 1 for 1.0 to < 2.0, etc. In the old days of 16-color VGA this was a direct assignment. But in todays 32-bit RGB colors
+            ! we need to make a color map to map the value 0 to a specific color. We have such a map RAM_COLORS(18) in the PlotModule
+            gContourIntervals%VR(VORTICITY) = 1.0
+            gContourIntervals%VR(HEIGHT) = 60.0         ! Gives 60m contours for L=5000km/PI
+            gContourIntervals%VR(TEMPERATURE) = 5.0
+            gContourIntervals%VR(VERTICAL_WIND) = 5.0
+            gContourIntervals%VR(TEMP_FORCING) = 5.0
             DO I = 1, 4
-               gModScalingParams%VR(I + 5) = 60.0 / gPlotScales(I + 5)
-               gModScalingParams%VR(I + 9) = 5.0 / gPlotScales(I + 9)
+               gContourIntervals%VR(I + 5) = 60.0
+               gContourIntervals%VR(I + 9) = 5.0
             END DO
-            gModScalingParams%VR(OROG_HGT_TEND) = 60.0 / gPlotScales(OROG_HGT_TEND)
-            gModScalingParams%VR(OROGRAPHY) = 100.0 / (90.0 * 11.0)
-            gModScalingParams%VR(HGT_FORCING) = 60.0 / gPlotScales(HGT_FORCING)
-            gModScalingParams%VR(PLOTTING_OFF) = 1.0 / gPlotScales(PLOTTING_OFF)
+            gContourIntervals%VR(OROG_HGT_TEND) = 60.0 
+            gContourIntervals%VR(OROGRAPHY) = 100.0
+            gContourIntervals%VR(HGT_FORCING) = 60.0
+            gContourIntervals%VR(PLOTTING_OFF) = 1.0
         !------------------------------Graphs only forces:
-            gModScalingParams%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
-            gModScalingParams%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
-            gModScalingParams%VR(MEAN_HGT_TEND_GRAF) = 60.0 / gPlotScales(MEAN_HGT_TEND_GRAF)
-            gModScalingParams%VR(MEAN_TEMP_TEND_GRAF) = 5.0 / gPlotScales(MEAN_TEMP_TEND_GRAF)
+            gContourIntervals%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
+            gContourIntervals%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
+            gContourIntervals%VR(MEAN_HGT_TEND_GRAF) = 60.0 / gPlotScales(MEAN_HGT_TEND_GRAF)
+            gContourIntervals%VR(MEAN_TEMP_TEND_GRAF) = 5.0 / gPlotScales(MEAN_TEMP_TEND_GRAF)
         !------------------------------Phase speed and phase difference
-            gModScalingParams%VR(HGT_WAVE_SPEED_GRAF) = 50.0 / gPlotScales(HGT_WAVE_SPEED_GRAF)
-            gModScalingParams%VR(HGT_TEMP_PHASE_DIFF) = 180.0
-            gModScalingParams%VR(GROWTH_RATE_GRAF) = 1.0
-            gModScalingParams%VR(AMPLITUDE_RATIO_GRAF) = 1.0
-            gModScalingParams%VR(ZLEVEL_1) = 7.0     ! ZLEV of old
-            gModScalingParams%VR(ZLEVEL_2) = 0.0     ! ZLV2 of old
-            gModScalingParams%VR(ZLEVEL_3) = 0.0     ! ZLV3 of old
+            gContourIntervals%VR(HGT_WAVE_SPEED_GRAF) = 50.0 / gPlotScales(HGT_WAVE_SPEED_GRAF)
+            gContourIntervals%VR(HGT_TEMP_PHASE_DIFF) = 180.0
+            gContourIntervals%VR(GROWTH_RATE_GRAF) = 1.0
+            gContourIntervals%VR(AMPLITUDE_RATIO_GRAF) = 1.0
+            gContourIntervals%VR(ZLEVEL_1) = 7.0     ! ZLEV of old
+            gContourIntervals%VR(ZLEVEL_2) = 0.0     ! ZLV2 of old
+            gContourIntervals%VR(ZLEVEL_3) = 0.0     ! ZLV3 of old
         
         !------------------------------------------------------------ The ICN values.
         !  KMAX2 the number of zonal waves
@@ -1330,7 +1353,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  MSEN(12-14)=Integral indicator
         !-------------------------------Defaults:
             DO I = 1,3
-                gModScalingParams%VSEN(I) = 1.
+                gContourIntervals%VSEN(I) = 1.
             END DO
             gModSensParams%field1 = 2    ! field1 is the first parameter to vary in sensitivity runs (MSEN(1)) ?
             gModSensParams%field2 = 3    ! field2 is the 2nd parameter to vary in sensitivity runs (MSEN(2)) ?
@@ -1581,10 +1604,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !--------------------------------Compute sigma profile AND nondimensionalize:
 
             R = gVertArr%PP(1) / gScaleFactors%temperatureScale
-            ! gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS    ! 2.6121725E+08 m*m/s
+            ! gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS = 2.6121725E+08 m*m/s
             ! R = mb s / m**2
             ! gVertArr%A(N) has units of m**2/(s K) 
-            ! X has units of mb*s*m**2/(s*K*m**2) = mb/K
+            ! X = R * A(N) has units of mb*s*m**2/(s*K*m**2) = mb/K
             ! SIG has units K /mb
             DO N = 1, gModIntParams%NLEV - 1
                 X = R * gVertArr%A(N)
@@ -1681,7 +1704,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !--------------------------------------------------Nondimensionalize:
                 IF(gVertArr%H(N) .NE. 0.) gVertArr%H(N) = gScaleFactors%dissipation / gVertArr%H(N)
         !--------------------------------------------------Zero TF at level N
-                gHorzArr%TF(1 : gArrayDims%ITOT, N) = 0.0
+                gHorzArr%TF(1 : gCurrentDims%ITOT, N) = 0.0
         !--------------------------------------------------Compute equilibrium TF:
                 X = (SHORT_WAVE(J) * AA + SHORT_WAVE(J + 1) * BB) * gVertArr%THS(N)
                 gHorzArr%TF(1, N) = X / (4. * Y * SQRT2)

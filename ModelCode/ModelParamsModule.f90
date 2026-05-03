@@ -1,5 +1,5 @@
 module ModelParamsModule
-    use ConstantsModule, only: PLOT_SCALES_SIZE
+    use ConstantsModule, only: PLOT_SCALES_SIZE, STOPPED
     implicit none
 
     ! The original code compacted all the values into a single common block and single buffer
@@ -23,12 +23,12 @@ module ModelParamsModule
     ! Eventually the names of the individual fields will be changed to be more descriptive.
 
     ! Type defintions
-    public :: Settings, ModelRealParams, ModelIntParams, ModelPlotParams, ModelSensParams, ModelScalingParams, PlotControls
+    public :: Settings, ModelRealParams, ModelIntParams, ModelPlotParams, ModelSensParams, ContourIntervals, PlotControls
     public :: FileStruct
     ! Methods
     public :: initConstants
     ! Instances of the types
-    public :: gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams, gModScalingParams, gPlotControls
+    public :: gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams, gContourIntervals, gPlotControls
     public :: gNLevFile, gSensFile
     ! Constants that are not expressed as parameters
     public :: gPlotScales
@@ -164,10 +164,10 @@ module ModelParamsModule
         integer :: integralEnergyIndicator3 ! integralEnergyIndicator3 is the indicator for the integral energy (MSEN(14))
     end type ModelSensParams
     
-    type :: ModelScalingParams ! This is a new type to hold the scaling factors for the model
+    type :: ContourIntervals ! This is a new type to hold the scaling factors for the model
         real :: VR(30)    ! Scaling factors for converting nondimensional model data to dimensional for plotting
         real :: VSEN(30)  ! Scaling factors for the sensitivity runs
-    end type ModelScalingParams
+    end type ContourIntervals
     
     type :: PlotControls
         integer :: activePlotMap    ! Three possible fields can be displayed on a map. The 'active' one is the field that can
@@ -199,6 +199,10 @@ module ModelParamsModule
         real :: temperatureScale
         real :: CORIOLIS
     end type ScaleFactors
+    
+    type :: ModelState
+        integer :: runState = STOPPED    ! STOPPED, PAUSED, RUNNING
+    end type ModelState
 
     type(Settings) :: gUserSettings          !Settings(10, 5, 10, USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE) ! Initialize to defaults
     type(Settings) :: gUserSettingsPrev      !Settings(10, 5, 10, USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE) ! Initialize to defaults
@@ -207,11 +211,12 @@ module ModelParamsModule
     type(ModelIntParams) :: gModIntParams
     type(ModelPlotParams) :: gModPlotParams
     type(ModelSensParams) :: gModSensParams
-    type(ModelScalingParams) :: gModScalingParams
+    type(ContourIntervals) :: gContourIntervals
     type(PlotControls) :: gPlotControls
     type(FileStruct) :: gNLevFile
     type(FileStruct) :: gSensFile
     type(ScaleFactors) :: gScaleFactors
+    type(ModelState) :: gModelState
 
     ! Labels for the plots
     type :: FieldLabels
@@ -272,33 +277,29 @@ module ModelParamsModule
             gPlotScales(HEIGHT) = gScaleFactors%heights
             !---------------------------Temperature in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMPERATURE) = gScaleFactors%temperatureScale
-            !---------------------------Vertical velocity (omega) in mb/hr:
+            !---------------------------Vertical velocity (omega) in mb/hr or mm/sec
             gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480
-            write(valueStr, '(A, ES26.17)') "Omega Scale mb/hr: ", gPlotScales(VERTICAL_WIND)
-            call LogMessage(valueStr)
             !---------------------------Temperature forcing in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
             !---------------------------Total height tendencies m/day:
             gPlotScales(TOT_HGT_TEND) = gPlotScales(HEIGHT) * CORIOLIS * SECONDS_PER_DAY
-            write(valueStr, '(A, ES26.17)') "Height tendency Scale m/day: ", gPlotScales(VERTICAL_WIND)
-            call LogMessage(valueStr)
-            !---------------------------Vorticity advection + beta effect:
+            !---------------------------Vorticity advection + beta effect m/day:
             gPlotScales(ADV_BETA_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
-            !---------------------------Vorticity tendencies from omega:
+            !---------------------------Vorticity tendencies from omega m/day:
             gPlotScales(OMEGA_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Diabatic height tendencies m/day:
             gPlotScales(DIABATIC_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Total temp tendencies C/day:
             gPlotScales(TOT_TEMP_TEND) = gPlotScales(TEMPERATURE) * CORIOLIS * SECONDS_PER_DAY
-            !---------------------------Temperature advection:
+            !---------------------------Temperature advection C/day:
             gPlotScales(ADV_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
-            !---------------------------Temperature tendencies from omega:
+            !---------------------------Temperature tendencies from omega C/day:
             gPlotScales(OMEGA_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
             !---------------------------Diabatic temperature tendencies C/day:
             gPlotScales(DIABATIC_TEMP_TEND) = gPlotScales(TOT_TEMP_TEND)
-            !---------------------------Heights in meters (for strm forcing):
+            !---------------------------Heights in meters (for strm forcing) in meters:
             gPlotScales(HGT_FORCING) = gPlotScales(HEIGHT)
-            !---------------------------Orographic advection:
+            !---------------------------Orographic advection in m/day:
             gPlotScales(OROG_HGT_TEND) = gPlotScales(TOT_HGT_TEND)
             !---------------------------Orographic heights in meters (depends upon DP(1)):
             gPlotScales(OROGRAPHY) = 1.
@@ -321,10 +322,10 @@ module ModelParamsModule
             !------------------------------Amplitude ratio
             gPlotScales(AMPLITUDE_RATIO_GRAF) = 1.
             
+            ! Need one of these for all the above fields
             gFieldLabels(VORTICITY)%s =  "Vorticity in 10**-5/s"
             gFieldLabels(HEIGHT)%s =  "Height in meters"
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
-
 
         end subroutine initConstants
     

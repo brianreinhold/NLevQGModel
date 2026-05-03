@@ -423,10 +423,13 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
     use ifwin       ! For GetCurrentThreadId
     use user32
-    use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
+    use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
+    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAPS, NO_PLOT
     use UtilitiesModule, only: openModelFile
-    use SetUpModule, only: SaveModelState
-    use ModelParamsModule, only: gNLevFile
+    use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams
+    use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams
+    use ModelModule, only: StartTimeLoop
+    use PlotModule, only: ClearScreen, initializePlot
 
     implicit none
 
@@ -557,16 +560,18 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         case (WM_SYSKEYUP)
             ! Will cause the model to quit on the next plot check.
             if (wParam == VK_F10) then
-                !if (gDataType%runState == RUNNING) then
-                !    gDataType%runState = STOPPED
-                !    call LogMessage("User stopped run using F10")
-                !else
-                !    if (gDataType%dataSource == MODEL) then
-                !        call LogMessage("User returning to ModelControl Dialog via F10")
-                !        ret = SetFocus(ghCurrentDlg)
-                !    else if (gDataType%dataSource == FILE .OR. gDataType%dataSource == ENSEMBLES) then
+                if (gModelState%runState .NE. STOPPED) then
+                    gModelState%runState = STOPPED
+                    call LogMessage("User stopped run using F10")
+                else
+                    call LogMessage("User returning to ModelControl Dialog via F10")
+                    ret = EnableWindow(ghCurrentDlg, .TRUE.)
+                    ret = SetFocus(ghCurrentDlg)
+                    ret = SetActiveWindow(ghCurrentDlg)
+                endif
+                !    else if (gModelState%dataSource == FILE .OR. gModelState%dataSource == ENSEMBLES) then
                 !        call LogMessage("User returning to Ensembles Dialog via F10")
-                !        if (gDataType%dataSource == ENSEMBLES) then
+                !        if (gModelState%dataSource == ENSEMBLES) then
                 !            call computeMseAndSpredFromEnsembles(hWnd, gEnsembleSetData, gObsBaseFile, .true.) ! This is a termination; True = cleanup
                 !        endif
                 !        ret = SetForegroundWindow(ghCurrentDlg)
@@ -585,6 +590,85 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             endif
             MainWndProc = 0
             return
+            
+        case (WM_KEYUP)
+            ! wParam contains the Virtual Key code
+            select case (wParam)
+    ! F1: PAUSE/RESUME -----------------------
+                case (VK_F1)
+                    if (gModelState%runState .EQ. PAUSED) then
+                        call LogMessage("User resuming run")
+                        gModelState%runState = RUNNING
+                    else if (gModelState%runState .EQ. RUNNING) then
+                        gModelState%runState = PAUSED
+                        call LogMessage("User pausing run")
+                    else ! STOPPED CASE
+                        call LogMessage("User continuing stopped run")
+                        !if(ALLOCATED(X)) then
+                        !    call LogMessage("DeAllocated interpolated X grid on F1")
+                        !    deallocate(X)
+                        !endif
+                        !if(ALLOCATED(X_Overlay)) then
+                        !    call LogMessage("DeAllocated interpolated x_Overlay grid on F1")
+                        !    deallocate(X_Overlay)
+                        !endif
+                        call NonDimensionalizeModRealParams()
+                        ret = StartTimeLoop()
+                    endif
+    ! F2: Change Plot type -----------------------
+                case (VK_F2)
+                    ! Check if the SHIFT key is pressed
+                    ! GetKeyState returns a negative value if the high-order bit is set
+                    if (GetKeyState(VK_SHIFT) < 0) then
+                        gModIntParams%plotType = gModIntParams%plotType - 1
+                        if (gModIntParams%plotType .LT. WEATHER_MAPS) gModIntParams%plotType = NO_PLOT
+                    else
+                        gModIntParams%plotType = gModIntParams%plotType + 1
+                        if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAPS
+                    end if
+                    !if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X and a new one wont be created
+                                                        ! ff we switch to weather maps
+                    !if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
+                    !current_val = -1.0
+                    call ClearScreen()
+                    !if (gModelState%runState .NE. RUNNING) then
+                    !    call setDimensionalState(.false.)
+                    !    if(gModelState%dataSource == MODEL) then
+                    !        call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
+                    !        ret = StartModel(gCurrentWelford)
+                    !    else if (gModelState%dataSource == FILE) then
+                    !        call LogMessage("Plot type changed while single ensemble run was stopped or paused. Restarting run")
+                    !        call computeMseWithOneEnsemble(hWnd, gEnsembleFile, gObsBaseFile)
+                    !    else if (gModelState%dataSource == ENSEMBLES) then
+                    !        call LogMessage("Plot type changed while ensembles run was stopped or paused. Restarting run")
+                    !        call computeMseAndSpredFromEnsembles(hWnd, gEnsembleSetData, gObsBaseFile, .false.) ! No cleanup
+                    !    endif
+                    !end if
+    ! F3: Clear Screen -----------------------
+                case (VK_F3)
+                    call ClearScreen()
+                    call LogMessage("User cleared screen")
+                case (VK_UP)
+                    call LogMessage("User moving up a level")
+                    gModIntParams%LEVP = gModIntParams%LEVP + 1
+                    if (gModIntParams%LEVP > gModIntParams%NLEV) gModIntParams%LEVP = 1
+                    ! Need to recompute the specific plot types struct values
+                    call initializePlot()
+                    call ClearScreen()
+                case (VK_DOWN)
+                    call LogMessage("User moving down a level")
+                    gModIntParams%LEVP = gModIntParams%LEVP - 1
+                    if (gModIntParams%LEVP < 1) gModIntParams%LEVP = gModIntParams%NLEV
+                    ! Need to recompute the specific plot types struct values
+                    call initializePlot()
+                    call ClearScreen()
+                case (VK_ESCAPE)
+                    call PostQuitMessage(0)
+            end select
+
+            MainWndProc = 0
+            return
+
 
         ! WM_COMMAND: user command
         case (WM_COMMAND)

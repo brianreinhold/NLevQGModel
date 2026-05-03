@@ -93,7 +93,7 @@ MODULE ModelFieldsModule
         !TYPE :: ChainHorzArrays
         !    LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
         !    REAL, POINTER :: GQ(:),BTA(:),PSB(:),PS(:),TH(:),WW(:),TF(:),FS(:),ADS(:),WS(:),S(:),FT(:),ADT(:),WT(:),T(:),SF(:),ADO(:),TOP(:)
-        !    REAL, POINTER :: G1(:),G2(:),G3(:),WRK(:),TMP(:),DAT(:),AKL(:),AKLI(:),ZS(:),PSSAVE(:),RML(:),TRX(:),TRY(:)
+        !    REAL, POINTER :: G1(:),G2(:),G3(:),TMP(:),DAT(:),AKL(:),AKLI(:),ZS(:),PSSAVE(:),RML(:),TRX(:),TRY(:)
         !    INTEGER, POINTER :: IXL(:),IYL(:)
         !END TYPE ChainHorzArrays
     ! Unfortunately Fortran does not allow allocatable target arrays in a type
@@ -123,7 +123,6 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: G3_pool(:)       !  G3(KX*LY) grid point arrays for transform routine
     REAL, ALLOCATABLE, TARGET :: G4_pool(:)       !  G4(KX*LY) grid point arrays for transform routine
     COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc(KX) complex grid point array for the periodic transform routine
-    REAL, ALLOCATABLE, TARGET :: WRK_pool(:)      !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
     real, allocatable, target :: GZonal_pool(:)   !  G1Zonal(LY) grid point array for zonal component of transform 
     REAL, ALLOCATABLE, TARGET :: TMP_pool(:)      !  TMP(gArrayDims%LYD)
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
@@ -173,7 +172,6 @@ MODULE ModelFieldsModule
         REAL, POINTER :: G4(:, :) => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
         REAL, POINTER :: G4plot(:, :) => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
         REAL, POINTER :: G4plot_1D(:) => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
-        REAL, POINTER :: WRK(:) => null()       !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
         REAL, POINTER :: GZonal(:) => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
         REAL, POINTER :: GZonalplot(:) => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
         REAL, POINTER :: TMP(:) => null()       !  TMP(gArrayDims%LYD)
@@ -335,7 +333,6 @@ MODULE ModelFieldsModule
                     G2_pool(gArrayDims%KXLYD),                         &
                     G3_pool(gArrayDims%KXLYD),                         &
                     G4_pool(gArrayDims%KXLYD),                         &
-                    WRK_pool(gArrayDims%ibig),                         &
                     GZonal_pool(gArrayDims%LY),                        &
                     TMP_pool(gArrayDims%lyd),                          &
                     DAT_pool(gArrayDims%itot),                         &
@@ -385,7 +382,6 @@ MODULE ModelFieldsModule
             G2_pool = 0.0
             G3_pool = 0.0
             G4_pool = 0.0
-            WRK_pool = 0.0
             GZonal_pool = 0.0
             TMP_pool = 0.0
             DAT_pool = 0.0
@@ -494,7 +490,6 @@ MODULE ModelFieldsModule
             gHorzArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             gHorzArr%G4plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
             gHorzArr%G4plot_1D(1 : arraySizes%KX * arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%WRK(1 : gArrayDims%ibig) => WRK_pool(1 : gArrayDims%ibig)
             gHorzArr%GZonal(1 : gArrayDims%IYMAX) => GZonal_pool(1 : arraySizes%IYMAX)
             gHorzArr%GZonalplot(1 : gArrayDims%LY) => GZonal_pool(1 : arraySizes%LY)
             gHorzArr%TMP(1 : arraySizes%lyd) => TMP_pool(1 : arraySizes%lyd)
@@ -526,7 +521,6 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(G2_pool))      DEALLOCATE(G2_pool)
             IF (ALLOCATED(G3_pool))      DEALLOCATE(G3_pool)
             IF (ALLOCATED(G4_pool))      DEALLOCATE(G4_pool)
-            IF (ALLOCATED(WRK_pool))     DEALLOCATE(WRK_pool)
             IF (ALLOCATED(GZonal_pool))  DEALLOCATE(GZonal_pool)
             IF (ALLOCATED(TMP_pool))     DEALLOCATE(TMP_pool)
             IF (ALLOCATED(DAT_pool))     DEALLOCATE(DAT_pool)
@@ -571,7 +565,6 @@ MODULE ModelFieldsModule
             gHorzArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
             gHorzArr%G4plot  => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
             gHorzArr%G4plot_1D  => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
-            gHorzArr%WRK  => null()       !  WRK(IBIG>KX*LY) is a work array for FFT991 routine
             gHorzArr%GZonal  => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
             gHorzArr%GZonalplot  => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
             gHorzArr%TMP  => null()       !  TMP(gArrayDims%LYD)

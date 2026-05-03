@@ -72,7 +72,7 @@ module InitVariablesDialogModule
             integer :: i
 
             select case (dlgMsg)
-            CASE (WM_APP + 100)
+                CASE (WM_APP + 300)
                     ! hide edit box
                     ID = getListControlIdFromRowClicked()
                     if (id /= -1) then
@@ -81,6 +81,10 @@ module InitVariablesDialogModule
                         bret = SetFocus(hFocus)
                     endif
                     bret = SetFocus(hFocus)
+                    RETURN
+                CASE (WM_APP + 301)
+                    ! Zero variables
+                    call ZeroVariables()
                     RETURN
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
                     psRowClicked = -1
@@ -96,8 +100,8 @@ module InitVariablesDialogModule
                         write(buffer, '(F6.1)') gVertArr%PV(i)
                         bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(trim(buffer)//char(0)))
                     end do
-                    ! Initialize the combo box with the lowest levelIndex
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(0, UINT_PTR), 0)
+                    ! Initialize the combo box with levelIndex
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(levelIndex - 1, UINT_PTR), 0)
                     ! How many items to display in dropdown
                     !bret = SendMessage(hCombo, Z'1701', INT(min(gModIntParams%NLEV, 20)), 0) ! CB_SETMINVISIBLE = 0x1701
 
@@ -150,7 +154,11 @@ module InitVariablesDialogModule
                                         ! Function returns pointer to the correct array based on which list view was clicked
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
                                         ! Converts real value to string for edit box
-                                        ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, levelIndex), str)
+                                        if (id .NE. IDC_LIST_INIT_OROGRAPHY) then
+                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, levelIndex), str)
+                                        else
+                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, 1), str)  ! Orography case
+                                        endif
                                         !str = getStringFromRealForEditBox(ptr(J + 1))
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
@@ -186,11 +194,13 @@ module InitVariablesDialogModule
 
 !--F1: Zero all fields ====================================================
                         case (IDC_BUTTON_INIT_ZERO_ALL)
+                            call ZeroVariables()
                             gHorzArr%PS = 0.0
                             gHorzArr%TF = 0.0
                             gHorzArr%TOP = 0.0
                             gHorzArr%SF = 0.0
                             gHorzArr%FS = 0.0           ! This is probably not necessary
+                            call populateListControls(levelIndex)
                             InitVariablesDlgProc = 1
 
 !--F10: EXIT ==============================================================
@@ -210,7 +220,7 @@ module InitVariablesDialogModule
                                     ! User unchecked it
                                     call NonDimensionalizeHorizontalParams()
                                 end if
-                                bret = PostMessage(hDlg, WM_APP + 100, 0, 0)
+                                bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
                                 call populateListControls(levelIndex)
 
                             endif
@@ -244,7 +254,7 @@ module InitVariablesDialogModule
                                         ios = 0
                                         
                                         ! Load the new value into the correct array index field
-                                        ios = readRealDataFromEditBox(str, rowClicked, ptr)
+                                        ios = readRealDataFromEditBox(str, rowClicked, ptr, levelIndex)
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
@@ -272,6 +282,16 @@ module InitVariablesDialogModule
             InitVariablesDlgProc = 0 ! Didn't process the dialog message dlgMsg
 
         contains
+                subroutine ZeroVariables()
+                    implicit none
+                    gHorzArr%PS = 0.0
+                    gHorzArr%TF = 0.0
+                    gHorzArr%TH = 0.0
+                    gHorzArr%TOP = 0.0
+                    gHorzArr%SF = 0.0
+                    gHorzArr%FS = 0.0           ! This is probably not necessary
+                    call populateListControls(levelIndex)
+                end subroutine ZeroVariables
 
                 subroutine populateListControls(N)
                     implicit none
@@ -285,6 +305,22 @@ module InitVariablesDialogModule
                     ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
                     call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1)
                     call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, N)
+                    ! Keep forgetting about MERGE
+                    hList = GetDlgItem(hDlg, IDC_LIST_INIT_TEMP_DRIVING)
+                    bret = EnableWindow(hList, MERGE(1, 0, N < gModIntParams%NLEV))
+                    ! Disabling does not 'gray out' the control. So one has to do it manually.
+                    IF (N < gModIntParams%NLEV) THEN
+                        ! RESTORE to standard colors (Black text on White background)
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(0, 0, 0), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                    ELSE
+                        ! SET to "Grayed" colors
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(128, 128, 128), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                    END IF
+
                 end subroutine populateListControls
 
                 ! Set of 'contained' subroutine and function to link list control rows to the corresponding arrays
@@ -521,7 +557,7 @@ module InitVariablesDialogModule
                         ! Print out the sinKxSinLy for every even waveStart
                         write(description, '(A, I0, A, I0, A)') "sinn", k, "x sin", L, "y"
                     endif
-                    call AddListViewRowReal(hList, description, [horzArr(i, level)], '(F7.3)') ! The 'trim' is done in the called subroutine
+                    call AddListViewRowReal(hList, description, [horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
                 endif
             end do
             i = SendMessage(hList, LVM_ENSUREVISIBLE, INT(gCurrentDims%ITOT - 1, INT_PTR_KIND()), TRUE)
@@ -549,7 +585,7 @@ module InitVariablesDialogModule
 
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
-        function readRealDataFromEditBox(str, rowClicked, horzArr) result(ios)
+        function readRealDataFromEditBox(str, rowClicked, horzArr, level) result(ios)
             use ModelFieldsModule, only: gHorzArr
             
             implicit none
@@ -557,11 +593,12 @@ module InitVariablesDialogModule
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
             integer, intent(in) :: rowClicked
             REAL, intent(inout) :: horzArr(:, :)
+            integer, intent(in) :: level
 
             integer :: ios
 
             ios = 0
-            read(str, *, iostat = ios) horzArr(rowClicked + 1, 1)
+            read(str, *, iostat = ios) horzArr(rowClicked + 1, level)
         end function readRealDataFromEditBox
 
 end module InitVariablesDialogModule

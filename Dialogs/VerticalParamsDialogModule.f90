@@ -34,7 +34,7 @@ module VerticalParamsDialogModule
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use SetUpModule, only: DimensionalizeVerticalParams, NonDimensionalizeVerticalParams, &
-                                   DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
+                                   DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams, ComputeVerticalProfiles
 
 
 
@@ -70,7 +70,7 @@ module VerticalParamsDialogModule
             integer :: newValue      ! For editing the displayed value in the list box
 
             select case (dlgMsg)
-            CASE (WM_APP + 100)
+            CASE (WM_APP + 400)
                     ! hide edit box
                     ID = getListControlIdFromRowClicked()
                     if (id /= -1) then
@@ -93,14 +93,14 @@ module VerticalParamsDialogModule
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VERT_DIMENSIONALIZE)
                     bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
 
-                    call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer")
-                    call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface")
-                    call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer", gModIntParams%NLEV)
+                    call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer", gModIntParams%NLEV)
+                    call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer", gModIntParams%NLEV)
+                    call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer", gModIntParams%NLEV)
+                    call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface", gModIntParams%NLEV - 1)
+                    call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface", gModIntParams%NLEV - 2)
                     pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)
-                    call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface")
+                    call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface", gModIntParams%NLEV - 1)
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -200,13 +200,13 @@ module VerticalParamsDialogModule
                                     call NonDimensionalizeHorizontalParams()
                                     call NonDimensionalizeVerticalParams()
                                 end if
-                                bret = PostMessage(hDlg, WM_APP + 100, 0, 0)
-                                call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer")
-                                call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer")
-                                call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface")
-                                call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface")
+                                bret = PostMessage(hDlg, WM_APP + 400, 0, 0)
+                                call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer", gModIntParams%NLEV)
+                                call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer", gModIntParams%NLEV)
+                                call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface", gModIntParams%NLEV - 1)
+                                call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface", gModIntParams%NLEV - 2)
                                 pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)
-                                call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface")
+                                call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface", gModIntParams%NLEV - 1)
                             endif
                             VerticalParamsDlgProc = 1
 
@@ -261,7 +261,8 @@ module VerticalParamsDialogModule
                     !bret = WriteCurrentStateToFile(hDlg, gModelSaveFile, gModelWelford, .true.)
                     bret = UnhookWindowsHookEx(hHook)
                     call NonDimensionalizeHorizontalParams()
-                    call NonDimensionalizeVerticalParams()                    
+                    call NonDimensionalizeVerticalParams()
+                    CALL ComputeVerticalProfiles()
                     ghVerticalParamsDlg = 0
             end select
             VerticalParamsDlgProc = 0 ! Didn't process the dialog message dlgMsg
@@ -461,7 +462,7 @@ module VerticalParamsDialogModule
         end function VerticalParamsDlgProc
 
 
-        subroutine handleIntListControl(hDlg, id, labels, vertArr, description)
+        subroutine handleIntListControl(hDlg, id, labels, vertArr, description, levels)
             use ifwinty
             use ifwin
             use DialogHelpersModule, only: EnsureListViewColumns, ResizeListViewToFitItems
@@ -474,6 +475,7 @@ module VerticalParamsDialogModule
             character(len=*), intent(in) :: labels(:)
             REAL, intent(in) :: vertArr(:)
             character(len=*), intent(in) :: description
+            integer, intent(in) :: levels
 
             integer(HANDLE) :: hList 
             integer(bool) :: bret
@@ -488,7 +490,7 @@ module VerticalParamsDialogModule
             widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsIntItemsIntoListView(hList, vertArr, description)
+            call loadLevelsIntItemsIntoListView(hList, vertArr, description, levels)
             bret = UpdateWindow(hList)
 
             ! Check that we have enough room to resize. If not we dont and we scroll.
@@ -503,7 +505,7 @@ module VerticalParamsDialogModule
             call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
         end subroutine handleIntListControl
 
-        subroutine loadLevelsIntItemsIntoListView(hList, vertArr, description)
+        subroutine loadLevelsIntItemsIntoListView(hList, vertArr, description, nlevs)
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gVertArr
             use DialogHelpersModule, only : AddListViewRowReal
@@ -514,11 +516,12 @@ module VerticalParamsDialogModule
             integer(HANDLE), intent(in) :: hList
             REAL, intent(in) :: vertArr(:)
             character(len=*), intent(in) :: description
+            integer, intent(in) :: nlevs
 
             integer :: i
             character(len=16) :: levels
         
-            do i = 1, gModIntParams%NLEV
+            do i = 1, nlevs
                 write(levels, '(A, I0)') trim(description)//" ", i
                 call AddListViewRowReal(hList, levels, [vertArr(i)], '(F7.3)') ! The 'trim' is done in the called subroutine
             end do

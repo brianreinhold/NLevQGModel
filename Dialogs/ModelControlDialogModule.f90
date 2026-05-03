@@ -18,7 +18,8 @@ module ModelControlDialogModule
             use ifwinty
             use ifwin
 
-            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, ghwndMain, LogMessage, WriteMessageBox, CenterWindow
+            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, gFont, ghwndMain, ghCurrentDlg, &
+                                          LogMessage, WriteMessageBox, CenterWindow
             use iso_c_binding
 
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile
@@ -84,7 +85,13 @@ module ModelControlDialogModule
             ModelControlDlgProc = 0
 
             select case (uMsg)
-            case (WM_INITDIALOG)
+
+                CASE (WM_APP + 200)
+                    ! Run model
+                    call setupAndRunModel()
+
+                case (WM_INITDIALOG)
+                    ghCurrentDlg = hDlg
                     realRowClicked = -1
                     intRowClicked = -1
                     ! When we get here we have come from the F4 option of the Main Menu. We need to
@@ -100,16 +107,18 @@ module ModelControlDialogModule
                         ModelControlDlgProc = 1
                         return
                     end if
-
-                    call DimensionalizeModRealParams()
-                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
-                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
+                    
                     ! If we get here we need to save some of the fields in modelIntParams and modelRealParams in case
                     ! the user changes them.
                     paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
                     paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
                     paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
                     paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                                                                   ! The saved RN value here is non dimensional
+
+                    call DimensionalizeModRealParams()
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
+                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
 
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgModelControlProc), NULL, GetCurrentThreadId())
@@ -288,28 +297,28 @@ module ModelControlDialogModule
                                     gModIntParams%plotType = GetComboIndex(hDlg, IDC_COMBO_MAP_TYPE) ! These are zero based
                                     ! Did plotType change from maps to time series?
                                     ! plotType <= 4 is map plotType > 4 is time series
-                                    if ((gModIntParams%plotType .GT. HOV_DIAG_AT_LONG .AND. previousMPLOT .LE. HOV_DIAG_AT_LONG) .OR. &
-                                        (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG .AND. previousMPLOT .GT. HOV_DIAG_AT_LONG)) Then
-                                        ! We need to change the contents of what is in the COMBO_FIELD1 dropdown
-                                        ! Field2 and Field3 can only be used with maps and will be enabled/disabled appropriately
-                                        hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
-                                        ! This loads the new set of options (clearing the old first)
-                                        bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
-                                        ! Set a new default value for the field since the existing one is for time series
-                                        !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
-                                            gModIntParams%field1 = TEMPERATURE
-                                            bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0)
-                                        !else
-                                        !    gModIntParams%field1 = TOT_HGT_TEND_GRAF
-                                        !    ! This is for getting by NO_PLOT which is the first field in the graphs options (check this)
-                                        !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - NO_PLOT, UINT_PTR), 0)
-                                        !end if
-                                        ! Enable or disable as the case may be
-                                        hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE))
-                                        hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                                        bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
-                                    end if
+                                    !if ((gModIntParams%plotType .GT. HOV_DIAG_AT_LONG .AND. previousMPLOT .LE. HOV_DIAG_AT_LONG) .OR. &
+                                    !    (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG .AND. previousMPLOT .GT. HOV_DIAG_AT_LONG)) Then
+                                    !    ! We need to change the contents of what is in the COMBO_FIELD1 dropdown
+                                    !    ! Field2 and Field3 can only be used with maps and will be enabled/disabled appropriately
+                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
+                                    !    ! This loads the new set of options (clearing the old first)
+                                    !    bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
+                                    !    ! Set a new default value for the field since the existing one is for time series
+                                    !    !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
+                                    !        gModIntParams%field1 = TEMPERATURE
+                                    !        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0)
+                                    !    !else
+                                    !    !    gModIntParams%field1 = TOT_HGT_TEND_GRAF
+                                    !    !    ! This is for getting by NO_PLOT which is the first field in the graphs options (check this)
+                                    !    !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - NO_PLOT, UINT_PTR), 0)
+                                    !    !end if
+                                    !    ! Enable or disable as the case may be
+                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
+                                    !    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE))
+                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
+                                    !    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
+                                    !end if
                                 case (IDC_COMBO_FIELD1)
                                     gModIntParams%field1 = GetComboIndex(hDlg, IDC_COMBO_FIELD1) + addOffset
                                 case (IDC_COMBO_FIELD2)
@@ -401,7 +410,6 @@ module ModelControlDialogModule
                                     ! User unchecked it
                                     call NonDimensionalizeModRealParams()
                                 end if
-                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
                                 bret = SetFocus(GetDlgItem(hDlg, IDC_REALVALUES))
                                 call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_REALVALUES))
                                 call handleRealListControl(hDlg)
@@ -409,34 +417,20 @@ module ModelControlDialogModule
 
 ! ------------------ Now to handle the F1-F10 buttons
 ! ---- F1:  Run Model
-                        case (IDC_BUTTON_RUN_MODEL) ! F1 Run as movie
-                            ! paramChange is defined in KeyboardHooksModule
-                            ! Non dimensionalized in the following function
-                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                            ret = InitModelWithModelControlVals()
-                            bret = EnableWindow(hDlg, .FALSE.)
-                            gElapsedTime%dimensionalTime = 4.0 * CORIOLIS_INVERSE * gModRealParams%DELT / SECONDS_PER_DAY
-                            gElapsedTime%timeSteps = 0
-                            call ClearScreen()
-                            bret = SetFocus(ghwndMain)
-                            call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
-                            ret = StartTimeLoop()
-                            ! Note this will eventually be moved into the F10 handler of the graphics window procedure
-                            bret = SetActiveWindow(hDlg)
-                            bret = EnableWindow(hDlg, .TRUE.)
-                            paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                            paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                            paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                            paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                            call DimensionalizeModRealParams() ! Method checks if already dimensionalized
+                        case (IDC_BUTTON_RUN_MODEL) ! F1 Run model
+                            call setupAndRunModel()
 
 ! ---- F2:  Edit Vertical Parameters
                         case (IDC_BUTTON_VERTICAL_PARAMS)
+                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
                             ghModelControlDlg = hDlg
 
 ! ---- F3:  Initialize flow variables
                         case (IDC_BUTTON_INIT_FLOW_VARIABLES)
+                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
                             ghModelControlDlg = hDlg
 
@@ -459,6 +453,12 @@ module ModelControlDialogModule
                                 if (ret == 0) ret = ReadSaveFile(gNLevFile)
                             endif
                             ghModelControlDlg = hDlg
+                            
+! ---- F8:  Clear Screen
+                        case (IDC_BUTTON_CLEAR_SCREEN)
+                            call ClearScreen()
+                            ghModelControlDlg = hDlg
+
 
 ! ---- F10:  Exit to main
                         case (IDC_BUTTON_RETURN_TO_MAIN) ! F10 Close
@@ -478,10 +478,33 @@ module ModelControlDialogModule
                     bret = ShowWindow(ghSettingsDlg, SW_SHOW)
                     ghModelControlDlg = 0
             end select
+
+            contains
+                subroutine setupAndRunModel()
+                    implicit none
+                    ! paramChange is defined in KeyboardHooksModule
+                    ! Non dimensionalized in the following function
+                    ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                    ret = InitModelWithModelControlVals()
+                    bret = EnableWindow(hDlg, .FALSE.)
+                    gElapsedTime%dimensionalTime = 4.0 * CORIOLIS_INVERSE * gModRealParams%DELT / SECONDS_PER_DAY
+                    gElapsedTime%timeSteps = 0
+                    call ClearScreen()
+                    bret = SetFocus(ghwndMain)
+                    call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
+                    ret = StartTimeLoop()
+                    paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                    paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                    paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                    paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                    call DimensionalizeModRealParams() ! Method checks if already dimensionalized
+                end subroutine setupAndRunModel
+
         end function ModelControlDlgProc
 
 !===================================== PRIVATE HELPERS
-        
+
+
         subroutine handleRealListControl(hDlg)
             use ifwinty
             use ifwin

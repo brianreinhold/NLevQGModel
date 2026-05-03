@@ -163,6 +163,7 @@ module KeyboardHooksModule
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams
             use DialogHelpersModule, only: HideMyEdit
+            use PlotModule, only: ClearScreen
             
             implicit none
 
@@ -183,15 +184,9 @@ module KeyboardHooksModule
 
                 IF (nCode >= 0) THEN
                     IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F7: Run as a movie
+                        ! F1: Run model
                         call LogMessage('User pressed F1 key in Model Control Dialog')
-                        iret = CheckModelControlChanges(paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                        iret = InitModelWithModelControlVals()
-                        iret = StartTimeLoop()
-                        paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                        paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                        paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                        paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                        bret = PostMessage(ghModelControlDlg, WM_APP + 200, 0, 0) 
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -239,8 +234,9 @@ module KeyboardHooksModule
                     END IF
 
                     IF (wParam == VK_F8 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F8: Run as a sequence of maps
+                        ! F8: Clear Screen
                         call LogMessage('User pressed F8 key in Model Control Dialog')
+                        call ClearScreen()
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -371,7 +367,7 @@ module KeyboardHooksModule
                         hFocus = GetFocus() ! currently focused control
                         hLB_User = GetDlgItem(ghVerticalParamsDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
                         IF (hFocus == hLB_User) THEN
-                            bret = PostMessage(ghVerticalParamsDlg, WM_APP + 100, 0, 0) ! Hides edit box if it is in focus
+                            bret = PostMessage(ghVerticalParamsDlg, WM_APP + 400, 0, 0) ! Hides edit box if it is in focus
                         END IF
                         KeyboardForDlgVerticalParamsProc = 1  ! Swallow the key
                         RETURN
@@ -412,11 +408,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
                         ! F1: Zero variables
                         call LogMessage('User pressed F1 key in InitVariables Dialog')
-                        gHorzArr%PS = 0.0
-                        gHorzArr%TF = 0.0
-                        gHorzArr%TOP = 0.0
-                        gHorzArr%SF = 0.0
-                        gHorzArr%FS = 0.0  
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 301, 0, 0) ! Calls ZeroVariables() and then repopulates the list controls
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -472,7 +464,7 @@ module KeyboardHooksModule
                         hFocus = GetFocus() ! currently focused control
                         hLB_User = GetDlgItem(ghInitVariablesDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
                         IF (hFocus == hLB_User) THEN
-                            bret = PostMessage(ghInitVariablesDlg, WM_APP + 100, 0, 0) ! Hides edit box if it is in focus
+                            bret = PostMessage(ghInitVariablesDlg, WM_APP + 300, 0, 0) ! Hides edit box if it is in focus
                         END IF
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
