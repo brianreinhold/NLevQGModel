@@ -25,7 +25,7 @@ module ModelControlDialogModule
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile
             use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
                                    ReadSaveFile, SaveModelState
-            use ConstantsModule, only: WEATHER_MAPS, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
+            use ConstantsModule, only: WEATHER_MAP, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
                                        FIELD_START, FIELD_GRAPH_START, SECONDS_PER_DAY, CORIOLIS_INVERSE
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
@@ -154,8 +154,8 @@ module ModelControlDialogModule
                     ! and maps or vice versa, and if so we reload FIELD1 with the appropriate options.
                     ! This is done in 'reloadComboBoxFields'
                     bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
-                    bret = reloadComboBoxFields(hDlg, WEATHER_MAPS, IDC_COMBO_FIELD2)   ! Always load with map options
-                    bret = reloadComboBoxFields(hDlg, WEATHER_MAPS, IDC_COMBO_FIELD3)   ! Always load with map options
+                    bret = reloadComboBoxFields(hDlg, WEATHER_MAP, IDC_COMBO_FIELD2)   ! Always load with map options
+                    bret = reloadComboBoxFields(hDlg, WEATHER_MAP, IDC_COMBO_FIELD3)   ! Always load with map options
                     ! initialize FIELD1
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
                     !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then

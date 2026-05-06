@@ -74,7 +74,7 @@ module ConstantsModule
     integer, parameter :: MAP_OVERLAY_3 = 3
     
                                                     ! Options for the types of displays for variable plotType
-    integer, parameter :: WEATHER_MAPS = 0          ! Classic weather maps at various levels
+    integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
     integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
     integer, parameter :: HOV_DIAG_AT_LAT = 3       ! Hovmoller diagram at specified 'latitude' and level

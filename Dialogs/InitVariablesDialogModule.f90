@@ -22,12 +22,12 @@ module InitVariablesDialogModule
 
             use ifwinty
             use ifwin
-
-            use NLevQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
             use iso_c_binding
 
+            use NLevQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
+
             use ArrayDimensionsModule, only: gCurrentDims
-            use ConstantsModule, only: REAL_TO_ASCII
+            use ConstantsModule, only: REAL_TO_ASCII, SQRT2
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit, GetComboIndex
@@ -124,6 +124,7 @@ module InitVariablesDialogModule
                         integer :: ios, rowClicked
                         character(len=16) :: str
                         real, pointer :: ptr(:, :)
+                        real :: val
                         ! Step 1: cast lParam to a C_PTR
                         lp = lParam
                         p_raw = transfer(lp, p_raw)
@@ -154,11 +155,17 @@ module InitVariablesDialogModule
                                         ! Function returns pointer to the correct array based on which list view was clicked
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
                                         ! Converts real value to string for edit box
-                                        if (id .NE. IDC_LIST_INIT_OROGRAPHY) then
-                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, levelIndex), str)
+                                        if (pnmv%hdr%idFrom .NE. IDC_LIST_INIT_OROGRAPHY) then
+                                            val = ptr(J + 1, levelIndex)
                                         else
-                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1, 1), str)  ! Orography case
+                                            val = ptr(J + 1, 1) ! Orography case
                                         endif
+                                        if (J + 1 < gModIntParams%LMAX2) then
+                                            val = SQRT2 * val
+                                        else
+                                            val = 2.0 * val
+                                        endif
+                                        ios = RealToAsciiToReal(REAL_TO_ASCII, val, str)
                                         !str = getStringFromRealForEditBox(ptr(J + 1))
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
@@ -238,18 +245,29 @@ module InitVariablesDialogModule
                                         character(LEN=16) :: strC ! C-string will have null terminator
                                         integer :: ios, rowClicked
                                         real, pointer :: ptr(:, :)
+                                        real :: val
+                                        logical, save :: isUpdating = .FALSE.
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
+                                        
                                         call LogMessage("EN_CHANGE signaled from edit real control ")
-
+                                        if (isUpdating) exit EN
+                                        isUpdating = .TRUE.
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_HORZ)
                                         newValue = GetDlgItemText(hDlg, IDC_EDIT_HORZ, strC, LEN(strC))
                                         str = strC(1 : newValue) ! Clean out the junk
-                                        if (ADJUSTL(TRIM(str)) == '') exit EN ! User typed enter
+                                        str = ADJUSTL(TRIM(str))
+                                        if (len_trim(str) == 0 .OR. str == "." .OR. str == "-" .OR. str == "-.") then
+                                            isUpdating = .FALSE.
+                                            exit EN
+                                        endif
+
+                                        ! Get the handle to the list control based upon the row clicked.
                                         hList = getListControlHandleFromRowClicked()
+                                        ! Get the array that is being edited based upon the row clicked
                                         ptr => getArrayFromRowClicked()
 
                                         ! This should be the row that was hilighted when we clicked on it. Of
-                                        ! course the original value of 'realRowClicked' is lost when callback returned
+                                        ! course the original value of 'rowClicked' is lost when callback returned
                                         rowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
                                         ios = 0
                                         
@@ -258,13 +276,24 @@ module InitVariablesDialogModule
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
-                                            
-                                            ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1, levelIndex), strC)
+                                            if (GetDlgCtrlID(hList) == IDC_LIST_INIT_OROGRAPHY) then
+                                                val = ptr(rowClicked + 1, 1)
+                                            else
+                                                val = ptr(rowClicked + 1, levelIndex)
+                                            endif
+                                            if (rowClicked + 1 < gModIntParams%LMAX2) then
+                                                val = SQRT2 * val
+                                            else
+                                                val = 2.0 * val
+                                            endif
+                                            ios = RealToAsciiToReal(REAL_TO_ASCII, val, strC)
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, strC)
+                                            isUpdating = .FALSE.
                                             exit EN
                                         end if
                                         call updateListViewValue(hEdit, hList, rowClicked, strC)
+                                        isUpdating = .FALSE.
                                     end BLOCK EN
                             end SELECT
                     end select
@@ -504,7 +533,7 @@ module InitVariablesDialogModule
             widths(1) = 128  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsIntItemsIntoListView(hList, horzArr, level)
+            call loadLevelsValuesIntoListView(hList, horzArr, level)
             bret = SendMessage(hList, LVM_ENSUREVISIBLE, 0, 0)
             bret = UpdateWindow(hList)
 
@@ -524,12 +553,13 @@ module InitVariablesDialogModule
             call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
         end subroutine handleIntListControl
 
-        subroutine loadLevelsIntItemsIntoListView(hList, horzArr, level)
+        subroutine loadLevelsValuesIntoListView(hList, horzArr, level)
             use ifwinty
             use ifwin
+            use ConstantsModule, only: SQRT2
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
-            use ModelFieldsModule, only: gVertArr
+            use ModelFieldsModule, only: gHorzArr
             use DialogHelpersModule, only : AddListViewRowReal
              
             implicit none
@@ -540,11 +570,18 @@ module InitVariablesDialogModule
 
             integer :: i, K, L, waveStart
             character(len=32) :: description
+            real :: zonalFactor, waveFactor
 
+            zonalFactor = 1.0
+            waveFactor = 1.0
+            if (gHorzArr%isDimensionalized) then
+                zonalFactor = SQRT2
+                waveFactor = 2.0
+            endif
             do i = 1, gCurrentDims%ITOT
                 if (I <= gModIntParams%LMAX2) then
                      write(description, '(A, I0, A)') "cos", i, "y"
-                     call AddListViewRowReal(hList, description, [horzArr(i, level)], '(F7.3)') ! The 'trim' is done in the called subroutine
+                     call AddListViewRowReal(hList, description, [zonalFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
                 else
                     waveStart = (i - gModIntParams%LMAX2)
                     ! pattern is cosKnxsinLy, sinKnxsinLy, for all L and then for all K
@@ -557,11 +594,11 @@ module InitVariablesDialogModule
                         ! Print out the sinKxSinLy for every even waveStart
                         write(description, '(A, I0, A, I0, A)') "sinn", k, "x sin", L, "y"
                     endif
-                    call AddListViewRowReal(hList, description, [horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
+                    call AddListViewRowReal(hList, description, [waveFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
                 endif
             end do
             i = SendMessage(hList, LVM_ENSUREVISIBLE, INT(gCurrentDims%ITOT - 1, INT_PTR_KIND()), TRUE)
-        end subroutine loadLevelsIntItemsIntoListView
+        end subroutine loadLevelsValuesIntoListView
         
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
         ! one of the real parameters and this method gets the real value and converts it
@@ -586,7 +623,9 @@ module InitVariablesDialogModule
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
         function readRealDataFromEditBox(str, rowClicked, horzArr, level) result(ios)
+            use ConstantsModule, only: SQRT2
             use ModelFieldsModule, only: gHorzArr
+            use ModelParamsModule, only: gModIntParams
             
             implicit none
             
@@ -594,11 +633,19 @@ module InitVariablesDialogModule
             integer, intent(in) :: rowClicked
             REAL, intent(inout) :: horzArr(:, :)
             integer, intent(in) :: level
+            
+            REAL :: val
 
             integer :: ios
 
             ios = 0
-            read(str, *, iostat = ios) horzArr(rowClicked + 1, level)
+            read(str, *, iostat = ios) val
+            if (rowClicked + 1 < gModIntParams%LMAX2) then
+                val = val / SQRT2
+            else
+                val = val / 2.0
+            endif
+            horzArr(rowClicked + 1, level) = val
         end function readRealDataFromEditBox
 
 end module InitVariablesDialogModule

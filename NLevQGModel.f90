@@ -424,12 +424,12 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ifwin       ! For GetCurrentThreadId
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
-    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAPS, NO_PLOT
+    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, NO_PLOT
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot
+    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime
 
     implicit none
 
@@ -458,8 +458,22 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     integer:: ret
     character(SIZEOFAPPNAME)  lpszName, lpszHelpFileName, lpszContents, lpszMessage
     character(SIZEOFAPPNAME)  lpszHeader
-    integer(HANDLE) :: hHook
-    save hHook
+    integer(HANDLE), save :: hHook
+
+    ! Variables used for mousing over maps and graphs to display the values at that point
+    integer, save :: mouse_x, mouse_y   ! Location of the mouse cursor
+    logical :: maps, graphs             ! Mousing over a map or a graph? Need both since both can be present on the screen
+    real, save :: current_val1, current_val2 ! Value at moused over location of field1 and field2
+    character*32 :: textbuffer
+    character*32, save :: valueStringStrm, valueStringTemp
+    INTEGER(4) :: textLen
+    TYPE(T_SIZE) :: sz
+    integer :: draw_x, i
+    real :: rlat, rlon
+    integer :: years
+    REAL, ALLOCATABLE, save :: X(:,:), X_Overlay(:, :)  ! These are the arrays containing interpolated values for weather maps. Created on heap.
+
+
 
     select case ( mesg )
         
@@ -537,11 +551,104 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
  
             ! 2. Copy the entire persistent black canvas from memory to the screen
             lret = BitBlt(hdc, 0, 0, gBitMapInfo%width, gBitMapInfo%height, gBitMapInfo%hMemDC, 0, 0, SRCCOPY)
+            
+! =============================== MOUSE OVER CODE
+            ! THis mess prints the moused-over value 'current_val' of the weather map to the screen in a separate 
+            ! layer. Some extra variables are needed since the value will be printed to the left when
+            ! the cursor is too close to the right side.
+            maps = (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP)
+            graphs = (gModIntParams%plotType == WEATHER_STN)
+
+            ! Early exit 
+            if ((gModelState%runState == RUNNING) .OR. &
+               (.NOT. (maps .OR. graphs)) .OR. &
+               (maps .AND. .NOT. (ALLOCATED(X) .OR. ALLOCATED(X_Overlay)))) then
+                lret = EndPaint(hWnd, ps)
+                MainWndProc = 0
+                return
+            endif
+            
+            ! --- 2. Calculate Content (The "What") This is the lat-lon for maps and the time for time series graphs
+            !        The values of the two field are printed above and below this line
+            textBuffer = ""
+            if (maps) then
+                if (mouse_y >= gBitMapInfo%height / 2) then
+                    lret = EndPaint(hWnd, ps)
+                    MainWndProc = 0
+                    return
+                endif
+                rlat = REAL(gBitMapInfo%height / 2 - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
+                rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
+                write(textBuffer, '(F5.1, A, F5.1, A)') rlon, " lon ", rlat, " lat"
+            else if (graphs) then
+                if (current_val1 < 0.0) then
+                    lret = EndPaint(hWnd, ps)
+                    MainWndProc = 0
+                    return
+                end if
+                years = Floor(current_val1 / 365.0)
+                write(textBuffer, '(I0, ":", F0.2, " yrs:days")') years, current_val1 - (years * 365)
+            end if
+
+            ! --- 3. UI Positioning (The "Where") ---
+            textLen = LEN_TRIM(textBuffer)
+            ret = GetTextExtentPoint32(hDC, TRIM(textBuffer), textLen, sz)
+            
+            ! result = MERGE( value_if_true, value_if_false, condition )  Like C's ? operator.
+            draw_x = merge(mouse_x - 15 - sz%cx, mouse_x + 15, mouse_x + 15 + sz%cx > gBitMapInfo%width)
+
+            ! --- 4. Draw (The "How") ---
+            ret = SetBkMode(hDC, TRANSPARENT)
+            ret = MSFWIN$SetTextColor(hDC, RGB(10, 80, 10))
+
+            ! Center Row
+            call QuickText(draw_x, mouse_y, textBuffer)
+
+            if (graphs) then
+                call QuickText(draw_x, mouse_y + 12, valueStringStrm)
+                call QuickText(draw_x, mouse_y - 12, valueStringTemp)
+            else if (maps) then
+                call FormatField(textBuffer, gModIntParams%field1, current_val1)
+                call QuickText(draw_x, mouse_y - 12, textBuffer)
+
+                call FormatField(textBuffer, gModIntParams%field2, current_val2)
+                call QuickText(draw_x, mouse_y + 12, textBuffer)
+            end if
+
             ! 3. End the paint process
             lret = EndPaint(hWnd, ps)
 
             MainWndProc = 0
             return
+            
+            CASE (WM_MOUSEMOVE)
+                if (GetForegroundWindow() /= hWnd .or. gModelState%runState == RUNNING) return
+                mouse_x = IAND(lParam, #FFFF)
+                mouse_y = ISHFT(lParam, -16)
+                maps = (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP)
+                graphs = (gModIntParams%plotType == WEATHER_STN)
+                if (maps) then
+                    ! 1. Ensure data is ready (only happens once per plot change)
+                    if (.NOT. ALLOCATED(X) .AND. .NOT. ALLOCATED(X_Overlay)) then
+                         call NonDimensionalizeModRealParams()
+                         call PrepareGrid(X, gModIntParams%field1)
+                         call PrepareGrid(X_Overlay, gModIntParams%field2)
+                    end if
+            
+                    ! 2. Sample data if within bounds
+                    if (mouse_y >= 0 .and. mouse_y < gBitMapInfo%height / 2) then
+                        if (ALLOCATED(X))         current_val1 = X(mouse_x + 1, gBitMapInfo%height/2 - mouse_y)
+                        if (ALLOCATED(X_Overlay)) current_val2 = X_Overlay(mouse_x + 1, gBitMapInfo%height/2 - mouse_y)
+                        ret = InvalidateRect(hWnd, NULL, .FALSE.)
+                    end if
+            
+                else if (graphs) then
+                    i = gModIntParams%outputInterval * (mouse_x - (gBitMapInfo%width - 1)) + gElapsedTime%timeSteps
+                    current_val1 = REAL(i) * gElapsedTime%dimensionalTime
+                    valueStringStrm = getYValues(mouse_y, gModIntParams%field1)
+                    valueStringTemp = getYValues(mouse_y, gModIntParams%field2)
+                    ret = InvalidateRect(hWnd, NULL, .FALSE.)
+                end if
 
 
         case (WM_ERASEBKGND)
@@ -569,24 +676,15 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ret = SetFocus(ghCurrentDlg)
                     ret = SetActiveWindow(ghCurrentDlg)
                 endif
-                !    else if (gModelState%dataSource == FILE .OR. gModelState%dataSource == ENSEMBLES) then
-                !        call LogMessage("User returning to Ensembles Dialog via F10")
-                !        if (gModelState%dataSource == ENSEMBLES) then
-                !            call computeMseAndSpredFromEnsembles(hWnd, gEnsembleSetData, gObsBaseFile, .true.) ! This is a termination; True = cleanup
-                !        endif
-                !        ret = SetForegroundWindow(ghCurrentDlg)
-                !        ret = SendMessage(ghCurrentDlg, WM_NEXTDLGCTL, GetDlgItem(ghCurrentDlg, IDC_BUTTON_RUN_DIFF), INT(1, INT_PTR))
-                !    endif
-                !    gTimeSteps = 0 ! Reset the elapsed time displayed in plots
-                !    if(ALLOCATED(X)) then
-                !        call LogMessage("DeAllocated interpolated grid X on F10")
-                !        deallocate(X)
-                !    endif
-                !    if(ALLOCATED(X_Overlay)) then
-                !        call LogMessage("DeAllocated interpolated grid X_overlay on F10")
-                !        deallocate(X_Overlay)
-                !    endif
-                !endif
+                gElapsedTime%timeSteps = 0 ! Reset the elapsed time displayed in plots
+                if(ALLOCATED(X)) then
+                    call LogMessage("DeAllocated interpolated grid X on F10")
+                    deallocate(X)
+                endif
+                if(ALLOCATED(X_Overlay)) then
+                    call LogMessage("DeAllocated interpolated grid X_overlay on F10")
+                    deallocate(X_Overlay)
+                endif
             endif
             MainWndProc = 0
             return
@@ -596,24 +694,25 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             select case (wParam)
     ! F1: PAUSE/RESUME -----------------------
                 case (VK_F1)
-                    if (gModelState%runState .EQ. PAUSED) then
+                    if (gModelState%runState .NE. RUNNING) then
+                        if(ALLOCATED(X)) then
+                            call LogMessage("DeAllocated interpolated X grid on F1")
+                            deallocate(X)
+                        endif
+                        if(ALLOCATED(X_Overlay)) then
+                            call LogMessage("DeAllocated interpolated x_Overlay grid on F1")
+                            deallocate(X_Overlay)
+                        endif
+                        call NonDimensionalizeModRealParams()
                         call LogMessage("User resuming run")
-                        gModelState%runState = RUNNING
-                    else if (gModelState%runState .EQ. RUNNING) then
+                        if (gModelState%runState == PAUSED) then
+                            gModelState%runState = RUNNING
+                        else
+                            ret = StartTimeLoop()
+                        endif
+                    else
                         gModelState%runState = PAUSED
                         call LogMessage("User pausing run")
-                    else ! STOPPED CASE
-                        call LogMessage("User continuing stopped run")
-                        !if(ALLOCATED(X)) then
-                        !    call LogMessage("DeAllocated interpolated X grid on F1")
-                        !    deallocate(X)
-                        !endif
-                        !if(ALLOCATED(X_Overlay)) then
-                        !    call LogMessage("DeAllocated interpolated x_Overlay grid on F1")
-                        !    deallocate(X_Overlay)
-                        !endif
-                        call NonDimensionalizeModRealParams()
-                        ret = StartTimeLoop()
                     endif
     ! F2: Change Plot type -----------------------
                 case (VK_F2)
@@ -621,29 +720,21 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ! GetKeyState returns a negative value if the high-order bit is set
                     if (GetKeyState(VK_SHIFT) < 0) then
                         gModIntParams%plotType = gModIntParams%plotType - 1
-                        if (gModIntParams%plotType .LT. WEATHER_MAPS) gModIntParams%plotType = NO_PLOT
+                        if (gModIntParams%plotType .LT. WEATHER_MAP) gModIntParams%plotType = NO_PLOT
                     else
                         gModIntParams%plotType = gModIntParams%plotType + 1
-                        if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAPS
+                        if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAP
                     end if
-                    !if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X and a new one wont be created
-                                                        ! ff we switch to weather maps
-                    !if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
-                    !current_val = -1.0
+                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X and a new one wont be created
+                                                        ! if we switch to weather maps
+                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
+                    current_val1 = -1.0
                     call ClearScreen()
-                    !if (gModelState%runState .NE. RUNNING) then
-                    !    call setDimensionalState(.false.)
-                    !    if(gModelState%dataSource == MODEL) then
-                    !        call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
-                    !        ret = StartModel(gCurrentWelford)
-                    !    else if (gModelState%dataSource == FILE) then
-                    !        call LogMessage("Plot type changed while single ensemble run was stopped or paused. Restarting run")
-                    !        call computeMseWithOneEnsemble(hWnd, gEnsembleFile, gObsBaseFile)
-                    !    else if (gModelState%dataSource == ENSEMBLES) then
-                    !        call LogMessage("Plot type changed while ensembles run was stopped or paused. Restarting run")
-                    !        call computeMseAndSpredFromEnsembles(hWnd, gEnsembleSetData, gObsBaseFile, .false.) ! No cleanup
-                    !    endif
-                    !end if
+                    if (gModelState%runState .NE. RUNNING) then
+                        call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
+                        call NonDimensionalizeModRealParams()
+                        ret = StartTimeLoop()
+                    end if
     ! F3: Clear Screen -----------------------
                 case (VK_F3)
                     call ClearScreen()
@@ -652,6 +743,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User moving up a level")
                     gModIntParams%LEVP = gModIntParams%LEVP + 1
                     if (gModIntParams%LEVP > gModIntParams%NLEV) gModIntParams%LEVP = 1
+                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X 
+                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
+                    current_val1 = -1.0
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
@@ -659,6 +753,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User moving down a level")
                     gModIntParams%LEVP = gModIntParams%LEVP - 1
                     if (gModIntParams%LEVP < 1) gModIntParams%LEVP = gModIntParams%NLEV
+                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X 
+                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
+                    current_val1 = -1.0
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
@@ -686,7 +783,65 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             MainWndProc = DefWindowProc( hWnd, mesg, wParam, lParam )
 
     end select
-end
+
+
+    contains
+        ! The variables declared in function are visible in these 'internal' methods 
+        ! Helpers for WM_PAINT
+        subroutine QuickText(x, y, str)
+            use IFWBASE ! Contains RGB macro
+            use IFWIN, only: MSFWIN$SetTextColor
+            use user32
+            USE GDI32
+    
+            implicit none
+
+            integer, intent(in) :: x, y
+            character(len=*), intent(in) :: str
+
+            integer :: tLen
+            integer(bool) ret
+    
+            tLen = LEN_TRIM(str)
+            if (tLen > 0 .AND. str(1:1) /= char(0)) ret = TextOut(hDC, x, y, TRIM(str), tLen)
+        end subroutine
+
+        subroutine FormatField(buf, field, val)
+            use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
+                OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
+                OROG_HGT_TEND, OROGRAPHY
+
+            implicit none
+
+            character(len=*), intent(out) :: buf
+            integer, intent(in) :: field
+            real, intent(in) :: val
+
+            select case (field)     ! semi colon allows more than one line of code on a single line like in C
+                case (HEIGHT);      write(buf, '(F10.2, " m")') val
+                case (TEMPERATURE); write(buf, '(F10.2, A, "C")') val, char(176)
+                case default;       buf = ""
+            end select
+        end subroutine
+
+        ! Helper for MOUSE_MOVE
+        subroutine PrepareGrid(X, field)
+            use ConstantsModule, only: PLOTTING_OFF
+            use PlotModule, only: populateInterpolatedGrid
+
+            implicit none
+
+            REAL, ALLOCATABLE, INTENT(INOUT) :: X(:,:)
+            INTEGER, INTENT(IN) :: field
+        
+            if (field == PLOTTING_OFF) return
+
+            allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
+
+            call populateInterpolatedGrid(X, field)
+        end subroutine
+
+end function MainWndProc
 
 
 

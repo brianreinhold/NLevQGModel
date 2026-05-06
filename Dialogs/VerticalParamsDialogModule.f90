@@ -223,12 +223,22 @@ module VerticalParamsDialogModule
                                         integer :: ios, rowClicked
                                         real, pointer :: ptr(:)
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
+                                        logical, save :: isUpdating = .FALSE.
+                                        
+                                        if (isUpdating) exit EN
+                                        isUpdating = .TRUE.
                                         call LogMessage("EN_CHANGE signaled from edit real control ")
 
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_VERTICAL)
+                                        
                                         newValue = GetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC, LEN(strC))
                                         str = strC(1 : newValue) ! Clean out the junk
-                                        if (ADJUSTL(TRIM(str)) == '') exit EN ! User typed enter
+                                        str = ADJUSTL(TRIM(str))
+                                        if (len_trim(str) == 0 .OR. str == "." .OR. str == "-" .OR. str == "-.") then
+                                            isUpdating = .FALSE.
+                                            exit EN
+                                        endif
+
                                         hList = getListControlHandleFromRowClicked()
                                         ptr => getArrayFromRowClicked()
 
@@ -246,9 +256,11 @@ module VerticalParamsDialogModule
                                             ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1), strC)
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC)
+                                            isUpdating = .FALSE.
                                             exit EN
                                         end if
                                         call updateListViewValue(hEdit, hList, rowClicked, strC)
+                                        isUpdating = .FALSE.
                                     end BLOCK EN
                             end SELECT
                     end select
@@ -490,7 +502,7 @@ module VerticalParamsDialogModule
             widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsIntItemsIntoListView(hList, vertArr, description, levels)
+            call loadLevelsValsIntoListView(hList, vertArr, description, levels)
             bret = UpdateWindow(hList)
 
             ! Check that we have enough room to resize. If not we dont and we scroll.
@@ -505,13 +517,16 @@ module VerticalParamsDialogModule
             call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
         end subroutine handleIntListControl
 
-        subroutine loadLevelsIntItemsIntoListView(hList, vertArr, description, nlevs)
-            use ModelParamsModule, only: gModIntParams
-            use ModelFieldsModule, only: gVertArr
+        subroutine loadLevelsValsIntoListView(hList, vertArr, description, nlevs) 
+            use IFWINTY, only: HANDLE
+            use IFWIN, only: GetDlgCtrlID
+            use ConstantsModule, only: SQRT2
+            use ModelFieldsModule, only: gHorzArr
             use DialogHelpersModule, only : AddListViewRowReal
-            use ifwinty, only: HANDLE
             
             implicit none
+            
+            include 'resource.fd'
         
             integer(HANDLE), intent(in) :: hList
             REAL, intent(in) :: vertArr(:)
@@ -520,12 +535,16 @@ module VerticalParamsDialogModule
 
             integer :: i
             character(len=16) :: levels
-        
+            real :: zonalFactor
+
+            zonalFactor = 1.0
+            if ((GetDlgCtrlID(hList) == IDC_LIST_THERMAL_DRIVING) .AND. gHorzArr%isDimensionalized) zonalFactor = SQRT2
+
             do i = 1, nlevs
                 write(levels, '(A, I0)') trim(description)//" ", i
-                call AddListViewRowReal(hList, levels, [vertArr(i)], '(F7.3)') ! The 'trim' is done in the called subroutine
+                call AddListViewRowReal(hList, levels, [zonalFactor * vertArr(i)], '(F8.3)') ! The 'trim' is done in the called subroutine
             end do
-        end subroutine loadLevelsIntItemsIntoListView
+        end subroutine loadLevelsValsIntoListView
         
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
         ! one of the real parameters and this method gets the real value and converts it

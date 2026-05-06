@@ -71,14 +71,11 @@ module ArrayDimensionsModule
         integer :: IYH      ! IYH: Y dimension of arrays plotted to the screen. It is IYMAX/2 + 1
         integer :: IBIG     ! IBIG: The size of the WRK array for the FFT991 method and ASXY plot data generation. Must exceed KX * KY
         integer :: IBOX     ! IBOX: is the number of bytes in the work array (used in ASXY)
-        integer :: IRML     ! IRML is the size of the RML array used in the FFT991 inverse transform
         integer :: KXLYD    ! KXLYD is the allocated size of the G1, G2, G3 arrays used in FFT991 and ASXY plot routine
         integer :: LYD      ! LYD is the allocated size of the TMP array used in y-transforms
 
         ! Was Computed in AllocateHorizontalArrays now done in SetDimensions
         integer :: ITOTND   ! ITOTND is the allocated horizontal*vertical dimension = zonalWaves * meridWaves * levels
-        integer :: ITRXD    ! ITRXD is the allocated size of the zonal trig arrays for FFT991
-        integer :: ITRYD    ! ITRYD is the allocated size of the meridional trig arrays for FFT991
         
         integer :: NINTD    ! NINTD is the allocated size of the interaction coefficient arrays
         ! Was Computed in AllocateStatslArrays now done in SetDimensions
@@ -109,12 +106,9 @@ module ArrayDimensionsModule
             arraySizes%IYH = 0
             arraySizes%IBIG = 0
             arraySizes%IBOX = 0
-            arraySizes%IRML = 0
             arraySizes%ITOTND = 0
             arraySizes%KXLYD = 0
             arraySizes%LYD = 0
-            arraySizes%ITRXD = 0
-            arraySizes%ITRYD = 0
             arraySizes%NINTD = 0
             arraySizes%ITOTA = 0
             arraySizes%NALA = 0

@@ -93,7 +93,7 @@ MODULE ModelFieldsModule
         !TYPE :: ChainHorzArrays
         !    LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
         !    REAL, POINTER :: GQ(:),BTA(:),PSB(:),PS(:),TH(:),WW(:),TF(:),FS(:),ADS(:),WS(:),S(:),FT(:),ADT(:),WT(:),T(:),SF(:),ADO(:),TOP(:)
-        !    REAL, POINTER :: G1(:),G2(:),G3(:),TMP(:),DAT(:),AKL(:),AKLI(:),ZS(:),PSSAVE(:),RML(:),TRX(:),TRY(:)
+        !    REAL, POINTER :: G1(:),G2(:),G3(:),TMP(:),DAT(:),AKL(:),AKLI(:),ZS(:),PSSAVE(:)
         !    INTEGER, POINTER :: IXL(:),IYL(:)
         !END TYPE ChainHorzArrays
     ! Unfortunately Fortran does not allow allocatable target arrays in a type
@@ -130,9 +130,6 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: AKLI_pool(:)     !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels)
     REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:,:) !  PSSAVE(ITOTD,maxLevels)
-    REAL, ALLOCATABLE, TARGET :: RML_pool(:,:)    !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-    REAL, ALLOCATABLE, TARGET :: TRX_pool(:)      !  TRX(gArrayDims%ITRXD)
-    REAL, ALLOCATABLE, TARGET :: TRY_pool(:)      !  TRY(gArrayDims%ITRYD)
     
     INTEGER, ALLOCATABLE, TARGET :: IXL_pool(:)   !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
     INTEGER, ALLOCATABLE, TARGET :: IYL_pool(:)   !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
@@ -180,9 +177,6 @@ MODULE ModelFieldsModule
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
         REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
         REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
-        REAL, POINTER :: RML(:,:) => null()     !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-        REAL, POINTER :: TRX(:) => null()       !  TRX(gArrayDims%ITRXD)
-        REAL, POINTER :: TRY(:) => null()       !  TRY(gArrayDims%ITRYD)
 
         INTEGER, POINTER :: IXL(:) => null()    !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
         INTEGER, POINTER :: IYL(:) => null()    !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
@@ -340,9 +334,6 @@ MODULE ModelFieldsModule
                     AKLI_pool(gArrayDims%itot),                        &
                     ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels),  &
                     PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels), &
-                    RML_pool((2 * gUserSettings%maxLevels + 1) , gUserSettings%maxLevels), &
-                    TRX_pool(gArrayDims%ITRXD),              &
-                    TRY_pool(gArrayDims%ITRYD),              &
                     IXL_pool(gArrayDims%lyd),                &
                     IYL_pool(gArrayDims%lyd), STAT = status)
 
@@ -394,9 +385,6 @@ MODULE ModelFieldsModule
             AKL_pool = 0.0
             AKLI_pool = 0.0
             TOP_pool = 0.0
-            RML_pool = 0.0
-            TRX_pool = 0.0
-            TRY_pool = 0.0
             IXL_pool = 0.0
             IYL_pool = 0.0
         end subroutine ZeroHorzArrays
@@ -469,12 +457,7 @@ MODULE ModelFieldsModule
             gHorzArr%AKL(1 : itot) => AKL_pool(1 : itot)
             gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
 
-            ! RML is always the same size?
-            !gHorzArr%RML(1 : 2 * gUserSettings%maxMeridWaves + 1, 1 : gUserSettings%maxMeridWaves) => RML_pool
-            
             ! Transform arrays
-            gHorzArr%TRX(1 : arraySizes%ITRXD) => TRX_pool(1 : arraySizes%ITRXD)
-            gHorzArr%TRY(1 : arraySizes%ITRYD) => TRY_pool(1 : arraySizes%ITRYD)
             gHorzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
             gHorzArr%IYL(1 : arraySizes%lyd) => IYL_pool(1 : arraySizes%lyd)
             gHorzArr%Gc(1 : arraySizes%KX) => Gc_pool(1 : arraySizes%KX)
@@ -528,9 +511,6 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(AKLI_pool))    DEALLOCATE(AKLI_pool)
             IF (ALLOCATED(ZS_pool))      DEALLOCATE(ZS_pool)
             IF (ALLOCATED(PSSAVE_pool))  DEALLOCATE(PSSAVE_pool)
-            IF (ALLOCATED(RML_pool))     DEALLOCATE(RML_pool)
-            IF (ALLOCATED(TRX_pool))     DEALLOCATE(TRX_pool)
-            IF (ALLOCATED(TRY_pool))     DEALLOCATE(TRY_pool)
             IF (ALLOCATED(IXL_pool))     DEALLOCATE(IXL_pool)
             IF (ALLOCATED(IYL_pool))     DEALLOCATE(IYL_pool)
             ! The following below is equivalent to nullifying all pointers in gHorzArr type
@@ -573,9 +553,6 @@ MODULE ModelFieldsModule
             gHorzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
             gHorzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)
             gHorzArr%PSSAVE  => NULL()  !  PSSAVE(ITOTD,maxLevels)
-            gHorzArr%RML  => null()     !  RML(2*maxMeridWaves+1,maxMeridWaves) is used in the projection routines in inverse transform.
-            gHorzArr%TRX  => null()       !  TRX(gArrayDims%ITRXD)
-            gHorzArr%TRY  => null()       !  TRY(gArrayDims%ITRYD)
 
             gHorzArr%IXL  => null()
             gHorzArr%IYL  => null()

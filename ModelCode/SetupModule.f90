@@ -377,8 +377,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
                   gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
-                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
-                  gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
+                  gHorzArr%IXL, gHorzArr%IYL
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gStatsArr%allocated, &
@@ -466,8 +466,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
                   gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
-                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, gHorzArr%RML, &
-                  gHorzArr%TRX, gHorzArr%TRY, gHorzArr%IXL, gHorzArr%IYL
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
+                  gHorzArr%IXL, gHorzArr%IYL
 
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gStatsArr%allocated, &
@@ -981,10 +981,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !---------------------------------Set KXLYD to largest of KX*LY, (KX,LY)*IZMAX
             arraySizes%KXLYD = I * J ! will be either (KX * LY) or (KX * IZMAX) or (LY * IZMAX)
 
-            ! This is to compute the RML array size used ?
-            ! Still have to see how this is used
-            arraySizes%IRML = (2 * gUserSettings%maxMeridWaves + 1) * gUserSettings%maxMeridWaves
-
             !---------------------------------Set TMP array to largest of KX or LY
             arraySizes%LYD = I
 
@@ -998,9 +994,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             arraySizes%IXMAX1 = arraySizes%IXMAX + 1
             
             arraySizes%ITOTND = arraySizes%ITOT * levels
-            arraySizes%ITRXD = 3 * arraySizes%IXMAX / 2 + 1
-            arraySizes%ITRYD = 3 * arraySizes%IYMAX / 2 + 1
-            
+
             !---------------------------------Statistical array sizes:
             arraySizes%ITOTA = 1
             arraySizes%NALA = 1
@@ -1136,7 +1130,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         SUBROUTINE SetDefaults()
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
                 OROG_HGT_TEND, HGT_FORCING, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
-                HGT_WAVE_SPEED_GRAF, WEATHER_MAPS, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
+                HGT_WAVE_SPEED_GRAF, WEATHER_MAP, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
                 gContourIntervals, gModPlotParams, gModSensParams, gPlotScales
@@ -1303,7 +1297,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%ICYC = 1
             gModIntParams%ISTEP = 5840
             gModIntParams%outputInterval = 4 
-            gModIntParams%plotType = WEATHER_MAPS
+            gModIntParams%plotType = WEATHER_MAP
             gModIntParams%field1 = TEMPERATURE
             gModIntParams%field2 = HEIGHT
             gModIntParams%field3 = PLOTTING_OFF

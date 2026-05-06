@@ -230,7 +230,7 @@ module PlotModule
         ! during a model run. The user might be able to change some parameters while the model is
         ! running that could require that this routine be called again.
         subroutine initializePlot()
-            use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, WEATHER_MAPS, &
+            use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, WEATHER_MAP, &
                                        SQRT2, PLOTTING_OFF
             use ModelParamsModule, only: gModIntParams, gPlotScales, gIsTemperature
             IMPLICIT NONE
@@ -267,12 +267,12 @@ module PlotModule
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG)then
             else if (gModIntParams%plotType == PHASE_AND_MAP) then 
             else if (gModIntParams%plotType == PHASE_AND_MAP) then 
-            else if (gModIntParams%plotType == WEATHER_MAPS) then
-                gWeatherMap1% field = gModIntParams%field1
+            else if (gModIntParams%plotType == WEATHER_MAP) then
+                gWeatherMap1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field1, gWeatherMap1, .true.)
                 endif
-                gWeatherMap2% field = gModIntParams%field2
+                gWeatherMap2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field2, gWeatherMap2, gModIntParams%field1 == PLOTTING_OFF)
                 endif
@@ -419,7 +419,7 @@ module PlotModule
         !> and gDataType%dataSource (where the data to be plotted is coming from the model, a file
         !> or a set of ensemble files
         subroutine outputPlot()
-            use ConstantsModule, only: WEATHER_MAPS, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
+            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
                 HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
                 HEIGHT, TEMPERATURE, SECONDS_PER_DAY, wp
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
@@ -487,7 +487,7 @@ module PlotModule
     !        endif
     !
     ! WEATHER MAP ----------------------
-            if (gModIntParams%plotType == WEATHER_MAPS) then
+            if (gModIntParams%plotType == WEATHER_MAP) then
                 ! We do not force the screen to update if gModIntParams%field2 is not equal
                 ! to NO_PLOT. In that case gModIntParams%field1 gets plotted first and then
                 ! a second call to plotWeatherMap fir gModIntParams%field2 is made.
@@ -515,6 +515,17 @@ module PlotModule
             gElapsedTime%timeSteps = gElapsedTime%timeSteps + gModIntParams%outputInterval
 
         end subroutine outputPlot
+
+        function getWeatherMapType(field) result(wxMapType)
+            implicit none
+            
+            integer, intent(in) :: field
+            
+            type(WeatherMap) :: wxMapType
+
+            if (gWeatherMap1%field == field) wxMapType = gWeatherMap1
+            if (gWeatherMap2%field == field) wxMapType = gWeatherMap2
+        end function getWeatherMapType
         
         !> This routine creates the one dimensional array representing the actual
         !> values of the height or temperature field at the latitude selected by
@@ -700,103 +711,41 @@ module PlotModule
             ! Copy the first column to the column just after the FFT data
             ! where the FFT data occupies indices 1 to IXMAX
             grid(gCurrentDims%IXMAX + 1, :) = grid(1, :)
-            
-
         end subroutine createGrid
 
         !> This function gets the value of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
         !! @param  mouse_y: the y-ccordinate value of the mouse cursor
-        !! @Param  isHeight: when true we get the current height value the y-coordinate corresponds to. Otherwise it
-        !!                   gets the temperature. The values are based upon plot type (log or linear) and the
-        !!                   values of time series max values user-defined in gPlotConfig
-        !function getYValues(mouse_y, isHeight) result(labelText)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, WEATHER_STN, ENERGY_TIME_SERIES, MODEL
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !    use ModelTypesModule, only: gDataType
-        !    
-        !    implicit none
-        !
-        !    integer, intent(in) :: mouse_y  ! y-coordinate of mouse
-        !    LOGICAL, intent(in) :: isHeight ! are we doing the isHeight option (create string for height values, otherwise temperature values)
-        !
-        !    real :: value, topValue
-        !    character(len=32) :: labelText
-        !    character(len=16) :: units
-        !
-        !    real :: logMin, logMax, logRange, logVal
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !
-        !    if (gModIntParams%plotType == WEATHER_STN) then
-        !        if (isHeight) then
-        !            if (.NOT. usesHeight) then
-        !                labelText = CHAR(0)
-        !                return
-        !            endif
-        !            topValue = gPlotConfig%contHghtsSeries
-        !            units = " m"
-        !        else
-        !            if (.NOT. usesTemperature) then
-        !                labelText = CHAR(0)
-        !                return
-        !            endif
-        !            topValue = gPlotConfig%contTempsSeries
-        !            units = CHAR(176)//"C"
-        !        endif
-        !        ! This 'T12' forces the units to start at the 12th character of the string
-        !        value = topValue * (1 - 2.0 * real(mouse_y) / REAL(gBitMapInfo%height))
-        !        write(labelText, '(F10.3, T12, A)') value, trim(units)
-        !    else if (gModIntParams%plotType == ENERGY_TIME_SERIES) then
-        !        if (gDataType%dataSource == MODEL) then
-        !            if (.NOT. isHeight) then
-        !                labelText = CHAR(0)
-        !                return
-        !            end if
-        !            topValue = gPlotConfig%contKESeries
-        !            units = "J/kg"
-        !            value = topValue * (1 - real(mouse_y) / REAL(gBitMapInfo%height))
-        !            ! This 'T12' forces the units to start at the 12th character of the string
-        !            write(labelText, '(F10.3, T12, A)') value, trim(units)
-        !        else ! If not 'MODEL' source we are dealing with FILE and ENSEMBLES source and displaying RMSE and SPREADs
-        !            if (isHeight) then
-        !                ! ANY(myArray) returns .TRUE. if one is true.
-        !                ! .NOT. ANY(myArray) returns .TRUE. only if all of them are false.
-        !                ! Exit if NONE of 11, 13, or 15 are true
-        !                if (.NOT. ANY(gPlotConfig%weatherStnCom(11:15:2))) then
-        !                    labelText = CHAR(0)
-        !                    return
-        !                endif 
-        !                topValue = REAL(gPlotConfig%contHghtsSeries)
-        !                units = "m"
-        !            else
-        !                ! Exit if NONE of 12, 14, or 16 are true
-        !                if (.NOT. ANY(gPlotConfig%weatherStnCom(12:16:2))) then
-        !                    labelText = CHAR(0)
-        !                    return
-        !                endif 
-        !                topValue = REAL(gPlotConfig%contTempsSeries)
-        !                units = CHAR(176)//"C"
-        !            end if
-        !            logMax = log10(topValue)
-        !            logMin = logMax - REAL(gPlotConfig%logfloor)  ! Displays gPlotConfig%logfloor orders of magnitude (e.g., 100 to 0.001)
-        !            logRange = logMax - logMin
-        !            logVal = logMax - logRange * (real(mouse_y)/REAL(gBitMapInfo%height))
-        !            value = 10.0**logVal
-        !            ! This 'T13' forces the units to start at the 13th character of the string
-        !            if (value < .01) then
-        !                write(labelText, '(E11.4, T13, A)') value, trim(units)
-        !            else
-        !                write(labelText, '(F10.4, T13, A)') value, trim(units)
-        !            endif
-        !        endif
-        !    endif
-        !    
-        !end function getYValues
+        !! @Param  field: variable being displayed
+        function getYValues(mouse_y, field) result(labelText)
+            use ConstantsModule, only: PLOTTING_OFF, WEATHER_STN
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ModelParamsModule, only: gModelState, gModIntParams, gContourIntervals
+            
+            implicit none
+        
+            integer, intent(in) :: mouse_y  ! y-coordinate of mouse
+            integer, intent(in) :: field
+        
+            real :: value, topValue
+            character(len=32) :: labelText
+            character(len=16) :: units
+            
+            if (field == PLOTTING_OFF) then
+                labelText = CHAR(0)
+                return
+            endif
+
+            if (gModIntParams%plotType == WEATHER_STN) then
+                topValue = gContourIntervals%VR(field)
+                
+                units = getUnits(field)
+                ! This 'T12' forces the units to start at the 12th character of the string
+                value = topValue * (1 - 2.0 * real(mouse_y) / REAL(gBitMapInfo%height))
+                write(labelText, '(F10.3, T12, A)') value, trim(units)
+            endif
+
+        end function getYValues
 
         subroutine ClearScreen()
             USE IFWINTY
@@ -804,7 +753,7 @@ module PlotModule
             USE USER32
             use IFWBASE ! Contains RGB macro
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ConstantsModule, only: WEATHER_MAPS, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
+            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
                 HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
                 HEIGHT, TEMPERATURE, wp
             use ModelParamsModule, only: gModIntParams
@@ -859,7 +808,7 @@ module PlotModule
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
                 gPlotConfig%col = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
-            else if (gModIntParams%plotType == WEATHER_MAPS) then
+            else if (gModIntParams%plotType == WEATHER_MAP) then
                 !call DrawGridLines(.false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
                 !call DrawGridLines(.false.)
@@ -950,6 +899,71 @@ module PlotModule
 
             end select
         end subroutine loadFields
+        
+        function getUnits(field) result(text)
+            use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
+                OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
+                OROG_HGT_TEND, OROGRAPHY
+
+            implicit none
+
+            integer, intent(in)        :: field
+            
+            character(len=16) :: text
+
+            select case (field)
+                case(VORTICITY)             ! Vorticity in 10**-5/s
+                    text =  " 10**-5/s"
+
+                case(HEIGHT)                ! Height in meters
+                    text =  " m"
+
+                case(TEMPERATURE)           ! Temperature in Centigrade
+                    text = CHAR(176)//"C"
+
+                case(VERTICAL_WIND)         ! Vertical wind in mb/hr or mm/sec
+                    text = " mb/hr"
+                    
+                case(TEMP_FORCING)          ! Temperature driving (forcing) - Radiative relaxation temperature in Centigrade
+                    text = CHAR(176)//"C/day"
+
+                case(TOT_HGT_TEND)          ! Total Height tendency in meters/day
+                    text = " m/day"
+
+                case(ADV_BETA_HGT_TEND)     ! Height tendencies in m/day from Advection plus beta
+                    text = " m/day"
+
+                case(OMEGA_HGT_TEND)        ! Height tendencies in m/day from omega (dp/dt)
+                    text = " m/day"
+
+                case(DIABATIC_HGT_TEND)     ! Height tendencies in m/day from Diabatic effects (like dissipation)
+                    text = " m/day"
+
+                case(TOT_TEMP_TEND)         ! Total temperture tendencies in C/day
+                    text = CHAR(176)//"C/day"
+
+                case(ADV_TEMP_TEND)         ! Temperature tendencies in C/day from advection
+                    text = CHAR(176)//"C/day"
+
+                case(OMEGA_TEMP_TEND)       ! Temperature tendencies in C/day from omega
+                    text = CHAR(176)//"C/day"
+
+                case(DIABATIC_TEMP_TEND)    ! Temperature tendencies in C/day from Diabatic effects
+                    text = CHAR(176)//"C/day"
+
+                case(HGT_FORCING)           ! Mean streamfunction (height) forcing in m
+                    text = " m/day"
+                    
+                case(OROG_HGT_TEND)         ! Height tendencies from ororgraphy in m/day
+                    text = " m/day"
+
+                case(OROGRAPHY)             ! Height of ororgraphy in m
+                    text = " m" 
+
+            end select
+        end function getUnits
+
+
 
 
         subroutine plotPhaseSpace(phaseSpaceType, invalidate)
@@ -1875,42 +1889,39 @@ module PlotModule
         
         end subroutine plotWeatherMap
 
-        !! This method populates a grid X of all the interpolated values that are displayed on the
-        !! screen in weather maps. Recall the screen values are just ARGB color values. The array
-        !! X contains the actual values for each pixel on the screen. This allows us to display the
-        !! actual value of weather map when we pause the integration and mouse over the map.
-        !! This routine is called from the main window callback when the user presses F1 while the
-        !! model is integrating. This array is populated only once for every pause.
-        !subroutine populateInterpolatedGrid(spectralComponents, X, field)
-        !    use ConstantsModule, only: NO_PLOT, wp
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !    implicit none
-        !    
-        !    real(wp), intent(in) :: spectralComponents(:)
-        !    real, intent(out) :: X(:, :)
-        !    integer, intent(in) :: field
-        !
-        !    REAL :: grid(33, 17)
-        !    type(InterpolationBounds) b
-        !    
-        !    if (field == NO_PLOT) return
-        !
-        !    ! Creates a small grid of values directly from the spectral components. THis is a brute 
-        !    ! force approach - a larger resolution model would use an FFT. But we only have 10 components
-        !    ! and doing it brute force with sine and cosine functions is not too costly.
-        !    call createGrid(grid, spectralComponents, field)
-        !    ! Generate the interpolate 2D array X
-        !    b%il = 1
-        !    b%iu = 33
-        !    b%jl = 1
-        !    b%ju = 17
-        !    b%KL = 1
-        !    b%KU = gBitMapInfo%width
-        !    b%LL = 1
-        !    b%LU = gBitMapInfo%height / 2
-        !    call Interpolate2D(grid, b, X)
-        !
-        !end subroutine populateInterpolatedGrid
+        ! This method populates a grid X of all the interpolated values that are displayed on the
+        ! screen in weather maps. Recall the screen values are just ARGB color values. The array
+        ! X contains the actual values for each pixel on the screen. This allows us to display the
+        ! actual value of weather map when we pause the integration and mouse over the map.
+        ! This routine is called from the main window callback when the user presses F1 while the
+        ! model is integrating. This array is populated only once for every pause.
+        subroutine populateInterpolatedGrid(X, field)
+            use ConstantsModule, only: PLOTTING_OFF
+            use ArrayDimensionsModule, only: gCurrentDims
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ModelFieldsModule, only: gHorzArr
+            implicit none
+
+            real, intent(out) :: X(:, :)
+            integer, intent(in) :: field
+
+            type(InterpolationBounds) b
+            
+            if (field == PLOTTING_OFF) return
+
+            call createGrid(gHorzArr%G1plot, getWeatherMapType(field))
+            ! Generate the interpolated 2D array X
+            b%il = 1
+            b%iu = gCurrentDims%IXMAX + 1
+            b%jl = 1
+            b%ju = gCurrentDims%IYMAX
+            b%KL = 1
+            b%KU = gBitMapInfo%width
+            b%LL = 1
+            b%LU = gBitMapInfo%height / 2
+            call Interpolate2D(gHorzArr%G1plot, b, X)   ! X is populated here
+        
+        end subroutine populateInterpolatedGrid
 
         
         SUBROUTINE PumpMessages()
