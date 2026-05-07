@@ -3,6 +3,7 @@
 ! from C:\Users\BrianReinhold\projects\BVE\NLevQGModel\Resource.h
 !
       integer, parameter :: IDC_BUTTON_INIT_ZERO_ALL = 1072
+      integer, parameter :: IDD_CONTOURS = 112
       integer, parameter :: IDC_BUTTON_LOAD_SAVED_FLOW = 1045
       integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
       integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
@@ -17,6 +18,7 @@
       integer, parameter :: IDC_USERSETTINGS = 1008
       integer, parameter :: IDC_COMBO_USERSETTINGS1 = 1013
       integer, parameter :: IDC_INTEGERVALUES = 1024
+      integer, parameter :: IDC_BUTTON_EXIT_CONTOURS = 1079
       integer, parameter :: IDC_BUTTON_CLEAR_SCREEN = 1048
       integer, parameter :: IDC_BUTTON_LOAD_FROM_FILE = 1017
       integer, parameter :: IDC_STATIC_NEWT_COOLING = 1054
@@ -25,6 +27,7 @@
       integer, parameter :: IDD_MODEL_CONTROL = 106
       integer, parameter :: IDC_STATIC_TURB_MIXING = 1052
       integer, parameter :: IDC_BUTTON_GENERAL_INFO = 1022
+      integer, parameter :: IDC_LIST_RANGES = 1077
       integer, parameter :: IDD_SETTINGS_DLG = 107
       integer, parameter :: IDC_STATIC_INIT_TEMP_DRIVING = 1068
       integer, parameter :: IDD_INIT_VARIABLES = 110
@@ -32,12 +35,15 @@
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
       integer, parameter :: IDC_BUTTON_SET_SCALE_FACTORS = 1021
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY = 1069
+      integer, parameter :: IDC_EDIT_CONTOURS = 1080
+      integer, parameter :: IDC_BUTTON_CONTOURS = 1041
       integer, parameter :: IDC_EDIT_INTEGERVALUES = 1026
       integer, parameter :: IDC_LIST_INIT_STRM_DRIVING = 1066
       integer, parameter :: IDC_STATIC_EKMAN_FRICTION = 1050
       integer, parameter :: IDC_STATIC_THERMAL_DRIVING = 1058
       integer, parameter :: IDC_BUTTON_CONFIG = 1041
       integer, parameter :: IDC_STATIC_INIT_STRM_DRIVING = 1070
+      integer, parameter :: IDC_STATIC_RANGES = 1078
       integer, parameter :: IDC_CHECK_HORZ_DIMENSIONALIZE = 1071
       integer, parameter :: IDC_LIST_THERMAL_DRIVING = 1057
       integer, parameter :: IDC_STATIC_COMBO_FIELD1 = 1032
@@ -51,6 +57,7 @@
       integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
       integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
       integer, parameter :: IDC_LIST_TURB_MIXING = 1051
+      integer, parameter :: IDC_LIST_CONTOURS = 1075
       integer, parameter :: IDC_BUTTON_RUN_MODEL = 1046
       integer, parameter :: IDC_LIST_EKMAN_FRICTION = 1049
       integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
@@ -58,6 +65,7 @@
       integer, parameter :: IDC_BUTTON_SAVE_CURRENT_FLOW = 1044
       integer, parameter :: IDC_LIST_INIT_OROGRAPHY = 1065
       integer, parameter :: IDC_STATIC_COMBO_MAP_TYPE = 1030
+      integer, parameter :: IDC_STATIC_CONTOURS = 1076
       integer, parameter :: IDC_BUTTON_SENSITIVITY_FILES = 1020
       integer, parameter :: IDC_BUTTON_SAVE_TO_FILE = 1018
       integer, parameter :: IDC_COMBO_FIELD1 = 1031

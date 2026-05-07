@@ -272,7 +272,11 @@ module InitVariablesDialogModule
                                         ios = 0
                                         
                                         ! Load the new value into the correct array index field
-                                        ios = readRealDataFromEditBox(str, rowClicked, ptr, levelIndex)
+                                        if (GetDlgCtrlID(hList) == IDC_LIST_INIT_OROGRAPHY) then
+                                            ios = readRealDataFromEditBox(str, rowClicked, ptr, 1)
+                                        else
+                                            ios = readRealDataFromEditBox(str, rowClicked, ptr, levelIndex)
+                                        endif
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")

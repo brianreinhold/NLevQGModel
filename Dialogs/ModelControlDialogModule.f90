@@ -32,6 +32,7 @@ module ModelControlDialogModule
             use DialogHelpersModule, only: GetComboIndex, moveEditBox, updateListViewValue, HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
             use InitVariablesDialogModule, only: InitVariablesDlgProc
+            use ContoursAndRangesDialogModule, only: ContoursAndRangesDlgProc
             use UtilitiesModule, only: openModelFile
             use PlotModule, only: ClearScreen, initializePlot, gElapsedTime
 
@@ -89,6 +90,20 @@ module ModelControlDialogModule
                 CASE (WM_APP + 200)
                     ! Run model
                     call setupAndRunModel()
+                    
+                case (WM_ACTIVATE)
+                    ! Check if window is being activated (WA_ACTIVE or WA_CLICKACTIVE)
+                    if (IAND(wParam, 16#FFFF) /= WA_INACTIVE) then
+                        ! The dialog just got focus. Update the selection here.
+                        hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
+                        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%plotType, UINT_PTR), 0)
+
+                        ! Force the visual refresh
+                        ret = InvalidateRect(hCombo, NULL, .TRUE.)
+                        ret = UpdateWindow(hCombo)
+                    end if
+                    ModelControlDlgProc = 0
+                    return
 
                 case (WM_INITDIALOG)
                     ghCurrentDlg = hDlg
@@ -140,6 +155,7 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Wave-amplitude time series'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Wave-phase time series'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Skip plot for speed'//char(0)))
 
                     ! Initialize the plotType combo box
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%plotType, UINT_PTR), 0)
@@ -348,18 +364,26 @@ module ModelControlDialogModule
                         case (IDC_EDIT_REALVALUES)
                             SELECT CASE (ISHFT(wParam, -16))
                                 CASE (EN_CHANGE)
-                                    BLOCK
+                                    EN: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
                                         integer :: ios
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
-                                        call LogMessage("EN_CHANGE signaled from edit real control ")
+                                        logical, save :: isUpdating = .FALSE.
 
+                                        call LogMessage("EN_CHANGE signaled from edit real control ")
+                                        if (isUpdating) exit EN
+                                        isUpdating = .TRUE.
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_REALVALUES)
                                         newValue = GetDlgItemText(hDlg, IDC_EDIT_REALVALUES, strC, LEN(strC))
                                         str = strC(1 : newValue) ! Clean out the junk
-                                        hList = GetDlgItem(hDlg, IDC_REALVALUES)
+                                        str = ADJUSTL(TRIM(str))
+                                        if (len_trim(str) == 0 .OR. str == "." .OR. str == "-" .OR. str == "-.") then
+                                            isUpdating = .FALSE.
+                                            exit EN
+                                        endif
                                         ! This should be the row that was hilighted when we clicked on it. Of
                                         ! course the original value of 'realRowClicked' is lost when callback returned
+                                        hList = GetDlgItem(hDlg, IDC_REALVALUES)
                                         realRowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
                                         ios = 0
                                         ! Load the new value into the correct modRealParam field
@@ -370,7 +394,8 @@ module ModelControlDialogModule
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_REALVALUES, strC)
                                         end if
                                         call updateListViewValue(hEdit, hList, realRowClicked, strC)
-                                    end BLOCK
+                                        isUpdating = .FALSE.
+                                    end BLOCK EN
                             end SELECT
 
                         ! Recall that for the moved the edit control to work correctly the RC file needs to be manually edit
@@ -453,7 +478,12 @@ module ModelControlDialogModule
                                 if (ret == 0) ret = ReadSaveFile(gNLevFile)
                             endif
                             ghModelControlDlg = hDlg
-                            
+
+! ---- F7:  EditContours
+                        case (IDC_BUTTON_CONTOURS)
+                            ret = DialogBoxParam(ghInstance, INT(IDD_CONTOURS, LONG_PTR), hDlg, LOC(ContoursAndRangesDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
+
 ! ---- F8:  Clear Screen
                         case (IDC_BUTTON_CLEAR_SCREEN)
                             call ClearScreen()
@@ -526,7 +556,7 @@ module ModelControlDialogModule
             ! Load everything into the real list view
             bret = GetClientRect(hList, rc)
             widths(1) = 404
-            widths(2) = rc%right - rc%left - 404  ! buffer for margin/scrollbar is 16 but that is not to be there
+            widths(2) = rc%right - rc%left - widths(1) ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, ["Model Physical parameters", "Value"], widths)
             call loadRealItemsIntoListView(hList)
             bret = UpdateWindow(hList)

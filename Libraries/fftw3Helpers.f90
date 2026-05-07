@@ -39,14 +39,13 @@ module Fftw3HelpersModule
     type(c_ptr) :: plan_x_c2r_1d = c_null_ptr ! X-dir C2R (Spectral to Grid). This uses a complex input and real output
     type(c_ptr) :: plan_x_r2c_1d = c_null_ptr ! X-dir R2C (Grid to Spectral). This used a real input and complex output
 
-    !type(c_ptr) :: plan_y_FFTW_REDFT00 = c_null_ptr
+
     type(c_ptr) :: plan_y_FFTW_REDFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_REDFT01 spectral to grid
     type(c_ptr) :: plan_y_FFTW_REDFT01 = c_null_ptr     ! The only cosly plan that will line up the sinly grid points correctly in y
-    !type(c_ptr) :: plan_y_FFTW_REDFT11 = c_null_ptr
-    !type(c_ptr) :: plan_y_FFTW_RODFT00 = c_null_ptr
+
     type(c_ptr) :: plan_y_FFTW_RODFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_RODFT01 spectral to grid
     type(c_ptr) :: plan_y_FFTW_RODFT01 = c_null_ptr     ! The only sinly plan that will line up the cosly grid points correctly in y
-    !type(c_ptr) :: plan_y_FFTW_RODFT11 = c_null_ptr
+
 
     ! ... (Keep all your normalization factors) ...
     REAL :: norm_fwd = 1 / 4.0   ! Normalization for Spectral -> Grid for wave part

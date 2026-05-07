@@ -118,6 +118,21 @@ module PlotModule
                                     ! by the user, we take inverse in the setup. This replaces a division by a multiplication
         integer :: field = PLOTTING_OFF            ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
     end type WeatherMap
+    
+    type :: Hovmoller
+        LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
+        LOGICAL :: useSolidColor    ! When true, the map is plotted using solid colors and not lines
+        integer :: row = 0          ! row on the screen to draw the hovmoller. I think this can be used for both lat and lon
+        real, pointer :: value(:)   ! Points to the variable to be plotted at a certain level
+        real :: scale               ! The scaling factor needed to make the quantity dimensional and contoured.
+        real :: contourIntervalInv  ! The contour interval for the map. Since the field has to be divided by the contour interval specified
+                                    ! by the user, we take inverse in the setup. This replaces a division by a multiplication
+        REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y  Latitudinal Hovmoller
+        REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
+        REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosknxy values for constant x    Longitudinal Hovmoller
+        REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinknxy values for constant x
+        integer :: field = PLOTTING_OFF            ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
+    end type Hovmoller
 
     type :: TimeSeriesBuffer
         REAL(4), ALLOCATABLE :: data_buffer(:)
@@ -142,6 +157,11 @@ module PlotModule
     type(PhaseSpace) :: gPhaseSpace2
     type(WeatherMap) :: gWeatherMap1
     type(WeatherMap) :: gWeatherMap2
+    type(Hovmoller) :: gLatHovmoller1
+    type(Hovmoller) :: gLatHovmoller2
+    type(Hovmoller) :: gLonHovmoller1
+    type(Hovmoller) :: gLonHovmoller2
+    
 
     type(TimeSeriesBuffer) :: gHeightTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gTempTimeSeriesBuffer
@@ -222,6 +242,20 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
         END SUBROUTINE DrawGridLines
     END INTERFACE
+    
+    INTERFACE
+        MODULE SUBROUTINE DrawVerticalLines(invalidate)
+            LOGICAL, intent(in) :: invalidate
+        END SUBROUTINE DrawVerticalLines
+    END INTERFACE
+
+    INTERFACE
+        MODULE SUBROUTINE DrawHorizontalLines(invalidate, labelsOnLeft, color)
+            LOGICAL, intent(in) :: invalidate
+            LOGICAL, intent(in) :: labelsOnLeft
+            INTEGER(4), intent(in) :: color
+        END SUBROUTINE DrawHorizontalLines
+    END INTERFACE
 
     contains
 
@@ -237,7 +271,7 @@ module PlotModule
             
             integer(4) :: leadColor, color
 
-            if (gModIntParams%plotType == PHASE_SPACE) then
+            if (gModIntParams%plotType == PHASE_SPACE .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gPhaseSpace1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     if (gIsTemperature(gModIntParams%field1)) then
@@ -264,10 +298,25 @@ module PlotModule
                 endif
             else if (gModIntParams%plotType == WEATHER_STN) then
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                gLatHovmoller1%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    call initializeHovmollerType(gModIntParams%field1, gLatHovmoller1, .true., .true.)
+                endif
+                gLatHovmoller2%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .true.)
+                endif
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG)then
+                gLonHovmoller1%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    call initializeHovmollerType(gModIntParams%field1, gLonHovmoller1, .true., .false.)
+                endif
+                gLonHovmoller2%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .false.)
+                endif
             else if (gModIntParams%plotType == PHASE_AND_MAP) then 
-            else if (gModIntParams%plotType == PHASE_AND_MAP) then 
-            else if (gModIntParams%plotType == WEATHER_MAP) then
+            else if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gWeatherMap1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field1, gWeatherMap1, .true.)
@@ -323,7 +372,7 @@ module PlotModule
                                         2 * gModIntParams%LMAX2 * (gModIntParams%zonalWavenumber - 1) + & ! Puts us at the start of the Kth zonal wave
                                         2 * (gModIntParams%meridWavenumber - 1)
                 !phaseSpaceType%xScale = REAL(min(gBitMapInfo%height, gBitMapInfo%width))
-                !phaseSpaceType%xScale = 2.0 * gContourIntervals%VR(field)
+                !phaseSpaceType%xScale = 2.0 * gContourIntervals%Contours(field)
                 ! The spectral eigenfunction is 2 * (cosx, sinx)siny
                 if (gIsTemperature(field)) then
                     phaseSpaceType%xScale = 2.0 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
@@ -360,8 +409,8 @@ module PlotModule
                 endif
             endif
             ! Now take into account the screen size and the range that it is supposed to represent.
-            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (20.0 * gContourIntervals%VR(field))
-            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (20.0 * gContourIntervals%VR(field))
+            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (2.0 * gContourIntervals%Ranges(field))
+            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (2.0 * gContourIntervals%Ranges(field))
 
             ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
             call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
@@ -409,10 +458,78 @@ module PlotModule
                 weatherMapType%scale = gPlotScales(field)
             endif
             ! We divide by the contour interval here to save a division
-            weatherMapType%contourIntervalInv = 1.0 / REAL(gContourIntervals%VR(field))
+            weatherMapType%contourIntervalInv = 1.0 / REAL(gContourIntervals%Contours(field))
             ! Get field to be plotted
             call loadFields( weatherMapType%value, field, gModIntParams%LEVP)
         end subroutine initializeWeatherMapType
+        
+        !! Initializes all the parameters for a weather map plot that do not depend upon the newly generated values
+        !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
+        !> @param field: This is the quantity being plotted, such as HEIGHT, TEMPERATURE, etc.
+        !> @param weatherMapType: This is the WeatherMap type that is being populated.
+        !> @param solidColor: When true the map is plotted using solid color and not line contours. If more than one
+        !>                    field is being plotted, only the first field can be solid color
+        !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
+        !>                  the trig functions to pre-compute
+        subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latOrLon)
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ConstantsModule, only: SQRT2, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PI
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gPlotScales, gContourIntervals, gIsTemperature
+            use ModelFieldsModule, only: gVertArr
+
+            IMPLICIT NONE
+
+            integer, intent(in) :: field
+            type(Hovmoller), intent(inout) :: hovmollerType
+            logical, intent(in) :: useSolidColor
+            logical, intent(in) :: latOrLon
+            
+            integer :: K, L
+
+            hovmollerType%field = field
+            hovmollerType%useSolidColor = useSolidColor
+
+            ! Scale factor
+            if (gIsTemperature(field)) then
+                hovmollerType%scale = gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+            else
+                hovmollerType%scale = gPlotScales(field)
+            endif
+            ! We divide by the contour interval here to save a division
+            hovmollerType%contourIntervalInv = 1.0 / REAL(gContourIntervals%Contours(field))
+            ! Get field to be plotted
+            call loadFields( hovmollerType%value, field, gModIntParams%LEVP)
+            
+            if (latOrLon) then       ! Precompute the sinLy and cosLy for constant y
+                ! The latitude is given by gModRealParams%hovLat. The number of L waves is given by gModIntParams%LMAX2
+                if (ALLOCATED(hovmollerType%siny)) deallocate(hovmollerType%siny)
+                allocate(hovmollerType%siny(gModIntParams%LMAX2))
+                if (ALLOCATED(hovmollerType%cosy)) deallocate(hovmollerType%cosy)
+                allocate(hovmollerType%cosy(gModIntParams%LMAX2))
+                ! gModRealParams%hovLat is in radians (in the UI in dimensional form it is in degrees). Here it will always be radians
+                ! However, the user treats the channel as going from 0 to 90, but the actual range is 0 to 180 such that siny is 0 at the
+                ! equatorial boundary and 0 at the polar boundary and max in the middle. Thus we need to multiply gModRealParams%hovLat
+                ! by 2.
+                do L = 1, gModIntParams%LMAX2
+                    hovmollerType%siny(L) = SIN(real(2 * L) * gModRealParams%hovLat)
+                    hovmollerType%cosy(L) = COS(real(2 * L) * gModRealParams%hovLat)
+                end do
+            else
+                ! The longitude is given by gModRealParams%hovLon. The number of K waves is given by gModIntParams%KMAX2
+                if (ALLOCATED(hovmollerType%cosx)) deallocate(hovmollerType%cosx)
+                allocate(hovmollerType%cosx(gModIntParams%KMAX2))
+                if (ALLOCATED(hovmollerType%sinx)) deallocate(hovmollerType%sinx)
+                allocate(hovmollerType%sinx(gModIntParams%KMAX2))
+                ! gModRealParams%hovLat is in radians (in the UI in dimensional form it is in degrees). Here it will always be radians
+                ! In this case the degrees entered is from 0 to 360 which is consistent with the actual eigenfunctions. No factor of
+                ! 2 in this case.
+                do K = 1, gModIntParams%KMAX2
+                    hovmollerType%sinx(K) = SIN(real(K) * gModRealParams%hovLon)
+                    hovmollerType%cosx(K) = COS(real(K) * gModRealParams%hovLon)
+                end do
+            endif
+            hovmollerType%isInitialized = .true.
+        end subroutine initializeHovmollerType
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -421,17 +538,11 @@ module PlotModule
         subroutine outputPlot()
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
                 HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
-                HEIGHT, TEMPERATURE, SECONDS_PER_DAY, wp
+                PLOTTING_OFF, SECONDS_PER_DAY, wp
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
 
-            logical :: usesHeight
-            logical :: usesTemperature
-            
-            usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-            usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-            
             ! Allows the user to interact with the program.
             CALL PumpMessages()
 
@@ -458,14 +569,16 @@ module PlotModule
     ! PHASE SPACE ----------------------
             if (gModIntParams%plotType == PHASE_SPACE) then
                 call labelPlotsAndDisplayTime(.true.)
-                if(gModIntParams%field1 .NE. NO_PLOT) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == NO_PLOT)
-                if(gModIntParams%field2 .NE. NO_PLOT) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
                 !if(usesTemperature) call plotPhaseSpace(Y, .true., TEMPERATURE)
             end if
 
-    !! WEATHER STATION ----------------------
-    !        if (gModIntParams%plotType == WEATHER_STN) call plotTimeSeries(Y)
-    !
+    ! WEATHER STATION ----------------------
+            if (gModIntParams%plotType == WEATHER_STN) then
+                call plotTimeSeries()
+            endif
+    
     !! ENERGY TIME SERIES ----------------------
     !        if (gModIntParams%plotType == ENERGY_TIME_SERIES) then
     !            if (gDataType%dataSource == MODEL) then
@@ -475,12 +588,25 @@ module PlotModule
     !            end if
     !        endif
     !
-    !! HOVMOLLER LAT ----------------------
-    !        if (gModIntParams%plotType == HOV_DIAG_AT_LAT) call plotLatHovmoller(Y)
-    !
-    !! HOVMOLLER LON ----------------------
-    !        if (gModIntParams%plotType == HOV_DIAG_AT_LONG) call plotLonHovmoller(Y)
-    !
+    ! HOVMOLLER LAT ----------------------
+            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLatHovmoller(gLatHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLatHovmoller(gLatHovmoller2, .TRUE.)
+            endif
+    
+    ! HOVMOLLER LON ----------------------
+            if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller2, .TRUE.)
+            endif
+            
+    ! HOVMOLLER LAT CROSS SECTION----------------------
+            if (gModIntParams%plotType == HOV_DIAG_CROSS_SEC_AT_LAT) then
+            endif
+    ! HOVMOLLER LON CROSS SECTION----------------------
+            if (gModIntParams%plotType == HOV_DIAG_CROSS_SEC_AT_LONG) then
+            endif
+    
     !! HOVMOLLER SPECTRAL RMSE ------------
     !        if (gModIntParams%plotType == HOV_DIAG_RMSE .AND. (gDataType%dataSource == FILE .OR. gDataType%dataSource == ENSEMBLES)) then
     !            call plotRmseHovmoller(gDataType)
@@ -498,13 +624,13 @@ module PlotModule
                 ! This will always plot unless gModIntParams%field2 = PLOTTING_OFF.
                 call plotWeatherMap(.true., gWeatherMap2)
             endif
-    !! WEATHER MAP and PHASE SPACE ----------------------
-    !        if (gModIntParams%plotType == PHASE_AND_MAP) then
-    !            call plotWeatherMap(.false., gModIntParams%field1, .true.)
-    !            call plotWeatherMap(.false., gModIntParams%field2, (gModIntParams%field1 == PLOTTING_OFF))
-    !            if(usesHeight) call plotPhaseSpace(Y, (.NOT. usesTemperature), HEIGHT)
-    !            if(usesTemperature) call plotPhaseSpace(Y, .true., TEMPERATURE)
-    !        endif
+    ! WEATHER MAP and PHASE SPACE ----------------------
+            if (gModIntParams%plotType == PHASE_AND_MAP) then
+                call plotWeatherMap((gModIntParams%field2 == PLOTTING_OFF), gWeatherMap1)
+                call plotWeatherMap(.true., gWeatherMap2)
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
+            endif
     !
     !! RUNNING MEAN STATISTICS ----------------------
     !        if (gModIntParams%plotType == STATISTICS) then
@@ -539,14 +665,12 @@ module PlotModule
         !> has more than a thousand points. Thus the array (hov(33) which is part of this
         !> module) created by this routine is interpolated using bipolar cubic splines to 
         !> create each pixel value.
-        !subroutine createHovmollerAtLat(hov, Y)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, wp
+        !subroutine createHovmollerAtLat(hov)
         !    use ModelTypesModule, only: PI, scaleHeights
         !
         !    implicit none
         !
         !    real, intent(inout) :: hov(33)
-        !    real(wp), intent(in) :: Y(:)
         !
         !    integer :: k, I1, I2
         !    real :: waveLat, zonalLat, waveLat2, zonalLat2
@@ -649,16 +773,15 @@ module PlotModule
 
             real, intent(inout) :: grid(:, :)
             type(WeatherMap), intent(in) :: weatherMapType
-            
+
             integer :: index, K, L
             REAL :: temp_calc
-            real(C_FLOAT) :: temp_y(gCurrentDims%IYMAX)
 
             if (weatherMapType%field == PLOTTING_OFF) then
                 return
             endif
             
-            grid = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the grid
+            grid = 0.0    ! Fortran short cut to zero an entire array in all dimensions. This is the output array for the grid
 
             ! 1. Load ac(k,l)cosknxsinly and as(k,l)sinknxsinly into the imaginary and real parts of Gc for each L
             ! In two dimensions the spectral coeffcients A(k,l) would be
@@ -675,7 +798,7 @@ module PlotModule
                     index = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * (K - 1) + 2 * (L - 1) + 1
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
                     gHorzArr%Gc(K + 1) = CMPLX( temp_calc * weatherMapType%value(index), &         ! ac(k,l) cosknxsinly part
-                                                -temp_calc * weatherMapType%value(index + 1), &         ! as(k,l) sinknxsinly part
+                                                -temp_calc * weatherMapType%value(index + 1), &    ! as(k,l) sinknxsinly part
                                                 kind=C_FLOAT_COMPLEX)
                 END DO
                 call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, grid(:, L))
@@ -686,12 +809,6 @@ module PlotModule
                 ! Pass the column slice directly
                 call fftwf_execute_r2r(plan_y_FFTW_RODFT01, grid(index, :), grid(index, :))
             END DO
-            
-            !DO index = 1, gCurrentDims%IXMAX
-            !    temp_y = grid(index, :) ! This copies the row into contiguous memory
-            !    call fftwf_execute_r2r(plan_y_FFTW_RODFT01, temp_y, temp_y)
-            !    grid(index, :) = temp_y  ! Copy back
-            !END DO
 
             ! 3. Zonal components: Load   sqrt(2)*az(l)cosly into GZonal
             gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
@@ -713,7 +830,7 @@ module PlotModule
             grid(gCurrentDims%IXMAX + 1, :) = grid(1, :)
         end subroutine createGrid
 
-        !> This function gets the value of the current location in a paused time series plot based on the y-coordinate
+        !> This function gets the values of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
         !! @param  mouse_y: the y-ccordinate value of the mouse cursor
         !! @Param  field: variable being displayed
@@ -737,7 +854,7 @@ module PlotModule
             endif
 
             if (gModIntParams%plotType == WEATHER_STN) then
-                topValue = gContourIntervals%VR(field)
+                topValue = gContourIntervals%Contours(field)
                 
                 units = getUnits(field)
                 ! This 'T12' forces the units to start at the 12th character of the string
@@ -803,10 +920,12 @@ module PlotModule
             else if (gModIntParams%plotType == PHASE_SPACE) then
                 call DrawCartesianAxes(.false.)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
-                gPlotConfig%row = 0
+                gLatHovmoller1%row = 0
+                gLatHovmoller2%row = 0
                 !call DrawVerticalLines(.false.)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
-                gPlotConfig%col = 0
+                gLonHovmoller1%row = 0
+                gLonHovmoller2%row = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
             else if (gModIntParams%plotType == WEATHER_MAP) then
                 !call DrawGridLines(.false.)
@@ -896,7 +1015,6 @@ module PlotModule
                     
                 case(OROGRAPHY)             ! Height of ororgraphy in m
                     ptr => gHorzArr%TOP(:) 
-
             end select
         end subroutine loadFields
         
@@ -963,17 +1081,14 @@ module PlotModule
             end select
         end function getUnits
 
-
-
-
+! PLOT PHASE SPACE ----------------------------------------------------
         subroutine plotPhaseSpace(phaseSpaceType, invalidate)
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-
             USE IFWINTY
-            USE GDI32
             USE USER32
-            USE IFWBASE ! For RGB
+            !USE IFWBASE ! For RGB
             USE, INTRINSIC :: ISO_C_BINDING
+
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
 
             ! Windows (0,0) is the top-left corner and the range is 
 
@@ -990,7 +1105,7 @@ module PlotModule
             xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
             yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
 
-            x_pix = phaseSpaceType%xcenter  + INT(xc)   ! Note screen coordinates are 0-based.
+            x_pix = phaseSpaceType%xcenter + INT(xc)   ! Note screen coordinates are 0-based.
             y_pix = phaseSpaceType%ycenter - INT(yc)
             if (x_pix < 0) x_pix = 0
             if (y_pix < 0) y_pix = 0
@@ -1012,345 +1127,26 @@ module PlotModule
 
         end subroutine plotPhaseSpace
 
+! PLOT WEATHER STN TIME SERIES ----------------------------------------------------
         !> This routine plots the time series of a 'weather station' at a selected lat/lon
         !> coordinate. It computes the value from the spectral coefficients times the associated
         !> basis function by brute force (no 2-d FFT) - there are only 10 modes so not so bad.
         !> Which components are to be included in the plot and which field can also be set.
         !! @param Y The spectral coefficients array. It is passed instead of imported from
         !!          the ModelModule to avoid circular dependencies.
-        !subroutine plotTimeSeries(Y)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, wp
-        !    use ModelTypesModule, only: PI, scaleHeights, scaleTemps, scaleVelocity, gModRealParams, sqrt2
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !
-        !    IMPLICIT NONE
-        !
-        !    real(wp), intent(in) :: Y(:)
-        !
-        !    ! --- Variable Declarations ---
-        !    REAL :: VALUE, VALUET, hovLon, hovLat, scale, scalet, radx, rady, U, V, rn, wind_dir
-        !
-        !    real :: mask(10), s_y, s_2y, c_y, c_2y
-        !    real :: s_x, c_x, s_2x, c_2x
-        !    LOGICAL :: usesHeight, usesTemperature
-        !
-        !    hovLon = REAL(gPlotConfig%stn_longitude)
-        !    hovLat = REAL(gPlotConfig%stn_latitude)
-        !    !if (gPlotConfig%field == HEIGHT)
-        !    scale = gBitMapInfo%Height / REAL(2 * gPlotConfig%contHghtsSeries)
-        !    !if (gPlotConfig%field == TEMPERATURE)
-        !    scalet = gBitMapInfo%Height / REAL(2 * gPlotConfig%contTempsSeries)
-        !    rn = real(gModRealParams%RN)
-        !    radx = hovLon * PI / 180.
-        !    rady = hovLat * PI / 90.
-        !
-        !    ! 1. Pre-calculate trig ONCE
-        !    s_x = SIN(radx)
-        !    c_x = COS(radx)
-        !    s_2x = SIN(2.0 * radx)
-        !    c_2x = COS(2.0 * radx)
-        !    s_y = SIN(rady)
-        !    s_2y = SIN(2.0 * rady)
-        !    c_y = COS(rady)
-        !    c_2y = COS(2.0 * rady)
-        !
-        !    ! 2. Create a numeric mask (1.0 if true, 0.0 if false)
-        !    ! This removes the need for 'IF' branches
-        !    mask = MERGE(1.0, 0.0, gPlotConfig%weatherStnCom(1:10))
-        !
-        !    ! 3. Value calculation (Vectorized style)
-        !    VALUE = mask(2) * 2.0 * Y(2) * c_x * s_y + &
-        !            mask(3) * 2.0 * Y(3) * s_x * s_y + &
-        !            mask(5) * 2.0 * Y(5) * c_x * s_2y + &
-        !            mask(6) * 2.0 * Y(6) * s_x * s_2y + &
-        !            mask(7) * 2.0 * Y(7) * c_2x * s_y + &
-        !            mask(8) * 2.0 * Y(8) * s_2x * s_y + &
-        !            mask(9) * 2.0 * Y(9) * c_2x * s_y + &
-        !            mask(10)* 2.0 * Y(10)* s_2x * s_y + &
-        !            mask(1) * sqrt2 * Y(1) * c_y + &
-        !            mask(4) * sqrt2 * Y(4) * c_2y
-        !    VALUE = VALUE * scaleHeights
-        !
-        !    ! 4. ValueT calculation
-        !    VALUET = mask(2) * 2.0 * Y(12) * c_x * s_y + &
-        !             mask(3) * 2.0 * Y(13) * s_x * s_y + &
-        !             mask(5) * 2.0 * Y(15) * c_x * s_2y + &
-        !             mask(6) * 2.0 * Y(16) * s_x * s_2y + &
-        !             mask(7) * 4.0 * Y(17) * c_2x * s_y + &
-        !             mask(8) * 4.0 * Y(18) * s_2x * s_y + &
-        !             mask(9) * 4.0 * Y(19) * c_2x * s_y + &
-        !             mask(10)* 4.0 * Y(20) * s_2x * s_y + &
-        !             mask(1) * sqrt2 * Y(11) * c_y + &
-        !             mask(4) * sqrt2 * Y(14) * c_2y
-        !    VALUET = VALUET * scaleTemps
-        !
-        !    ! Right now we dont plot the winds but one day I will figure out how to introduce it into the UI.
-        !    U = 0.0
-        !    V = 0.0
-        !    if (gPlotConfig%weatherStnCom(2)) then
-        !        U = U - 2. * Y(2) * c_x * c_y     ! d/dy Y(2)*[2cosnx*siny]
-        !        V = V - 2. * Y(2) * RN * s_x * s_y ! d/dx Y(2)*[2cosnx*siny]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(3)) then
-        !        U = U - 2. * Y(3) * s_x * c_y      ! d/dy Y(3)*[2sinnx*siny]
-        !        V = V + 2. * Y(3) * RN * c_x * s_y  ! d/dx Y(3)*[2sinnx*siny]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(5))then
-        !        U = U - 2. * 2. * Y(5) * c_x * c_2y   ! d/dy Y(5)*[2cosnx*sin2y]
-        !        V = V - 2. * Y(5) * RN * s_x * s_2y    ! d/dx Y(5)*[2cosnx*sin2y]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(6)) then
-        !        U = U - 2. * 2. * Y(6) * s_x * c_2y   ! d/dy Y(6)*[2sinnx*sin2y]
-        !        V = V + 2. * Y(6) * RN * c_x * s_2y    ! d/dx Y(6)*[2sinnx*sin2y]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(7)) then
-        !        U = U - 2. * Y(7) * c_2x * c_y           ! d/dy Y(7)*[2cos2nx*siny]
-        !        V = V - 2. * 2. * RN * Y(7) * s_2x * s_y  ! d/dx Y(7)*[2cos2nx*siny]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(8)) then
-        !        U = U - 2. * Y(8) * s_2x * c_y            ! d/dy Y(8)*[2sin2nx*siny]
-        !        V = V + 2. * 2. * RN * Y(8) * c_2x * s_y   ! d/dx Y(8)*[2sin2nx*siny]
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(9)) then
-        !        U = U - 2. * 2. * Y(9) * c_2x * c_2y       ! d/dy Y(9)*[2cos2nx*sin2y]
-        !        V = V - 2. * 2. * RN * Y(9) * s_2x * s_2y   ! d/dx Y(9)*[2cos2nx*sin2y]
-        !    end if
-        !    if (gPlotConfig%weatherStnCom(10)) then
-        !        U = U - 2. * 2. * Y(10) * s_2x * c_2y       ! d/dy Y(10)*[2sin2nx*sin2y]
-        !        V = V + 2. * 2. * RN * Y(10) * c_2x * s_2y   ! d/dx Y(10)*[2sin2nx*sin2y]
-        !    endif 
-        !    if (gPlotConfig%weatherStnCom(1))then
-        !        u = u + sqrt2 * Y(1) * s_y ! d/dy Y(1)*[cosy]  (d/dx is 0)
-        !    endif
-        !    if (gPlotConfig%weatherStnCom(4)) then
-        !        u = u + 2. * sqrt2 * Y(4) * s_2y! d/dy Y(4)*[cos2y]  (d/dx is 0)
-        !    endif
-        !    u = u * scaleVelocity
-        !    v = v * scaleVelocity
-        !    ! Result is in degrees (0=North, 90=East, 180=South, 270=West)
-        !    wind_dir = ATAN2(-u, -v) * 180.0 / PI
-        !    ! Ensure the result is in the range [0, 360)
-        !    if (wind_dir < 0.0) wind_dir = wind_dir + 360.0
-        !    u = SQRT(u * u + v * v)
-        !
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !    ! #0000FF00 = alpha, blue, green, red
-        !    if (usesHeight) then
-        !        call loadTimeSeriesArray(gHeightTimeSeriesBuffer, value, scale, gBitMapInfo%height / 2, WX_STN_HEIGHT_COLOR, & ! gBitMapInfo%height is screen height
-        !            .true., &   ! Always Clear screen since heights are first
-        !            (.NOT. usesTemperature))    ! draw moving timelines if true, False for both, true if temperature is not done
-        !        if (.NOT. usesTemperature) call labelPlotsAndDisplayTime(.false.) ! Do it here if no temperature plot
-        !        call DrawHorizontalLines((.NOT. usesTemperature), .true., .true., WX_STN_HEIGHT_COLOR) ! Force screen update if no temperature plot
-        !        ! If the temperature is NOT being plotted, we need to update the screen. true means Draw labels on left side, next .true. is to that these are heights
-        !    end if
-        !    if (usesTemperature) then
-        !        call loadTimeSeriesArray(gTempTimeSeriesBuffer, valuet, scalet, gBitMapInfo%height / 2, WX_STN_TEMP_COLOR, &
-        !            (.NOT. usesHeight), & ! Clear screen if no height plot
-        !            .true.)     ! Always draw moving time lines since temperature is last
-        !        call labelPlotsAndDisplayTime(.false.)
-        !        call DrawHorizontalLines(.true., .false., .false., WX_STN_TEMP_COLOR) ! true means force screen update. false means draw labels on right side
-        !    end if
-        !
-        !end subroutine plotTimeSeries
+        subroutine plotTimeSeries()
+            use NLevQGModelGlobals, only: gBitMapInfo
 
-        !subroutine plotStatisticsTimeSeries()
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE
-        !    use ModelTypesModule, only: scaleHeights, scaleTemps, gCurrentWelford
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !    use StatisticsModule, only: getVariance
-        !
-        !    IMPLICIT NONE
-        !
-        !    ! --- Variable Declarations ---
-        !    REAL :: VALUE, VALUET, scale, scalet
-        !    INTEGER :: J, countStrm, countTemp
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !    scale = gBitMapInfo%Height / REAL(gPlotConfig%contHghtsSeries)
-        !    scalet = gBitMapInfo%Height / REAL(gPlotConfig%contTempsSeries)
-        !
-        !    VALUE = 0.0
-        !    VALUET = 0.0
-        !
-        !    do J = 1, 10
-        !        if (gPlotConfig%weatherStnCom(J)) VALUE = VALUE + getVariance(gCurrentWelford(J), .false.)
-        !        if (gPlotConfig%weatherStnCom(J)) VALUET = VALUET + getVariance(gCurrentWelford(J + 10), .false.)
-        !    end do
-        !
-        !    VALUE = SQRT(VALUE) * scaleHeights
-        !    VALUET = SQRT(VALUET) * scaleTemps
-        !
-        !    ! #0000FF00 = alpha, blue, green, red
-        !    if (usesHeight) then
-        !        call loadTimeSeriesArray(gHeightStatsTimeSeriesBuffer, value, scale, gBitMapInfo%height, STD_DEV_HEIGHT_COLOR, & ! gBitMapInfo%height is screen height
-        !            .true., &   ! Always Clear screen since heights are first
-        !            (.NOT. usesTemperature))    ! draw moving timelines if true, False for both, true if temperature is not done
-        !        if (.NOT. usesTemperature) call labelPlotsAndDisplayTime(.false.) ! Do it here if no temperature plot
-        !        call DrawHorizontalLines((.NOT. usesTemperature), .true., .true., #00DD0000) ! Force screen update if not temperature plot
-        !        ! If the temperature is NOT being plotted, we need to update the screen. true means Draw labels on left side, next .true. is to that these are heights
-        !    end if
-        !    if (usesTemperature) then
-        !        call loadTimeSeriesArray(gTempStatsTimeSeriesBuffer, valuet, scalet, gBitMapInfo%height, STD_DEV_TEMP_COLOR, &
-        !            (.NOT. usesHeight), & ! Clear screen if no height plot
-        !            .true.)     ! Always draw moving time lines since temperature is last
-        !        call labelPlotsAndDisplayTime(.false.)
-        !        call DrawHorizontalLines(.true., .false., .false., #000077FF) ! true means force screen update. false means draw labels on right side
-        !    end if
-        !
-        !end subroutine plotStatisticsTimeSeries
-        
-        !> This routine plots the time series of the model kinetic and potential energies.
-        !! @param KE The kinetic energy. It is passed instead of imported from
-        !!          the ModelModule to avoid circular dependencies.
-        !subroutine plotEnergyTimeSeries(KE)
-        !    use IFWBASE ! For RGB
-        !    use ConstantsModule, only: wp, MODEL, FILE, ENSEMBLES, HEIGHT, TEMPERATURE
-        !    use ModelTypesModule, only: scaleKE, scaleHeights, scaleTemps, gDataType
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !
-        !    IMPLICIT NONE
-        !    
-        !    real(wp), intent(in) :: KE(:) ! This can have length 2, 3, or 4
-        !    
-        !    real :: scale, valueAPE, valueKE, valueTot
-        !
-        !
-        !    scale = real(scaleKE) * REAL(gBitMapInfo%Height) / REAL(gPlotConfig%contKESeries)
-        !    valueKe = REAL(KE(1))
-        !    valueApe = REAL(KE(2))
-        !    valueTot = REAL(KE(3))
-        !    call loadTimeSeriesArray(gKeTimeSeriesBuffer, valueKe, scale, gBitMapInfo%height, KE_COLOR, .true., .false.) ! KE blue
-        !    call loadTimeSeriesArray(gApeTimeSeriesBuffer, valueApe, scale, gBitMapInfo%height, APE_COLOR, .false., .false.) ! APE orange
-        !    call loadTimeSeriesArray(gTotTimeSeriesBuffer, valueTot, scale, gBitMapInfo%height, TOTAL_ENERGY_COLOR, .false., .true.) ! Total green
-        !    call labelPlotsAndDisplayTime(.false.)
-        !    call DrawHorizontalLines(.true., .true., .false., #00323232) ! All plots have the same units; 'isHeight' parameter is not used
-        !end subroutine plotEnergyTimeSeries
-        !
-        !!> This routine plots the time series of the rmse and spread for single and multiple ensembles.
-        !!> THe spread comes only from multiple ensembles
-        !!! @param KE(1-4) rmse strm, rmse temp, spread strm, spread temp.
-        !subroutine plotEnsembleStatsTimeSeries(KE)
-        !    use IFWBASE ! For RGB
-        !    use ConstantsModule, only: wp, HEIGHT, TEMPERATURE, ENSEMBLES
-        !    use ModelTypesModule, only: scaleHeights, scaleTemps, gDataType
-        !    use WeatherRegimesGlobals, only: gBitMapInfo
-        !
-        !    IMPLICIT NONE
-        !
-        !    integer, parameter :: MAX_LINES = 8
-        !
-        !    real(wp), intent(in) :: KE(:) ! This can have length 2 or 8
-        !
-        !    real :: logValues(MAX_LINES), scales(MAX_LINES)
-        !    real :: logVal(MAX_LINES), logMax(MAX_LINES), logMin(MAX_LINES), logRange(MAX_LINES)
-        !    real :: final_pixel_value(MAX_LINES)
-        !
-        !    integer :: i, firstIdx, lastIdx, maxNumSeries, saveField
-        !    integer(kind=4) :: color(MAX_LINES) = &
-        !        [RMSEM_HEIGHT_COLOR, RMSEM_TEMP_COLOR, SPRD_HEIGHT_COLOR, SPRD_TEMP_COLOR, BFIT_HEIGHT_COLOR, BFIT_TEMP_COLOR, RMSE_HEIGHT_COLOR, RMSE_TEMP_COLOR]
-        !
-        !    logical :: userSelections(MAX_LINES), invalidate, drawLeft, ensSrc, userSelectedStrm, userSelectedTemp
-        !
-        !    ensSrc = gDataType%dataSource == ENSEMBLES
-        !    maxNumSeries = 2
-        !    scales(1) = real(scaleHeights)
-        !    scales(2) = real(scaleTemps)
-        !    ! Prepare log scales
-        !    logMax(1) = log10(REAL(gPlotConfig%contHghtsSeries))
-        !    logMax(2) = log10(REAL(gPlotConfig%contTempsSeries))
-        !    
-        !    ! if we are coming from ENSEMBLES data source there will also be Spread time series and best fits
-        !    if(ensSrc) then
-        !        maxNumSeries = MAX_LINES
-        !        scales(3) = scales(1)
-        !        scales(4) = scales(2)
-        !        scales(5) = scales(1)
-        !        scales(6) = scales(2)
-        !        scales(7) = scales(1)
-        !        scales(8) = scales(2)
-        !        logMax(3) = logMax(1)
-        !        logMax(4) = logMax(2)
-        !        logMax(5) = logMax(1)
-        !        logMax(6) = logMax(2)
-        !        logMax(7) = logMax(1)
-        !        logMax(8) = logMax(2)
-        !        
-        !    endif
-        !
-        !    final_pixel_value = 0.0
-        !    do I = 1, maxNumSeries
-        !        ! 1. Define the range (must match DrawHorizontalLines)
-        !        logMin(i) = logMax(i) - REAL(gPlotConfig%logfloor)  ! This is the 10^-xx floor (range of log)
-        !        logRange(i) = logMax(i) - logMin(i)
-        !        ! Set the values
-        !        logValues(I) = REAL(KE(I)) * scales(I)
-        !        ! Check against a log(0) which is undefined. We will treat anything less than our pre-determined min value as a 0 and set to the min
-        !        if (logValues(I) > 10.0**logMin(I)) then
-        !            logValues(I) = log10(logValues(I))
-        !        else
-        !            logValues(I) = logMin(I)
-        !        end if
-        !        final_pixel_value(I) = REAL(gBitMapInfo%height) - &
-        !                                REAL(gBitMapInfo%height) * (logMax(I) - logValues(I)) / logRange(I)
-        !    end do
-        !
-        !    !write(*, '(A, I0)') "maxNumSeries= ", maxNumSeries
-        !
-        !    ! Extract the MAX_SIZE user choices for the ensemble RMSE/SPREAD/BEST_FIT displays into a temporary logical array
-        !    userSelections(1:6) = gPlotConfig%weatherStnCom(11:16)
-        !    userSelections(7) = gPlotConfig%weatherStnCom(11)
-        !    userSelections(8) = gPlotConfig%weatherStnCom(12)
-        !    ! If the user has selected SPREADs but is doing a single ensemble comparison there is no spread/best fit so turn them off.
-        !    if (.NOT. ensSrc) then
-        !        userSelections(3:8) = .false.
-        !    endif
-        !    userSelectedStrm = ANY(userSelections(1:5:2)) ! The user picked at least one option that is heights
-        !    userSelectedTemp = ANY(userSelections(2:6:2)) ! The user picked at least one option that is temperature
-        !    ! Find the first and last .TRUE. indices (relative to this 1-6 array)
-        !    firstIdx = findloc(userSelections, .TRUE., dim=1)
-        !    lastIdx  = findloc(userSelections, .TRUE., dim=1, back=.TRUE.)
-        !
-        !    !write(*, '(A, I0, A, I0)') "firstIdx= ", firstIdx, " lastIdx= ", lastIdx
-        !
-        !    ! Loop through and call plotting routine
-        !    do i = 1, maxNumSeries
-        !        if (userSelections(i)) then
-        !            ! Call routine with conditional booleans
-        !            call loadTimeSeriesArray(gEnsStatsTimeSeriesBuffer(i), final_pixel_value(I), 1.0, gBitMapInfo%height, color(I), &
-        !                (i == firstIdx), & ! clearScreen is TRUE only for the first plot
-        !                (i == lastIdx) )   ! drawMovingTimeLines is TRUE only for the last plot
-        !        end if
-        !    end do
-        !    call labelPlotsAndDisplayTime(.false.)  ! False means we do not invalidate (force a screen redraw)
-        !    ! If the user has selected to display a heights time series 'userSelectedStrm' will be true
-        !    ! If the user has selected to display a temperature time series 'userSelectedTemp' will be true
-        !    ! Now we need to draw axes and need to know how to label the y-axes values
-        !    ! If the user selects only to plot heights or temps but not both, the labels will appear on the left.
-        !    ! If the user selects both, then heights will be to the left, and temperatures to the right
-        !    ! We also need to know if to clear the screen. The first field to be plotted clears the screen; that is done in loadTimeSeriesArray
-        !    ! We then need to know whether to update the screen. The last DrawHorizontalLines() method updates the screen
-        !
-        !    if (userSelectedStrm) then
-        !        drawLeft = .true.
-        !        invalidate = .false.
-        !        if (.NOT. userSelectedTemp) invalidate = .true.
-        !        call DrawHorizontalLines(invalidate, drawLeft, .true., #0000AA00) ! 'isHeight' set to TRUE
-        !    endif
-        !    if (userSelectedTemp) then
-        !        drawLeft = .true.
-        !        invalidate = .true.
-        !        if (userSelectedStrm) drawLeft = .false.
-        !        call DrawHorizontalLines(invalidate, drawLeft, .false., RGB(221, 68, 0)) 
-        !    endif
-        !end subroutine plotEnsembleStatsTimeSeries
-        
+            IMPLICIT NONE
+
+
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawHorizontalLines(.true., .false., WX_STN_TEMP_COLOR) ! true means force screen update. false means draw labels on right side
+
+        end subroutine plotTimeSeries
+
         !subroutine loadTimeSeriesArray(timeSeriesBuf, value, scale, yzero_axis, color, clearScreen, drawMovingTimeLines)
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
+        !    use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
         !    use ModelTypesModule, only: timeScale, secondsPerDay, gModRealParams, gModIntParams, gDataType
         !
         !    USE IFWINTY
@@ -1510,225 +1306,351 @@ module PlotModule
         !
         !end subroutine loadTimeSeriesArray
 
-        !> Plot a hovmoller row at a specified latitude on the screen
-        !! @Param: row The row on the bit map to plot (0 is the top row
-        !subroutine plotLatHovmoller(Y)
-        !    use ConstantsModule, only : HEIGHT, TEMPERATURE, wp
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    use Kernel32, only: RtlMoveMemory
-        !    USE IFWIN
-        !    USE GDI32
-        !    USE USER32
-        !    USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    real(wp), intent(in) :: Y(:)
-        !
-        !    LOGICAL(BOOL)   :: bret
-        !    REAL ::         hov(33), X(gBitMapInfo%width), cntInt
-        !    
-        !    integer(RGB32), target :: Pixels(gBitMapInfo%width)
-        !    integer ::  iVal, i, colorIdx
-        !    
-        !    integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
-        !    integer(c_intptr_t) :: bytesPerRow
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    type(InterpolationBounds) b
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !
-        !    call createHovmollerAtLat(hov, Y)
-        !    b%il = 1
-        !    b%iu = 32
-        !    b%KL = 1
-        !    b%KU = gBitMapInfo%width
-        !    call Interpolate1D(hov, b, .true., X) ! is periodic
-        !    
-        !    ! Turn X into an integer array of 32-pixel values
-        !    if (usesHeight) then
-        !        cntInt = 1.0 / REAL(gPlotConfig%contHghtsMaps)
-        !    else if (usesTemperature) then
-        !        cntInt = 1.0 / REAL(gPlotConfig%contTempsMaps)
-        !    end if
-        !    do I = 1, gBitMapInfo%width
-        !        ! Calculate value based on the contour interval
-        !        iVal = FLOOR(X(I) * cntInt) + 9
-        !        ! Cycle through the colorRam if iVal exceeds its size
-        !        ! Use ABS to handle negative iVal if necessary
-        !        ! Modulo keeps the recylcing postive versus mod which does not
-        !        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
-        !
-        !        Pixels(I) = RAM_COLORS(colorIdx)
-        !    end do
-        !            
-        !    ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
-        !    bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
-        !    
-        !    ! 2. Calculate memory address for the desired row 'targetY'
-        !    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-        !    baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
-        !    targetAddr = baseAddr + (int(gPlotConfig%row, c_intptr_t) * bytesPerRow)
-        !    
-        !    ! 3. Get the address of your source array
-        !    ! Pixels must have the TARGET attribute
-        !    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
-        !
-        !    ! 4. Move the interpolated array of Pixels into the DIBSection memory
-        !    ! Call the Intel-defined interface
-        !    ! Since the interface defines these as integers, pass them directly.
-        !    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
-        !    
-        !    gPlotConfig%row = mod(gPlotConfig%row + 1, gBitMapInfo%height)
-        !    call labelPlotsAndDisplayTime(.false.)
-        !    call DrawVerticalLines(.true.) ! True invalidates window and forcesd redraw
-        !
-        !end subroutine plotLatHovmoller
-        !
-        !subroutine plotLonHovmoller(Y)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, wp
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    USE, INTRINSIC :: iso_c_binding, only: C_F_POINTER
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    real(wp), intent(in) :: Y(:)
-        !
-        !    LOGICAL(BOOL)   :: bret
-        !    REAL ::         hov(17), X(gBitMapInfo%height), cntInt
-        !    
-        !    integer(RGB32), target :: Pixels(gBitMapInfo%height)
-        !    integer ::  iVal, i, colorIdx
-        !
-        !    integer(RGB32), pointer :: dibArray(:,:)
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    type (InterpolationBounds) b
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !
-        !    call createHovmollerAtLon(hov, Y)
-        !    b%il = 1
-        !    b%iu = 16
-        !    b%KL = 1
-        !    b%KU = gBitMapInfo%height
-        !    call Interpolate1D(hov, b, .false., X) ! not periodic
-        !    
-        !    ! Turn X into an integer array of 32-pixel values
-        !    if (usesHeight) then
-        !        cntInt = 1.0 / REAL(gPlotConfig%contHghtsMaps)
-        !    elseif (usesTemperature) then
-        !        cntInt = 1.0 / REAL(gPlotConfig%contTempsMaps)
-        !    end if
-        !    do I = 1, gBitMapInfo%height
-        !        ! Calculate value based on the contour interval
-        !        iVal = FLOOR(X(I) * cntInt) + NUM_RAM_COLORS / 2
-        !        ! Cycle through the colorRam if iVal exceeds its size
-        !        ! Use ABS to handle negative iVal if necessary
-        !        ! Modulo keeps the recylcing postive versus mod which does not
-        !        colorIdx = MODULO(iVal, NUM_RAM_COLORS) + 1
-        !        Pixels(I) = RAM_COLORS(colorIdx)
-        !    end do
-        !    
-        !    ! Get access to the DIBSection 
-        !    call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
-        !
-        !    ! 2. Loop through 'Pixels' array (height) 
-        !    ! and place each pixel into the DIBSection row-by-row
-        !    do i = gBitMapInfo%height, 1, -1
-        !        dibArray(gPlotConfig%col + 1, gBitMapInfo%height - i + 1) = Pixels(i)
-        !    end do
-        !    
-        !    gPlotConfig%col = mod(gPlotConfig%col + 1, gBitMapInfo%width)
-        !    call labelPlotsAndDisplayTime(.false.)
-        !    call DrawHorizontalLines(.true., .true., .false., #00646464) ! True invalidates window and forced redraw; 'isHeight is not used here
-        !
-        !end subroutine plotLonHovmoller
+! PLOT HOVMOLLER AT LATITUDE -------------------------------------------
+        ! Plot a hovmoller row at a specified latitude on the screen
+        ! @Param: row The row on the bit map to plot (0 is the top row
+        subroutine plotLatHovmoller(latHovmoller, invalidate)
+            use Kernel32, only: RtlMoveMemory
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ConstantsModule, only: SQRT2
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelFieldsModule, only: gHorzArr
+            use ModelParamsModule, only: gModIntParams
+            use Fftw3HelpersModule, only: norm_fwd, norm_cosly, plan_x_c2r_1d
+            
+            IMPLICIT NONE
+            
+            include 'fftw3.f03'
+            
+            type(Hovmoller), intent(inout) :: latHovmoller  ! Need the out as the 'row' is kept track of here.
+            LOGICAL, intent(in) :: invalidate
+
+            LOGICAL(BOOL) :: bret
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:, :)
+            integer(RGB32), pointer :: dibArray(:,:)
+
+            integer(RGB32), target :: Pixels(gBitMapInfo%width)
+            integer ::  iVal, iValLeft, iValUp, prevRow, index, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX
+            
+            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr, currentRow
+            integer(c_intptr_t) :: bytesPerRow
+
+            type(InterpolationBounds) b
+
+            real :: zonalMean, temp_calc, sin_ly
+
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+
+            ! 1. Calculate the zonal mean (the first LMAX elements)
+            !    This is the "background" field at latitude y0
+            ! There is no transfrom here so we dont need to worry about normalization
+            zonalMean = sum(latHovmoller%value(1:LMAX) * latHovmoller%cosy(1:LMAX)) * SQRT2 * latHovmoller%scale
+
+            ! 1. Initialize input with zeros (crucial since k=0 is empty)
+            gHorzArr%Gc = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
+            
+            temp_calc = 2. * norm_fwd * latHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
+
+            ! 2. Sum over L to collapse the Y-dimension
+            do L = 1, LMAX
+                sin_ly = latHovmoller%siny(L) ! Precomputed sinly's
+                do K = 1, KMAX
+                    ! Indexing for the 1-d storage of the zonal and wave components:
+                    index = LMAX + 2 * LMAX * (K - 1) + 2 * (L - 1) + 1
+                    ! Accumulate the weighted spectral components
+                    gHorzArr%Gc(K + 1) = gHorzArr%Gc(K + 1) + CMPLX( &
+                        temp_calc * latHovmoller%value(index) * sin_ly, &
+                       -temp_calc * latHovmoller%value(index + 1) * sin_ly, &
+                        kind=C_FLOAT_COMPLEX)
+                end do
+            end do
+
+            ! 3. Transform the accumulated 1D row
+            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1plot_1D)
+            gHorzArr%G1plot_1D(gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1)
+            gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) + zonalMean
+
+            if (latHovmoller%useSolidColor) then
+                if (.not. allocated(X)) allocate(X(gBitMapInfo%width, 3))
+                Xptr => X        ! Note the pointer and not the equals! Not like C!
+            else
+                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%width, 3))
+                Xptr => X_Overlay
+            endif
+            
+            b%il = 1
+            b%iu = gCurrentDims%IXMAX + 1
+            b%KL = 1
+            b%KU = gBitMapInfo%width
+
+            currentRow = mod(latHovmoller%row, 3) + 1 
+            call Interpolate1D(gHorzArr%G1plot_1D, b, .true., Xptr(:, currentRow)) ! is periodic
+
+            if (latHovmoller%useSolidColor) then
+                ! Turn X into an integer array of 32-pixel values
+                do K = 1, gBitMapInfo%width
+                    ! Calculate value based on the contour interval
+                    iVal = FLOOR(Xptr(K, currentRow) * latHovmoller%contourIntervalInv) + 9
+                    ! Cycle through the colorRam if iVal exceeds its size
+                    ! Use ABS to handle negative iVal if necessary
+                    ! Modulo keeps the recylcing postive versus mod which does not
+                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
         
-        !subroutine plotRmseHovmoller(datType)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, wp
-        !    use ModelTypesModule, only: DataType, scaleHeights, scaleTemps
-        !    use WeatherRegimesGlobals, only: gBitMapInfo, ghwndMain
-        !    USE, INTRINSIC :: iso_c_binding, only: C_F_POINTER
-        !    
-        !    IMPLICIT NONE
-        !    
-        !    type(DataType), intent(in) :: datType
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    type (InterpolationBounds) b
-        !    
-        !    REAL :: hov(10), X(gBitMapInfo%height), scale, logMin, cntInt
-        !    integer(RGB32), target :: Pixels(gBitMapInfo%height)
-        !    integer ::  iVal, i, colorIdx, iLogMin
-        !    integer(RGB32), pointer :: dibArray(:,:)
-        !
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !    if (usesHeight) then
-        !        hov(1 : 10) = ABS(datType%ensMeanY(1 : 10) - datType%obsY(1 : 10))
-        !        scale = real(scaleHeights)
-        !        cntInt = 1.0 / REAL(gPlotConfig%contHghtsMaps)
-        !    else if (usesTemperature) then
-        !        usesHeight = .false.
-        !        hov(1 : 10) = ABS(datType%ensMeanY(11 : 20) - datType%obsY(11 : 20))
-        !        scale = real(scaleTemps)
-        !        cntInt = 1.0 / REAL(gPlotConfig%contTempsMaps)
-        !    else
-        !        return
-        !    endif
-        !
-        !    logMin = -REAL(gPlotConfig%logfloor)
-        !    iLogMin = INT(logMin)
-        !
-        !    do I = 1, 10
-        !        ! Set the values
-        !        hov(I) = hov(I) * scale  ! More efficient to do this in the loop instead of one liner initializing code outside the loop (if I have more loop stuff)
-        !        ! Check against a log(0) which is undefined. We will treat anything less than our pre-determined min value as a 0 and set to the min
-        !        if (hov(I) > 10.0**logMin) then
-        !            hov(I) = log10(hov(I))
-        !        else
-        !            hov(I) = logMin
-        !        end if
-        !    end do
-        !
-        !    b%il = 1
-        !    b%iu = 10
-        !    b%KL = 1
-        !    b%KU = gBitMapInfo%height
-        !    call Interpolate1D(hov, b, .false., X) ! not periodic
-        !    
-        !    ! Turn X into an integer array of 32-pixel values
-        !    do I = 1, gBitMapInfo%height
-        !        ! Calculate value based on the contour interval
-        !        iVal = FLOOR(X(I)) - iLogMin
-        !        ! Cycle through the colorRam if iVal exceeds its size
-        !        ! Use ABS to handle negative iVal if necessary
-        !        ! Modulo keeps the recylcing postive versus mod which does not
-        !        colorIdx = MODULO(iVal, NUM_RAM_COLORS) + 1
-        !        Pixels(I) = RAM_COLORS(colorIdx)
-        !    end do
-        !    
-        !    ! Get access to the DIBSection 
-        !    call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
-        !
-        !    ! 2. Loop through 'Pixels' array (height) 
-        !    ! and place each pixel into the DIBSection row-by-row
-        !    do i = gBitMapInfo%height, 1, -1
-        !        dibArray(gPlotConfig%col + 1, gBitMapInfo%height - i + 1) = Pixels(i)
-        !    end do
-        !    
-        !    gPlotConfig%col = mod(gPlotConfig%col + 1, gBitMapInfo%width)
-        !    call labelPlotsAndDisplayTime(.false.)
-        !    call DrawHorizontalLines(.true., .true., usesHeight, #00646464)
-        !end subroutine PlotRmseHovmoller
+                    Pixels(K) = RAM_COLORS(colorIdx)
+                end do
+                    
+                ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
+                bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
+            
+                ! 2. Calculate memory address for the desired row 'targetY'
+                ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+                baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
+                targetAddr = baseAddr + (int(latHovmoller%row, c_intptr_t) * bytesPerRow)
+            
+                ! 3. Get the address of your source array
+                ! Pixels must have the TARGET attribute
+                srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
         
+                ! 4. Move the interpolated array of Pixels into the DIBSection memory
+                ! Call the Intel-defined interface
+                ! Since the interface defines these as integers, pass them directly.
+                call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
+            else
+                call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
+                ! 2. Calculate borders by comparing current pixel to its neighbors.
+                !    Search through the row from 'left' to  'right'
+                prevRow = currentRow - 1
+                if (prevRow < 1) prevRow = 3
+                do K = 1, gBitMapInfo%width - 1
+
+                    L = gBitMapInfo%width - K + 1
+
+                    iVal      = floor(X_Overlay(L, currentRow) * latHovmoller%contourIntervalInv)
+                    iValLeft  = floor(X_Overlay(L - 1, currentRow) * latHovmoller%contourIntervalInv)
+                    iValUp    = floor(X_Overlay(L, prevRow) * latHovmoller%contourIntervalInv)
+                    ! Detect boundary
+                    if (iVal /= iValLeft) then
+                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                        ! J=1 is the top row of the pixelArray
+
+                        dibArray(K, latHovmoller%row + 1) = colorToDraw
+                    end if
+                    if (iVal /= iValUp .AND. latHovmoller%row > 0) then
+                        colorIdx = max(iVal, iValUp)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                        ! J=1 is the top row of the pixelArray
+
+                        dibArray(K, latHovmoller%row + 1) = colorToDraw
+                    end if
+                    
+                end do
+            endif
+
+            latHovmoller%row = mod(latHovmoller%row + 1, gBitMapInfo%height)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawVerticalLines(invalidate) ! True invalidates window and forces redraw
+        
+        end subroutine plotLatHovmoller
+
+! PLOT HOVMOLLER AT LONGITUDE -------------------------------------------
+        subroutine plotLonHovmoller(lonHovmoller, invalidate)
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ConstantsModule, only: SQRT22
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelFieldsModule, only: gHorzArr
+            use ModelParamsModule, only: gModIntParams
+            use Fftw3HelpersModule, only: norm_cosly, plan_y_FFTW_REDFT01, plan_y_FFTW_RODFT01
+
+            IMPLICIT NONE
+
+            include 'fftw3.f03'
+
+            type(Hovmoller), intent(inout) :: lonHovmoller  ! Need the out as the 'row' is kept track of here.
+                                                            ! However, row is really the column
+            LOGICAL, intent(in) :: invalidate
+
+            LOGICAL(BOOL) :: bret
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:, :)
+            integer(RGB32), pointer :: dibArray(:,:)
+
+            integer(RGB32), target :: Pixels(gBitMapInfo%height)
+            integer ::  iVal, iValDown, iValLeft, index, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
+
+
+            type(InterpolationBounds) b
+            
+            real :: temp_calc, cos_kx, sin_kx
+            real :: wave_real, wave_imag
+
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+            
+            ! 1. The cosLy components
+            ! These are k=0, so they have no x-dependence. 
+            ! Put them straight into the cosine buffer.
+            gHorzArr%G1plot_1D = 0
+            gHorzArr%G1plot_1D(2:LMAX+1) = lonHovmoller%value(1:LMAX) * lonHovmoller%scale * SQRT22
+
+
+            temp_calc = 2. * norm_cosly * lonHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
+
+            ! 2. The Waves (sinLy components)
+            gHorzArr%G2plot_1D = 0 ! Zero this array
+            !do K = 1, KMAX
+            !    cos_kx = lonHovmoller%cosx(K)
+            !    sin_kx = lonHovmoller%sinx(K)
+            !
+            !    do L = 1, LMAX
+            !        index = LMAX + 2 * LMAX * (K - 1) + 2 * (L - 1) + 1
+            !
+            !        wave_real = lonHovmoller%value(index)
+            !        wave_imag = lonHovmoller%value(index + 1)
+            !
+            !        ! Collapse X: Sum the contributions of all K waves at longitude x0
+            !        ! This creates the 1D spectral profile for the Sine transform
+            !        gHorzArr%G2plot_1D(L) = gHorzArr%G2plot_1D(L) + temp_calc * (wave_real * cos_kx - wave_imag * sin_kx)
+            !    end do
+            !end do
+            
+            ! 1. Precompute combined phase/normalization factor for each K
+            ! This moves the K-loop's trigonometry out of the L-loop bottleneck
+            do K = 1, KMAX
+                wave_real = temp_calc * lonHovmoller%cosx(K)
+                wave_imag = temp_calc * lonHovmoller%sinx(K)
+    
+                index = LMAX + 2 * LMAX * (K - 1) + 1
+    
+                ! 2. Vectorized slice operation
+                ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
+                gHorzArr%G2plot_1D(1:LMAX) = gHorzArr%G2plot_1D(1:LMAX) + &
+                    (lonHovmoller%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
+                    (lonHovmoller%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
+            end do
+
+            ! 3. Transform to Grid
+            ! Background flow (using REDFT01 for Cosine)
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G1plot_1D, gHorzArr%G1plot_1D) 
+
+            ! Waves (using RODFT01 for Sine)
+            ! We use a temp buffer so we can add them to the background
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G2plot_1D, gHorzArr%G2plot_1D)
+
+            ! 4. Combine
+            gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) = gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) + gHorzArr%G2plot_1D(1:gCurrentDims%IYMAX)
+            
+            if (lonHovmoller%useSolidColor) then
+                if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
+                Xptr => X        ! Note the pointer and not the equals! Not like C!
+            else
+                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%height, 3))
+                Xptr => X_Overlay
+            endif
+
+            b%il = 1
+            b%iu = gCurrentDims%IYMAX
+            b%KL = 1
+            b%KU = gBitMapInfo%height
+            currentColumn = MOD(lonHovmoller%row, 3) + 1
+            call Interpolate1D(gHorzArr%G1plot_1D, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            
+            ! Get access to the DIBSection 
+            call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
+            if (lonHovmoller%useSolidColor) then
+                ! Turn X into an integer array of 32-pixel values
+                do K = 1, gBitMapInfo%height
+                    ! Calculate value based on the contour interval
+                    iVal = FLOOR(Xptr(K, currentColumn) * lonHovmoller%contourIntervalInv) + NUM_RAM_COLORS / 2
+                    ! Cycle through the colorRam if iVal exceeds its size
+                    ! Use ABS to handle negative iVal if necessary
+                    ! Modulo keeps the recylcing postive versus mod which does not
+                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+
+                    Pixels(K) = RAM_COLORS(colorIdx)
+                end do
+
+
+                ! 2. Loop through 'Pixels' array (height) 
+                ! and place each pixel into the DIBSection row-by-row
+                do K = gBitMapInfo%height, 1, -1
+                    dibArray(lonHovmoller%row + 1, gBitMapInfo%height - K + 1) = Pixels(K)
+                end do
+            else
+                ! 2. Calculate borders by comparing current pixel to its neighbors.
+                ! We stop at Height-1 to prevent "out of bounds" on the iVal checks.
+                prevColumn = currentColumn - 1
+                if (prevColumn < 1) prevColumn = 3
+                do K = 1, gBitMapInfo%height - 1
+        
+                    ! J_data maps Screen Top (J=1) to Array North (Height)
+                    L = gBitMapInfo%height - K + 1
+                    ! J_next is the row physically below J on the screen (one step South in data)
+
+                    ! Calculate interval bins
+                    iVal      = floor(X_Overlay(L, currentColumn) * lonHovmoller%contourIntervalInv)
+                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * lonHovmoller%contourIntervalInv)
+                    iValLeft  = floor(X_Overlay(L, prevColumn) * lonHovmoller%contourIntervalInv)
+        
+                    ! Detect boundary
+                    if (iVal /= iValDown) then
+                        colorIdx = max(iVal, iValDown)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                            
+                        ! J=1 is the top row of the pixelArray
+                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
+                    end if
+                    if (iVal /= iValLeft .AND. lonHovmoller%row > 0) then
+                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                        ! J=1 is the top row of the pixelArray
+
+                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
+                    end if
+                end do
+            endif
+
+            lonHovmoller%row = mod(lonHovmoller%row + 1, gBitMapInfo%width)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
+
+        end subroutine plotLonHovmoller
+
+! PLOT WEATHER MAP -------------------------------------------
         ! @param Y: the spectral components array
         ! @param invalidate: if true, invalidate rectangle and update to force screen redraw
         ! @param field: which field to plot, one of HEIGHT, TEMPERATURE, or NO_PLOT

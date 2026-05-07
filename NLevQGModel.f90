@@ -426,7 +426,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, NO_PLOT
     use UtilitiesModule, only: openModelFile
-    use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams
+    use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams, DimensionalizeModRealParams
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams
     use ModelModule, only: StartTimeLoop
     use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime
@@ -672,6 +672,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User stopped run using F10")
                 else
                     call LogMessage("User returning to ModelControl Dialog via F10")
+                    call DimensionalizeModRealParams()
                     ret = EnableWindow(ghCurrentDlg, .TRUE.)
                     ret = SetFocus(ghCurrentDlg)
                     ret = SetActiveWindow(ghCurrentDlg)
@@ -729,12 +730,14 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                                                         ! if we switch to weather maps
                     if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
                     current_val1 = -1.0
+                    call initializePlot()
                     call ClearScreen()
                     if (gModelState%runState .NE. RUNNING) then
                         call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
                         call NonDimensionalizeModRealParams()
                         ret = StartTimeLoop()
                     end if
+
     ! F3: Clear Screen -----------------------
                 case (VK_F3)
                     call ClearScreen()
@@ -743,9 +746,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User moving up a level")
                     gModIntParams%LEVP = gModIntParams%LEVP + 1
                     if (gModIntParams%LEVP > gModIntParams%NLEV) gModIntParams%LEVP = 1
-                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X 
-                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
-                    current_val1 = -1.0
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
@@ -753,9 +753,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User moving down a level")
                     gModIntParams%LEVP = gModIntParams%LEVP - 1
                     if (gModIntParams%LEVP < 1) gModIntParams%LEVP = gModIntParams%NLEV
-                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X 
-                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
-                    current_val1 = -1.0
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()

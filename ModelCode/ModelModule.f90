@@ -65,7 +65,7 @@ module ModelModule
             ! Check that none of the scaling parameters are zero
             ! These parameters are used only in plotting
             DO I = 1, 23
-                IF(gContourIntervals%VR(I) .EQ. 0.) then
+                IF(gContourIntervals%Contours(I) .EQ. 0.) then
                     errorCode = ERR_SCALING_PARAMETER_ZERO
                     return
                 end if

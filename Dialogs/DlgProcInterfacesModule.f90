@@ -1,5 +1,37 @@
 module DlgProcInterfacesModule
     interface 
+        function  ContoursAndRangesDlgProc(hwnd, mesg, wParam, lParam)
+            !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_ContoursAndRangesDlgProc@16' :: ContoursAndRangesDlgProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'ContoursAndRangesDlgProc' :: ContoursAndRangesDlgProc
+            !DEC$ ENDIF
+            use ifwinty
+            integer(LRESULT) :: ContoursAndRangesDlgProc ! LRESULT
+            integer(HANDLE)   hwnd 
+            integer(UINT)     mesg  
+            integer(UINT_PTR) wParam
+            integer(LONG_PTR) lParam 
+        end function 
+    end interface
+    interface 
+        function  InitVariablesDlgProc(hwnd, mesg, wParam, lParam)
+            !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_InitVariablesDlgProc@16' :: InitVariablesDlgProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'InitVariablesDlgProc' :: InitVariablesDlgProc
+            !DEC$ ENDIF
+            use ifwinty
+            integer(LRESULT) :: InitVariablesDlgProc ! LRESULT
+            integer(HANDLE)   hwnd 
+            integer(UINT)     mesg  
+            integer(UINT_PTR) wParam
+            integer(LONG_PTR) lParam 
+        end function 
+    end interface
+    interface 
         function  VerticalParamsDlgProc(hwnd, mesg, wParam, lParam)
             !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
             !DEC$ IF DEFINED(_X86_)

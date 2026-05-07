@@ -6,6 +6,7 @@
 #define IDD_SETTINGS_DLG                107
 #define IDD_VERTICAL_PARAMS             108
 #define IDD_INIT_VARIABLES              110
+#define IDD_CONTOURS                    112
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
 #define IDC_COMBO_USERSETTINGS1         1013
@@ -36,6 +37,7 @@
 #define IDC_COMBO_MODEL_TYPE            1039
 #define IDC_STATIC_COMBO_MODEL_TYPE     1040
 #define IDC_BUTTON_CONFIG               1041
+#define IDC_BUTTON_CONTOURS             1041
 #define IDC_BUTTON_VERTICAL_PARAMS      1042
 #define IDC_BUTTON_INIT_FLOW_VARIABLES  1043
 #define IDC_LIST_LEVELS                 1043
@@ -81,6 +83,12 @@
 #define IDC_COMBO1                      1073
 #define IDC_COMBO_LEVEL                 1073
 #define IDC_STATIC_COMBO_LEVEL          1074
+#define IDC_LIST_CONTOURS               1075
+#define IDC_STATIC_CONTOURS             1076
+#define IDC_LIST_RANGES                 1077
+#define IDC_STATIC_RANGES               1078
+#define IDC_BUTTON_EXIT_CONTOURS        1079
+#define IDC_EDIT_CONTOURS               1080
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -88,9 +96,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        112
+#define _APS_NEXT_RESOURCE_VALUE        114
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1075
+#define _APS_NEXT_CONTROL_VALUE         1081
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

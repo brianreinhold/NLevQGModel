@@ -158,12 +158,13 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NLevQGModelGlobals, only: ghModelControlDlg, LogMessage
+            use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghVerticalParamsDlg, ghInitVariablesDlg, ghContoursAndRangesDlg, LogMessage
             use SetUpModule, only: CheckModelControlChanges
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams
             use DialogHelpersModule, only: HideMyEdit
             use PlotModule, only: ClearScreen
+            use DlgProcInterfacesModule, only: VerticalParamsDlgProc, InitVariablesDlgProc, ContoursAndRangesDlgProc
             
             implicit none
 
@@ -194,6 +195,9 @@ module KeyboardHooksModule
                     IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F2: Set Vertical parameters
                         call LogMessage('User pressed F2 key in Model Control Dialog')
+                        iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        iret = InitModelWithModelControlVals()
+                        bret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), ghVerticalParamsDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -201,6 +205,9 @@ module KeyboardHooksModule
                     IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F3: Initialize flow variables
                         call LogMessage('User pressed F3 key in Model Control Dialog')
+                            iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            iret = InitModelWithModelControlVals()
+                            bret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -229,6 +236,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F7 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F7: Set map contour intervals and graph ranges
                         call LogMessage('User pressed F7 key in Model Control Dialog')
+                        bret = DialogBoxParam(ghInstance, INT(IDD_CONTOURS, LONG_PTR), ghContoursAndRangesDlg, LOC(ContoursAndRangesDlgProc), 0_LONG_PTR)
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -474,5 +482,102 @@ module KeyboardHooksModule
             ! Pass to next hook in chain
             KeyboardForDlgInitVariablesProc = CallNextHookEx(0, nCode, wParam, lParam)
         END FUNCTION KeyboardForDlgInitVariablesProc
+        
+        function KeyboardForDlgContoursAndRangesProc(nCode, wParam, lParam)
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgContoursAndRangesProc@16' :: KeyboardForDlgContoursAndRangesProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgContoursAndRangesProc' :: KeyboardForDlgContoursAndRangesProc
+            !DEC$ ENDIF
+            USE IFWIN
+            use user32
+            use NLevQGModelGlobals, only: ghContoursAndRangesDlg, LogMessage
+            use ModelParamsModule, only: gContourIntervals
+            
+            implicit none
+
+            include '../resource.fd'
+
+            INTEGER(kind=4), INTENT(IN) :: nCode
+            integer(UINT_PTR), intent(in) :: wParam
+            integer(LONG_PTR), intent(in) :: lParam
+
+            integer(LRESULT) ::  KeyboardForDlgContoursAndRangesProc ! LRESULT
+            integer(kind=4) :: iret
+            integer(BOOL) ::   bret
+            integer(HANDLE) :: hFocus, hLB_User
+
+            IF (GetForegroundWindow() .EQ. ghContoursAndRangesDlg) then
+
+                IF (nCode >= 0) THEN
+                    IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
+                        ! F1: Zero variables
+                        call LogMessage('User pressed F1 key in ContoursAndRanges Dialog')
+                        bret = PostMessage(ghContoursAndRangesDlg, WM_APP + 301, 0, 0) ! Calls ZeroVariables() and then repopulates the list controls
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F2: Load data from a saved file
+                        call LogMessage('User pressed F2 key in ContoursAndRanges Dialog')
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F3: Save data to a file
+                        call LogMessage('User pressed F3 key in ContoursAndRanges Dialog')
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        call LogMessage('User pressed F4 key in ContoursAndRanges Dialog')
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F5: Go to Sensitivity file menu
+                        call LogMessage('User pressed F5 key in ContoursAndRanges Dialog')
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F6: Generic help
+                        call LogMessage('User pressed F6 key in ContoursAndRanges Dialog')
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F10 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F10: Return to main menu
+                        call LogMessage('User pressed F10 key in ContoursAndRanges Dialog')
+                        bret = PostMessage(ghContoursAndRangesDlg, WM_CLOSE, 0, 0)
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_RETURN) THEN
+                        ! Trap the Enter key: return non-zero to prevent default processing
+                        call LogMessage('User pressed Enter key, trapped by hook')
+                        ! Get the handle of the window that currently has focus
+                        ! If it is one of the list boxes, we are going to programmatically
+                        ! click on the top row.
+                        hFocus = GetFocus() ! currently focused control
+                        hLB_User = GetDlgItem(ghContoursAndRangesDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
+                        IF (hFocus == hLB_User) THEN
+                            bret = PostMessage(ghContoursAndRangesDlg, WM_APP + 300, 0, 0) ! Hides edit box if it is in focus
+                        END IF
+                        KeyboardForDlgContoursAndRangesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+                END IF
+            END IF
+            ! Pass to next hook in chain
+            KeyboardForDlgContoursAndRangesProc = CallNextHookEx(0, nCode, wParam, lParam)
+        END FUNCTION KeyboardForDlgContoursAndRangesProc
 
 end module KeyboardHooksModule

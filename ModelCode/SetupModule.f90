@@ -1228,37 +1228,39 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! Plotting off
 
             ! These give the contours specified when the variables are dimensionalized by the corresponding gPlotScales(j) element
-            ! Thus if I have PS(I, n) * gPlotScales(HEIGHT) this will give me th height in meters. Dividing by gContourIntervals%VR(HEIGHT)
+            ! Thus if I have PS(I, n) * gPlotScales(HEIGHT) this will give me th height in meters. Dividing by gContourIntervals%Contours(HEIGHT)
             ! will produce the value 0.0 to 1.0 for values between 0 and 60 meters and 1.0 to 2.0 for values between 60 and 120 meters.
             ! From this we can assign integer color values for those level ranges, for example we will use color 0 for 0.0 to < 1.0 and
             ! color 1 for 1.0 to < 2.0, etc. In the old days of 16-color VGA this was a direct assignment. But in todays 32-bit RGB colors
             ! we need to make a color map to map the value 0 to a specific color. We have such a map RAM_COLORS(18) in the PlotModule
-            gContourIntervals%VR(VORTICITY) = 1.0
-            gContourIntervals%VR(HEIGHT) = 60.0         ! Gives 60m contours for L=5000km/PI
-            gContourIntervals%VR(TEMPERATURE) = 5.0
-            gContourIntervals%VR(VERTICAL_WIND) = 5.0
-            gContourIntervals%VR(TEMP_FORCING) = 5.0
+            gContourIntervals%Contours(VORTICITY) = 1.0
+            gContourIntervals%Contours(HEIGHT) = 60.0         ! Gives 60m contours for L=5000km/PI
+            gContourIntervals%Contours(TEMPERATURE) = 5.0
+            gContourIntervals%Contours(VERTICAL_WIND) = 5.0
+            gContourIntervals%Contours(TEMP_FORCING) = 5.0
             DO I = 1, 4
-               gContourIntervals%VR(I + 5) = 60.0
-               gContourIntervals%VR(I + 9) = 5.0
+               gContourIntervals%Contours(I + 5) = 60.0
+               gContourIntervals%Contours(I + 9) = 5.0
             END DO
-            gContourIntervals%VR(OROG_HGT_TEND) = 60.0 
-            gContourIntervals%VR(OROGRAPHY) = 100.0
-            gContourIntervals%VR(HGT_FORCING) = 60.0
-            gContourIntervals%VR(PLOTTING_OFF) = 1.0
+            gContourIntervals%Contours(OROG_HGT_TEND) = 60.0 
+            gContourIntervals%Contours(OROGRAPHY) = 100.0
+            gContourIntervals%Contours(HGT_FORCING) = 60.0
+            gContourIntervals%Contours(PLOTTING_OFF) = 1.0
         !------------------------------Graphs only forces:
-            gContourIntervals%VR(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
-            gContourIntervals%VR(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
-            gContourIntervals%VR(MEAN_HGT_TEND_GRAF) = 60.0 / gPlotScales(MEAN_HGT_TEND_GRAF)
-            gContourIntervals%VR(MEAN_TEMP_TEND_GRAF) = 5.0 / gPlotScales(MEAN_TEMP_TEND_GRAF)
+            gContourIntervals%Contours(TOT_HGT_TEND_GRAF) = 60.0 / gPlotScales(TOT_HGT_TEND_GRAF)
+            gContourIntervals%Contours(TOT_TEMP_TEND_GRAF) = 5.0 / gPlotScales(TOT_TEMP_TEND_GRAF)
+            gContourIntervals%Contours(MEAN_HGT_TEND_GRAF) = 60.0 / gPlotScales(MEAN_HGT_TEND_GRAF)
+            gContourIntervals%Contours(MEAN_TEMP_TEND_GRAF) = 5.0 / gPlotScales(MEAN_TEMP_TEND_GRAF)
         !------------------------------Phase speed and phase difference
-            gContourIntervals%VR(HGT_WAVE_SPEED_GRAF) = 50.0 / gPlotScales(HGT_WAVE_SPEED_GRAF)
-            gContourIntervals%VR(HGT_TEMP_PHASE_DIFF) = 180.0
-            gContourIntervals%VR(GROWTH_RATE_GRAF) = 1.0
-            gContourIntervals%VR(AMPLITUDE_RATIO_GRAF) = 1.0
-            gContourIntervals%VR(ZLEVEL_1) = 7.0     ! ZLEV of old
-            gContourIntervals%VR(ZLEVEL_2) = 0.0     ! ZLV2 of old
-            gContourIntervals%VR(ZLEVEL_3) = 0.0     ! ZLV3 of old
+            gContourIntervals%Contours(HGT_WAVE_SPEED_GRAF) = 50.0 / gPlotScales(HGT_WAVE_SPEED_GRAF)
+            gContourIntervals%Contours(HGT_TEMP_PHASE_DIFF) = 180.0
+            gContourIntervals%Contours(GROWTH_RATE_GRAF) = 1.0
+            gContourIntervals%Contours(AMPLITUDE_RATIO_GRAF) = 1.0
+            gContourIntervals%Contours(ZLEVEL_1) = 7.0     ! ZLEV of old
+            gContourIntervals%Contours(ZLEVEL_2) = 0.0     ! ZLV2 of old
+            gContourIntervals%Contours(ZLEVEL_3) = 0.0     ! ZLV3 of old
+            
+            gContourIntervals%Ranges = 10.0 * gContourIntervals%Contours
         
         !------------------------------------------------------------ The ICN values.
         !  KMAX2 the number of zonal waves

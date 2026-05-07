@@ -56,14 +56,18 @@
 		</Filter>
 		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe">
 			<File RelativePath=".\NLevQGModel.ico"/>
-			<File RelativePath=".\NLevQGModel.rc"/>
+			<File RelativePath=".\NLevQGModel.rc">
+			</File>
 		</Filter>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 			<Filter Name="Dialogs">
+				<File RelativePath=".\Dialogs\ContoursAndRangesDialogModule.f90">
+				</File>
 				<File RelativePath=".\Dialogs\DialogHelpersModule.f90"/>
 				<File RelativePath=".\Dialogs\DlgProcInterfacesModule.f90"/>
 				<File RelativePath=".\Dialogs\InitVariablesDialogModule.f90"/>
-				<File RelativePath=".\Dialogs\KeyboardHooksModule.f90"/>
+				<File RelativePath=".\Dialogs\KeyboardHooksModule.f90">
+				</File>
 				<File RelativePath=".\Dialogs\ModelControlDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\SettingsDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\VerticalParamsDialogModule.f90"/>
@@ -85,15 +89,14 @@
 				<File RelativePath=".\ModelCode\UtilitiesModule.f90"/>
 			</Filter>
 			<Filter Name="PlotCode">
-				<File RelativePath=".\PlotCode\AxesSubModule.f90">
-				</File>
-				<File RelativePath=".\PlotCode\InterpolateSubModule.f90">
-				</File>
+				<File RelativePath=".\PlotCode\AxesSubModule.f90"/>
+				<File RelativePath=".\PlotCode\InterpolateSubModule.f90"/>
 				<File RelativePath=".\PlotCode\PlotModule.f90">
 				</File>
 			</Filter>
 			<File RelativePath=".\NLevQGModel.f90"/>
-			<File RelativePath=".\NLevQGModelglobals.f90"/>
+			<File RelativePath=".\NLevQGModelglobals.f90">
+			</File>
 			<File RelativePath=".\WndProcInterfacesModule.f90"/>
 		</Filter>
 		<File RelativePath=".\ReadMe.txt"/>

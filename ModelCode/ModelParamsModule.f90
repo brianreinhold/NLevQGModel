@@ -63,7 +63,7 @@ module ModelParamsModule
         REAL :: field3Level !  field3Level is the height of the model to be displayed in the third map overlay
         REAL :: hovLat      !  hovLat is the latitude of the Hovmoller and vertical structure cross section plot     
         REAL :: hovLon      !  hovLon is the longitude of the Hovmoller and vertical structure cross section plot
-        REAL :: lonXPoint   !  lonXPoint,latYPoint is the position of ae selected (longitude, latitude) point in
+        REAL :: lonXPoint   !  lonXPoint,latYPoint is the position of the selected (longitude, latitude) point in
         REAL :: latYPoint   !  the model for plots of data like the weather station
         REAL :: BOT     !  BOT,TPP is the pressure range to be displayed in cross section sections
         REAL :: TPP
@@ -165,7 +165,8 @@ module ModelParamsModule
     end type ModelSensParams
     
     type :: ContourIntervals ! This is a new type to hold the scaling factors for the model
-        real :: VR(30)    ! Scaling factors for converting nondimensional model data to dimensional for plotting
+        real :: Contours(30)    ! Contour intervals for each field for maps and Hovmollers
+        real :: Ranges(30) ! Ranges
         real :: VSEN(30)  ! Scaling factors for the sensitivity runs
     end type ContourIntervals
     

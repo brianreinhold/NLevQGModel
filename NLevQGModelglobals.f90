@@ -46,6 +46,7 @@ module NLevQGModelGlobals
     integer(HANDLE) ::     ghModelControlDlg
     integer(HANDLE) ::     ghVerticalParamsDlg
     integer(HANDLE) ::     ghInitVariablesDlg
+    integer(HANDLE) ::     ghContoursAndRangesDlg
     
     integer(HANDLE) ::     ghCurrentDlg             ! For anytime we need to refer to the "current" dialog
                                                     ! for example in winmain procedure when returning to calling dialog
