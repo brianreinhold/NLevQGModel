@@ -62,25 +62,34 @@ module PlotModule
 
 
 
-    type :: PlotConfig
-        integer :: stn_latitude     ! Latitude for weather station plots
-        integer :: stn_longitude    ! Longitude for weather station plots
-        integer :: row              ! Row for latitude Hovmoller plots
-        integer :: col              ! Column for longitude Hovmoller plots
-        integer :: contHghtsMaps    ! Contour interval index for Hovmoller and weather map in meters
-        integer :: contHghtsSeries  ! Contour interval for Phase space and time series in meters
-        integer :: logfloor         ! Orders of magnitude for log plots
-        integer :: contKESeries     ! Contour interval for KE 
-        integer :: contTempsMaps    ! Contour interval for Hovmoller and weather maps in deg C
-        integer :: contTempsSeries  ! Contour interval  for Phase space and time series in deg C
-        integer :: hov_latitude     ! Latitude for Hovmoller plots
-        integer :: hov_longitude    ! Longitude for Hovmoller plots
-        integer :: phaseSpaceXaxis  ! Which spectral coefficient to plot on X-axis in phase space plots
-        integer :: phaseSpaceYaxis  ! Which spectral coefficient to plot on Y-axis in phase space plots
-        logical :: weatherStnCom(16)! Which spectral components to inlcude in weather station time series (first 10)
-                                    !   and ensemble stats display (11-16)
-        LOGICAL :: drawLines        ! Whether to draw connecting lines in time series plots
-    end type PlotConfig
+    !type :: PlotConfig
+    !    integer :: stn_latitude     ! Latitude for weather station plots
+    !    integer :: stn_longitude    ! Longitude for weather station plots
+    !    integer :: row              ! Row for latitude Hovmoller plots
+    !    integer :: col              ! Column for longitude Hovmoller plots
+    !    integer :: contHghtsMaps    ! Contour interval index for Hovmoller and weather map in meters
+    !    integer :: contHghtsSeries  ! Contour interval for Phase space and time series in meters
+    !    integer :: logfloor         ! Orders of magnitude for log plots
+    !    integer :: contKESeries     ! Contour interval for KE 
+    !    integer :: contTempsMaps    ! Contour interval for Hovmoller and weather maps in deg C
+    !    integer :: contTempsSeries  ! Contour interval  for Phase space and time series in deg C
+    !    integer :: hov_latitude     ! Latitude for Hovmoller plots
+    !    integer :: hov_longitude    ! Longitude for Hovmoller plots
+    !    integer :: phaseSpaceXaxis  ! Which spectral coefficient to plot on X-axis in phase space plots
+    !    integer :: phaseSpaceYaxis  ! Which spectral coefficient to plot on Y-axis in phase space plots
+    !    logical :: weatherStnCom(16)! Which spectral components to inlcude in weather station time series (first 10)
+    !                                !   and ensemble stats display (11-16)
+    !    LOGICAL :: drawLines        ! Whether to draw connecting lines in time series plots
+    !end type PlotConfig
+    
+    type :: TimeSeriesBuffer
+        REAL(4), ALLOCATABLE :: data_buffer(:)
+        REAL(wp), ALLOCATABLE :: real8_buffer(:)        ! Use of circular buffer for other purposes than plotting time series
+        TYPE(T_POINT), ALLOCATABLE :: plot_pts(:)
+        INTEGER(4) :: head_idx
+        INTEGER(4) :: count
+        LOGICAL :: is_initialized
+    end type TimeSeriesBuffer
     
     type :: PhaseSpace
         LOGICAL :: isInitialized = .FALSE.    ! Indicates that this structure has been initialized and is ready to use when true
@@ -131,18 +140,30 @@ module PlotModule
         REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
         REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosknxy values for constant x    Longitudinal Hovmoller
         REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinknxy values for constant x
-        integer :: field = PLOTTING_OFF            ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
+        integer :: field = PLOTTING_OFF ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
     end type Hovmoller
+       
+    type :: WeatherStation
+        LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
+        integer(4) :: color         ! Color to use in GDC calls. This is the RGB color passed by the caller.
+        integer(4) :: gDCcolor      ! Internal reversed byte color for DIB section plotting of points.
+        integer :: yCenter          ! Location of the origin in the y-axis. The x-axis will be time in this plot.
+                                    ! The y-axis will be the value of the variable being plotted scaled by the range and 
+                                    ! multiplied by the height of the screen to fit in the screen. The range is from -R to R
+        real, pointer :: value(:)   ! Points to the variable to be plotted at a certain level
+        type(TimeSeriesBuffer) :: timeSeriesBuf ! Buffer to store the time series values to be plotted. This is a circular
+                                    ! buffer that stores the most recent values up to the size of the screen width in pixels.
+        real :: scale               ! The scaling factor needed to make the quantity dimensional.
+        real :: range               ! The range of the graph in y. Since the origin is in the middle, the range will be from -range to +range.
+                                    ! This is used to scale the plot to fit in the screen.
+        character(:), allocatable :: units  ! Units of the variable being plotted to be displayed in the graph legend
+        REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y
+        REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
+        REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosKnxy values for constant x
+        REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinKnxy values for constant x
+        integer :: field = PLOTTING_OFF ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
+    end type WeatherStation
 
-    type :: TimeSeriesBuffer
-        REAL(4), ALLOCATABLE :: data_buffer(:)
-        REAL(wp), ALLOCATABLE :: real8_buffer(:)        ! Use of circular buffer for other purposes than plotting time series
-        TYPE(T_POINT), ALLOCATABLE :: plot_pts(:)
-        INTEGER(4) :: head_idx
-        INTEGER(4) :: count
-        LOGICAL :: is_initialized
-    end type TimeSeriesBuffer
-    
     type :: ElapsedTime
         integer(8) :: timeSteps = 0_8
         real(wp) :: dimensionalTime
@@ -152,7 +173,7 @@ module PlotModule
     
     type(ElapsedTime) gElapsedTime
 
-    type(PlotConfig) :: gPlotConfig
+    !type(PlotConfig) :: gPlotConfig
     type(PhaseSpace) :: gPhaseSpace1
     type(PhaseSpace) :: gPhaseSpace2
     type(WeatherMap) :: gWeatherMap1
@@ -161,10 +182,9 @@ module PlotModule
     type(Hovmoller) :: gLatHovmoller2
     type(Hovmoller) :: gLonHovmoller1
     type(Hovmoller) :: gLonHovmoller2
-    
+    type(WeatherStation) :: gWeatherStation1
+    type(WeatherStation) :: gWeatherStation2
 
-    type(TimeSeriesBuffer) :: gHeightTimeSeriesBuffer
-    type(TimeSeriesBuffer) :: gTempTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gTempStatsTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gKeTimeSeriesBuffer
@@ -250,10 +270,11 @@ module PlotModule
     END INTERFACE
 
     INTERFACE
-        MODULE SUBROUTINE DrawHorizontalLines(invalidate, labelsOnLeft, color)
+        MODULE SUBROUTINE DrawHorizontalLines(invalidate, labelsOnLeft, color, weatherStn)
             LOGICAL, intent(in) :: invalidate
             LOGICAL, intent(in) :: labelsOnLeft
             INTEGER(4), intent(in) :: color
+            type(WeatherStation), optional, intent(in) :: weatherStn
         END SUBROUTINE DrawHorizontalLines
     END INTERFACE
 
@@ -271,6 +292,7 @@ module PlotModule
             
             integer(4) :: leadColor, color
 
+! ------ PHASE SPACE -----------------------------
             if (gModIntParams%plotType == PHASE_SPACE .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gPhaseSpace1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
@@ -296,8 +318,30 @@ module PlotModule
                     endif
                     call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2, leadColor, color)
                 endif
+ 
+! ------ WEATHER STN -----------------------------
             else if (gModIntParams%plotType == WEATHER_STN) then
-            else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                gWeatherStation1%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    if (gIsTemperature(gModIntParams%field1)) then
+                        color = PHASE_SPACE_TEMP_COLOR
+                    else
+                        color = PHASE_SPACE_HEIGHT_COLOR
+                    endif
+                    call initializeWeatherStationType(gModIntParams%field1, gWeatherStation1, color)
+                endif
+                gWeatherStation2%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    if (color == PHASE_SPACE_TEMP_COLOR) then
+                        color = PHASE_SPACE_HEIGHT_COLOR
+                    else
+                        color = PHASE_SPACE_TEMP_COLOR
+                    endif
+                    call initializeWeatherStationType(gModIntParams%field2, gWeatherStation2, color)
+                endif
+
+! ------ HOVMOLLER LATITUDE -----------------------------
+                else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field1, gLatHovmoller1, .true., .true.)
@@ -306,6 +350,8 @@ module PlotModule
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .true.)
                 endif
+
+! ------ HOVMOLLER LONGITUDE -----------------------------
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG)then
                 gLonHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
@@ -315,7 +361,10 @@ module PlotModule
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .false.)
                 endif
+
             else if (gModIntParams%plotType == PHASE_AND_MAP) then 
+
+! ------ WEATHER MAP & COMBO -----------------------------
             else if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gWeatherMap1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
@@ -463,10 +512,10 @@ module PlotModule
             call loadFields( weatherMapType%value, field, gModIntParams%LEVP)
         end subroutine initializeWeatherMapType
         
-        !! Initializes all the parameters for a weather map plot that do not depend upon the newly generated values
+        !! Initializes all the parameters for a hovmoller plot that do not depend upon the newly generated values
         !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
         !> @param field: This is the quantity being plotted, such as HEIGHT, TEMPERATURE, etc.
-        !> @param weatherMapType: This is the WeatherMap type that is being populated.
+        !> @param hovmollerType: This is the HOVMOLLER type that is being populated.
         !> @param solidColor: When true the map is plotted using solid color and not line contours. If more than one
         !>                    field is being plotted, only the first field can be solid color
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
@@ -530,6 +579,77 @@ module PlotModule
             endif
             hovmollerType%isInitialized = .true.
         end subroutine initializeHovmollerType
+        
+        subroutine initializeWeatherStationType(field, weatherStnType, color)
+            USE IFWINTY
+
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ConstantsModule, only: SQRT2
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gPlotScales, gContourIntervals, gIsTemperature
+            use ModelFieldsModule, only: gVertArr
+
+            implicit none
+            
+            integer, intent(in) :: field
+            type(WeatherStation), intent(inout) :: weatherStnType
+            integer(4), intent(in) :: color
+            
+            integer :: I, K, L
+
+            weatherStnType%field = field
+            weatherStnType%yCenter = gBitMapInfo%height / 2
+
+            ! Initialization & Re-allocation (Check if width changed)
+            IF (.NOT. weatherStnType%timeSeriesBuf%is_initialized .OR. size(weatherStnType%timeSeriesBuf%data_buffer) /= gBitMapInfo%width) THEN
+                ! This auto allocates/reallocates to the correct size AND initializes to zero
+                weatherStnType%timeSeriesBuf%data_buffer = spread(0.0, 1, gBitMapInfo%width)
+                                            ! implied do loop for auto allocation here since plot_pts is a derived type T_POINT
+                weatherStnType%timeSeriesBuf%plot_pts    = [(T_POINT(0, 0), I = 1, gBitMapInfo%width)]
+                weatherStnType%timeSeriesBuf%head_idx = 0
+                weatherStnType%timeSeriesBuf%count = 0
+                weatherStnType%timeSeriesBuf%is_initialized = .TRUE.
+            END IF
+
+            ! color for bit map point and GDC lines
+            weatherStnType%color = IOR(ISHFT(IAND(color, Z'000000FF'), 16), & ! R: bit 0 -> 16
+                        IOR(IAND(color, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
+                        ISHFT(IAND(color, Z'00FF0000'), -16))) ! B: bit 16 -> 0
+            weatherStnType%gDCcolor = color
+
+            ! Scale factor
+            if (gIsTemperature(field)) then
+                weatherStnType%scale = gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+            else
+                weatherStnType%scale = gPlotScales(field)
+            endif
+            weatherStnType%range = gContourIntervals%Ranges(field)
+            weatherStnType%scale = weatherStnType%scale * REAL(gBitMapInfo%height) / (2.0 * gContourIntervals%Ranges(field))
+
+            ! Pre computed arrays
+            if (ALLOCATED(weatherStnType%cosx)) deallocate(weatherStnType%cosx)
+            allocate(weatherStnType%cosx(gModIntParams%KMAX2))
+            if (ALLOCATED(weatherStnType%sinx)) deallocate(weatherStnType%sinx)
+            allocate(weatherStnType%sinx(gModIntParams%KMAX2))
+            if (ALLOCATED(weatherStnType%siny)) deallocate(weatherStnType%siny)
+            allocate(weatherStnType%siny(gModIntParams%LMAX2))
+            if (ALLOCATED(weatherStnType%cosy)) deallocate(weatherStnType%cosy)
+            allocate(weatherStnType%cosy(gModIntParams%LMAX2))
+            ! The location of the weather station is given by gModRealParams%lonPoint and gModRealParams%latPoint.
+            ! This 'weather station' will be at the level gModIntParams%LEVP
+            do L = 1, gModIntParams%LMAX2
+                weatherStnType%siny(L) = 2.0 * SIN(real(2 * L) * gModRealParams%latPoint)     ! Put in the factor of 2 here for 2(cosnknx, sinknx)sinLy
+                                                                                              ! The 2*L is becuase the user enters 0 to 90 and it really is 0 to 180
+                weatherStnType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%latPoint)   ! Put in the SQRT2 factor here for cosLy
+            end do
+            do K = 1, gModIntParams%KMAX2
+                weatherStnType%sinx(K) = SIN(real(K) * gModRealParams%lonPoint)
+                weatherStnType%cosx(K) = COS(real(K) * gModRealParams%lonPoint)
+            end do
+            call loadFields(weatherStnType%value, field, gModIntParams%LEVP)
+            weatherStnType%units = getUnits(field)
+            weatherStnType%isInitialized = .true.
+
+        end subroutine initializeWeatherStationType
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -537,8 +657,7 @@ module PlotModule
         !> or a set of ensemble files
         subroutine outputPlot()
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
-                PLOTTING_OFF, SECONDS_PER_DAY, wp
+                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
@@ -854,8 +973,7 @@ module PlotModule
             endif
 
             if (gModIntParams%plotType == WEATHER_STN) then
-                topValue = gContourIntervals%Contours(field)
-                
+                topValue = gContourIntervals%Ranges(field)
                 units = getUnits(field)
                 ! This 'T12' forces the units to start at the 12th character of the string
                 value = topValue * (1 - 2.0 * real(mouse_y) / REAL(gBitMapInfo%height))
@@ -871,7 +989,7 @@ module PlotModule
             use IFWBASE ! Contains RGB macro
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, HOV_DIAG_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, HOV_DIAG_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE,  WAVE_AMP_TIME_SERIES, WAVE_PHASE_TIME_SERIES, WEATHER_STN, NO_PLOT, &
+                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, PLOTTING_OFF, &
                 HEIGHT, TEMPERATURE, wp
             use ModelParamsModule, only: gModIntParams
             
@@ -894,15 +1012,18 @@ module PlotModule
                 
             if (gModIntParams%plotType == WEATHER_STN) then
                 ! Clear the time series buffers
-                call clearBuffer(gHeightTimeSeriesBuffer)
-                call clearBuffer(gTempTimeSeriesBuffer) 
+                call clearBuffer(gWeatherStation1%timeSeriesBuf)
+                call clearBuffer(gWeatherStation2%timeSeriesBuf)
 
                 ! Do heights on right
-                !call DrawHorizontalLines(.false., & ! No screen update
-                !                        .true., & ! put labels on left
-                !                        .TRUE., & ! making labels for height field
-                !                        #0000DD00) ! color of labels
-                !call DrawHorizontalLines(.true., .false., .FALSE., #000055EE) ! true means force screen update. false means draw labels on right side
+                call DrawHorizontalLines(gWeatherStation2%field == PLOTTING_OFF, &     ! No screen update if false
+                                         .true., &       ! put labels on left
+                                         Z'0000DD00', &  ! color of labels
+                                         gWeatherStation1)     ! isHeight is true for heights so draw horizontal lines         
+                call DrawHorizontalLines(.true., &      ! true means force screen update. 
+                                         .false., &     ! false means draw labels on right side
+                                         Z'000055EE', &
+                                         gWeatherStation2)
             !else if (gModIntParams%plotType == ENERGY_TIME_SERIES .OR. gModIntParams%plotType == STATISTICS) then
             !    ! Clear the time series buffers
             !    call clearBuffer(gKETimeSeriesBuffer)
@@ -1130,181 +1251,208 @@ module PlotModule
 ! PLOT WEATHER STN TIME SERIES ----------------------------------------------------
         !> This routine plots the time series of a 'weather station' at a selected lat/lon
         !> coordinate. It computes the value from the spectral coefficients times the associated
-        !> basis function by brute force (no 2-d FFT) - there are only 10 modes so not so bad.
-        !> Which components are to be included in the plot and which field can also be set.
-        !! @param Y The spectral coefficients array. It is passed instead of imported from
-        !!          the ModelModule to avoid circular dependencies.
+        !> basis function by brute force (no FFT).
         subroutine plotTimeSeries()
-            use NLevQGModelGlobals, only: gBitMapInfo
+            use ConstantsModule, only: PLOTTING_OFF
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelParamsModule, only: gModIntParams
 
             IMPLICIT NONE
+            
+            real :: value
+            integer :: I, K, L
 
+            if (gWeatherStation1%field /= PLOTTING_OFF) then
+                ! Compute the value
+                value = computeValue(gWeatherStation1)
+                call loadTimeSeriesArray(gWeatherStation1%timeSeriesBuf, value * gWeatherStation1%scale, &
+                                         gWeatherStation1%yCenter, gWeatherStation1%gDCcolor, .true., gWeatherStation2%field == PLOTTING_OFF)
+                call DrawHorizontalLines(.false., .true., WX_STN_TEMP_COLOR, gWeatherStation1) ! true means force screen update. false means draw labels on right side
 
-            call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(.true., .false., WX_STN_TEMP_COLOR) ! true means force screen update. false means draw labels on right side
+            endif
+            if (gWeatherStation2%field /= PLOTTING_OFF) then
+                value = computeValue(gWeatherStation2)
+                call loadTimeSeriesArray(gWeatherStation2%timeSeriesBuf, value * gWeatherStation2%scale, &
+                                         gWeatherStation2%yCenter, gWeatherStation2%gDCcolor, gWeatherStation1%field == PLOTTING_OFF, .true.)
+                call DrawHorizontalLines(.false., gWeatherStation1%field == PLOTTING_OFF, WX_STN_TEMP_COLOR, gWeatherStation2)
+            endif
+
+            call labelPlotsAndDisplayTime(.true.)
 
         end subroutine plotTimeSeries
+        
+        function computeValue(weatherStn) result (value)
+                use ArrayDimensionsModule, only: gCurrentDims
+                use ModelParamsModule, only: gModIntParams
+                implicit none
 
-        !subroutine loadTimeSeriesArray(timeSeriesBuf, value, scale, yzero_axis, color, clearScreen, drawMovingTimeLines)
-        !    use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-        !    use ModelTypesModule, only: timeScale, secondsPerDay, gModRealParams, gModIntParams, gDataType
-        !
-        !    USE IFWINTY
-        !    USE IFWINA   ! Replaced GDI32 for standard Intel compatibility
-        !    USE USER32
-        !    USE, INTRINSIC :: ISO_C_BINDING
-        !    implicit none
-        !
-        !    type(TimeSeriesBuffer), intent(inout) :: timeSeriesBuf
-        !    real, intent(in) :: value, scale
-        !    integer(4), intent(in) :: yzero_axis
-        !    integer(4), intent(in) :: color
-        !    logical, intent(in) :: clearScreen
-        !    logical, intent(in) :: drawMovingTimeLines
-        !    
-        !    LOGICAL(BOOL)   :: bret
-        !    INTEGER(4)      :: i, read_idx, iret, flippedColor
-        !    INTEGER(HANDLE) :: hBrush, hOldBrush, hPen, hOldPen, hPenAxis, hOldFont, hFontAxis
-        !
-        !    INTEGER(4), POINTER :: pixelArray(:, :)
-        !    integer :: ix, iy, first_mark , gridInterval, kInterval
-        !    character(len=32) :: timeStr
-        !    real :: days
-        !    integer :: years
-        !
-        !
-        !    ! 2. Initialization & Re-allocation (Check if width changed)
-        !    IF (.NOT. timeSeriesBuf%is_initialized .OR. size(timeSeriesBuf%data_buffer) /= gBitMapInfo%width) THEN
-        !        ! This auto allocates/reallocates to the correct size AND initializes to zero
-        !        timeSeriesBuf%data_buffer = spread(0.0, 1, gBitMapInfo%width)
-        !                                    ! implied do loop for auto allocation here since plot_pts is a derived type T_POINT
-        !        timeSeriesBuf%plot_pts    = [(T_POINT(0, 0), i = 1, gBitMapInfo%width)]
-        !        timeSeriesBuf%head_idx = 0
-        !        timeSeriesBuf%count = 0
-        !        timeSeriesBuf%is_initialized = .TRUE.
-        !    END IF
-        !
-        !    ! 3. Update Circular Buffer (1-based)
-        !    timeSeriesBuf%head_idx = MOD(timeSeriesBuf%head_idx, gBitMapInfo%width) + 1
-        !    timeSeriesBuf%data_buffer(timeSeriesBuf%head_idx) = scale * value
-        !    timeSeriesBuf%count = MIN(timeSeriesBuf%count + 1, gBitMapInfo%width) ! Keep a count of how many points are loaded. This is to stop the sprious 
-        !                                                                          ! zero points at the start when the buffer has not been filled. So count will
-        !                                                                          ! will go from 0 to screen width. ONce at the screen width it will stay there
-        !                                                                          ! until reset.
-        !
-        !    ! 4. Prepare Point Array (Mapping circular buffer to 0-based screen X)
-        !    DO i = 1, timeSeriesBuf%count
-        !        ! Offset the starting point so the "newest" data is always on the right
-        !        read_idx = MOD(timeSeriesBuf%head_idx - timeSeriesBuf%count + i, gBitMapInfo%width)
-        !        if (read_idx < 0) read_idx = read_idx + gBitMapInfo%width
-        !        read_idx = read_idx + 1 ! Back to 1-based
-        !
-        !        timeSeriesBuf%plot_pts(i)%x = (gBitMapInfo%width - timeSeriesBuf%count) + (i - 1)
-        !        ! NOTE: Flip and Scale Y. Windows Y=0 is top. 
-        !        ! This positions the y-axis = 0
-        !        timeSeriesBuf%plot_pts(i)%y = yzero_axis - NINT(timeSeriesBuf%data_buffer(read_idx))
-        !    END DO
-        !    ! 5. Clear Background (Dark Green)
-        !    hBrush = CreateSolidBrush(RGB(0, 30, 10))
-        !    hOldBrush = SelectObject(gBitMapInfo%hMemDC, hBrush)
-        !    if (clearScreen) iret = PatBlt(gBitMapInfo%hMemDC, 0, 0, gBitMapInfo%width, gBitMapInfo%height, PATCOPY)
-        !
-        !    ! 6. Draw lines (Optional: using your brush color or a pen)
-        !    ! [Insert your MoveToEx/LineTo axes code here if desired]
-        !    if (gPlotConfig%drawLines) then
-        !        ! Create a Solid Pen: PS_SOLID, Width=2, Color=Yellow (RGB 255, 255, 0)
-        !        hPen = CreatePen(PS_SOLID, 0, color) ! 0  = 1-pixel wide line regardless of GDI logical units
-        !        hOldPen = SelectObject(gBitMapInfo%hMemDC, hPen)
-        !
-        !        ! 7. Draw the entire line at once
-        !        ! Polyline uses the current Pen.
-        !        bret = Polyline(gBitMapInfo%hMemDC, timeSeriesBuf%plot_pts(1), timeSeriesBuf%count - 1)
-        !        ! Cleanup GDI Objects
-        !        hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-        !        bret = DeleteObject(hPen)
-        !    else
-        !        ! gdi approach: SetPixelV in a loop (Slower)
-        !        !do i = 1, gBitMapInfo%width
-        !        !    bret = SetPixelV(gBitMapInfo%hMemDC, timeSeriesBuf%plot_pts(i)%x, timeSeriesBuf%plot_pts(i)%y, RGB(0, 255, 0))
-        !        !end do
-        !        bret = GdiFlush()
-        !        CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
-        !
-        !        ! 1. Pre-calculate flipped color once outside the loop
-        !        ! Converts 0x00BBGGRR (Polyline) to 0x00RRGGBB (DIB)
-        !        flippedColor = IOR(ISHFT(IAND(color, Z'000000FF'), 16), & ! R: bit 0 -> 16
-        !                       IOR(IAND(color, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
-        !                           ISHFT(IAND(color, Z'00FF0000'), -16))) ! B: bit 16 -> 0
-        !        do i = 1, timeSeriesBuf%count
-        !            ! Get coordinates from your buffer
-        !            ix = timeSeriesBuf%plot_pts(i)%x
-        !            iy = timeSeriesBuf%plot_pts(i)%y
-        !        
-        !            ! Bounds checking is critical when using pointers!
-        !            if (ix >= 0 .and. ix < gBitMapInfo%width .and. &
-        !                iy >= 0 .and. iy < gBitMapInfo%height) then
-        !        
-        !                ! Direct memory write (Fast!)
-        !                ! Color #0000FF00 is Green in ABGR (00 Alpha, 00 Red, FF Green, 00 Blue)
-        !                pixelArray(ix + 1, iy + 1) = flippedColor 
-        !            end if
-        !        end do
-        !    end if
-        !
-        !    hpenaxis = createpen(ps_solid, 2, rgb(50, 50, 50)) ! 0  = 1-pixel wide line regardless of gdi logical units
-        !    hOldpen = selectobject(gbitmapinfo%hmemdc, hpenaxis)
-        !
-        !    ! 8. Draw X-Axis (Horizontal line through the middle)
-        !    bret = movetoex(gbitmapinfo%hmemdc, 0, gbitmapinfo%height / 2, null)
-        !    bret = lineto(gbitmapinfo%hmemdc, gbitmapinfo%width, gbitmapinfo%height / 2)
-        !
-        !    if (drawMovingTimeLines) then 
-        !        hOldFont = SelectObject(gBitMapInfo%hMemDC, hFontAxis) ! Use a small font
-        !        bret = SetTextColor(gBitMapInfo%hMemDC, RGB(100, 100, 100))
-        !        ! Now draw the vertical lines which represent time. These axes will need to move to the left
-        !        ! as new values come in.
-        !        ! How many pixels represent the gap between lines
-        !        gridInterval = gBitMapInfo%width / 20 
-        !    
-        !        ! The distance between lines in units of 'obsK'
-        !        ! If you plot every 10 steps, a 50-pixel gap represents 500 steps
-        !        kInterval = gridInterval * gModIntParams%outputInterval
-        !    
-        !        ! Align the first mark to the nearest kInterval
-        !        first_mark = (gDataType%obsK / kInterval) * kInterval
-        !
-        !        do i = first_mark, first_mark - (gBitMapInfo%width * gModIntParams%outputInterval), -kInterval
-        !            if (i < 0) exit 
-        !
-        !            ! NEW CALCULATION:
-        !            ! Difference in timesteps divided by interval = difference in pixels
-        !            ix = (gBitMapInfo%width - 1) - ((gDataType%obsK - i) / gModIntParams%outputInterval)
-        !
-        !            if (ix >= 0) then
-        !                ! 1. Draw Vertical Line (using MoveToEx/LineTo)
-        !                bret = MoveToEx(gBitMapInfo%hMemDC, ix, gBitMapInfo%height, NULL)
-        !                bret = LineTo(gBitMapInfo%hMemDC, ix, 0)
-        !
-        !                ! 2. Draw Text Label which will be years:days.fraction
-        !                days =  REAL(i) * REAL(gDimensionalTime)
-        !                years = Floor(days / 365.0_wp)
-        !                days = days - years * 365
-        !                write(timeStr, '( I0, ":", F0.2)') years, days
-        !                bret = SetTextAlign(gBitMapInfo%hMemDC, TA_CENTER)
-        !                bret = TextOut(gBitMapInfo%hMemDC, ix, 2, trim(timeStr), len_trim(timeStr))
-        !            end if
-        !        end do
-        !        hOldFont = SelectObject(gBitMapInfo%hMemDC, hOldFont)
-        !        bret = DeleteObject(hFontAxis)
-        !    endif
-        !
-        !    ! Cleanup GDI Objects
-        !    hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
-        !    bret = DeleteObject(hPenAxis)
-        !    hOldBrush = SelectObject(gBitMapInfo%hMemDC, hOldBrush)
-        !    bret = DeleteObject(hBrush)
-        !
-        !end subroutine loadTimeSeriesArray
+                type(WeatherStation), intent(in) :: weatherStn
+                
+                real :: value
+                integer :: I, K, L
+
+                value = 0.0
+                do I = 1, gModIntParams%LMAX2
+                    value = value + weatherStn%value(I) * weatherStn%cosy(I)
+                end do
+                K = 1
+                L = 1
+                do I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT - 1
+                    value = value + (weatherStn%value(I) * weatherStn%cosx(K) + &
+                                     weatherStn%value(I + 1) * weatherStn%sinx(K)) * weatherStn%siny(L)
+                    L = L + 1
+                    if (L .GT. gModIntParams%LMAX2) then
+                        K = 1
+                        L = 1
+                    endif
+                end do
+        end function computeValue
+
+        subroutine loadTimeSeriesArray(timeSeriesBuf, value, yzero_axis, color, clearScreen, drawMovingTimeLines)
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModRealParams, gModIntParams
+        
+            USE IFWINTY
+            USE IFWINA   ! Replaced GDI32 for standard Intel compatibility
+            USE USER32
+            USE, INTRINSIC :: ISO_C_BINDING
+            implicit none
+        
+            type(TimeSeriesBuffer), intent(inout) :: timeSeriesBuf
+            real, intent(in) :: value
+            integer(4), intent(in) :: yzero_axis
+            integer(4), intent(in) :: color
+            logical, intent(in) :: clearScreen
+            logical, intent(in) :: drawMovingTimeLines
+            
+            LOGICAL(BOOL)   :: bret
+            INTEGER(4)      :: i, read_idx, iret, flippedColor
+            INTEGER(HANDLE) :: hBrush, hOldBrush, hPen, hOldPen, hPenAxis, hOldFont, hFontAxis
+        
+            INTEGER(4), POINTER :: pixelArray(:, :)
+            integer :: ix, iy, first_mark , gridInterval, kInterval
+            character(len=32) :: timeStr
+            real :: days
+            integer :: years
+            LOGICAL :: drawLines = .TRUE.
+        
+            ! 1. Update Circular Buffer (1-based)
+            timeSeriesBuf%head_idx = MOD(timeSeriesBuf%head_idx, gBitMapInfo%width) + 1
+            timeSeriesBuf%data_buffer(timeSeriesBuf%head_idx) = value
+            timeSeriesBuf%count = MIN(timeSeriesBuf%count + 1, gBitMapInfo%width) ! Keep a count of how many points are loaded. This is to stop the sprious 
+                                                                                  ! zero points at the start when the buffer has not been filled. So count will
+                                                                                  ! will go from 0 to screen width. ONce at the screen width it will stay there
+                                                                                  ! until reset.
+        
+            ! 2. Prepare Point Array (Mapping circular buffer to 0-based screen X)
+            DO i = 1, timeSeriesBuf%count
+                ! Offset the starting point so the "newest" data is always on the right
+                read_idx = MOD(timeSeriesBuf%head_idx - timeSeriesBuf%count + i, gBitMapInfo%width)
+                if (read_idx < 0) read_idx = read_idx + gBitMapInfo%width
+                read_idx = read_idx + 1 ! Back to 1-based
+        
+                timeSeriesBuf%plot_pts(i)%x = (gBitMapInfo%width - timeSeriesBuf%count) + (i - 1)
+                ! NOTE: Flip and Scale Y. Windows Y=0 is top. 
+                ! This positions the y-axis = 0
+                timeSeriesBuf%plot_pts(i)%y = yzero_axis - NINT(timeSeriesBuf%data_buffer(read_idx))
+            END DO
+            ! 5. Clear Background (Dark Green)
+            hBrush = CreateSolidBrush(RGB(0, 30, 10))
+            hOldBrush = SelectObject(gBitMapInfo%hMemDC, hBrush)
+            if (clearScreen) iret = PatBlt(gBitMapInfo%hMemDC, 0, 0, gBitMapInfo%width, gBitMapInfo%height, PATCOPY)
+        
+            ! 6. Draw lines (Optional: using your brush color or a pen)
+            ! [Insert your MoveToEx/LineTo axes code here if desired]
+            if (drawLines) then
+                ! Create a Solid Pen: PS_SOLID, Width=2, Color=Yellow (RGB 255, 255, 0)
+                hPen = CreatePen(PS_SOLID, 0, color) ! 0  = 1-pixel wide line regardless of GDI logical units
+                hOldPen = SelectObject(gBitMapInfo%hMemDC, hPen)
+        
+                ! 7. Draw the entire line at once
+                ! Polyline uses the current Pen.
+                bret = Polyline(gBitMapInfo%hMemDC, timeSeriesBuf%plot_pts(1), timeSeriesBuf%count - 1)
+                ! Cleanup GDI Objects
+                hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
+                bret = DeleteObject(hPen)
+            else
+                bret = GdiFlush()
+                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
+        
+                ! 1. Pre-calculate flipped color once outside the loop
+                ! Converts 0x00BBGGRR (Polyline) to 0x00RRGGBB (DIB)
+                flippedColor = IOR(ISHFT(IAND(color, Z'000000FF'), 16), & ! R: bit 0 -> 16
+                               IOR(IAND(color, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
+                                   ISHFT(IAND(color, Z'00FF0000'), -16))) ! B: bit 16 -> 0
+                do i = 1, timeSeriesBuf%count
+                    ! Get coordinates from your buffer
+                    ix = timeSeriesBuf%plot_pts(i)%x
+                    iy = timeSeriesBuf%plot_pts(i)%y
+                
+                    ! Bounds checking is critical when using pointers!
+                    if (ix >= 0 .and. ix < gBitMapInfo%width .and. &
+                        iy >= 0 .and. iy < gBitMapInfo%height) then
+                
+                        ! Direct memory write (Fast!)
+                        ! Color #0000FF00 is Green in ABGR (00 Alpha, 00 Red, FF Green, 00 Blue)
+                        pixelArray(ix + 1, iy + 1) = flippedColor 
+                    end if
+                end do
+            end if
+        
+            hpenaxis = createpen(ps_solid, 2, rgb(50, 50, 50)) ! 0  = 1-pixel wide line regardless of gdi logical units
+            hOldpen = selectobject(gbitmapinfo%hmemdc, hpenaxis)
+        
+            ! 8. Draw X-Axis (Horizontal line through the middle)
+            bret = movetoex(gbitmapinfo%hmemdc, 0, gbitmapinfo%height / 2, null)
+            bret = lineto(gbitmapinfo%hmemdc, gbitmapinfo%width, gbitmapinfo%height / 2)
+        
+            if (drawMovingTimeLines) then 
+                hOldFont = SelectObject(gBitMapInfo%hMemDC, hFontAxis) ! Use a small font
+                bret = SetTextColor(gBitMapInfo%hMemDC, RGB(100, 100, 100))
+                ! Now draw the vertical lines which represent time. These axes will need to move to the left
+                ! as new values come in.
+                ! How many pixels represent the gap between lines
+                gridInterval = gBitMapInfo%width / 20 
+            
+                ! The distance between lines in units of 'obsK'
+                ! If you plot every 10 steps, a 50-pixel gap represents 500 steps
+                kInterval = gridInterval * gModIntParams%outputInterval
+
+                ! Align the first mark to the nearest kInterval
+                first_mark = (gElapsedTime%timeSteps / kInterval) * kInterval
+        
+                do i = first_mark, first_mark - (gBitMapInfo%width * gModIntParams%outputInterval), -kInterval
+                    if (i < 0) exit 
+        
+                    ! NEW CALCULATION:
+                    ! Difference in timesteps divided by interval = difference in pixels
+                    ix = (gBitMapInfo%width - 1) - ((gElapsedTime%timeSteps - i) / gModIntParams%outputInterval)
+        
+                    if (ix >= 0) then
+                        ! 1. Draw Vertical Line (using MoveToEx/LineTo)
+                        bret = MoveToEx(gBitMapInfo%hMemDC, ix, gBitMapInfo%height, NULL)
+                        bret = LineTo(gBitMapInfo%hMemDC, ix, 0)
+        
+                        ! 2. Draw Text Label which will be years:days.fraction
+                        days =  REAL(i) * REAL(gElapsedTime%dimensionalTime)
+                        years = Floor(days / 365.0_wp)
+                        days = days - years * 365
+                        write(timeStr, '( I0, ":", F0.2)') years, days
+                        bret = SetTextAlign(gBitMapInfo%hMemDC, TA_CENTER)
+                        bret = TextOut(gBitMapInfo%hMemDC, ix, 2, trim(timeStr), len_trim(timeStr))
+                    end if
+                end do
+                hOldFont = SelectObject(gBitMapInfo%hMemDC, hOldFont)
+                bret = DeleteObject(hFontAxis)
+            endif
+
+            ! Cleanup GDI Objects
+            hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
+            bret = DeleteObject(hPenAxis)
+            hOldBrush = SelectObject(gBitMapInfo%hMemDC, hOldBrush)
+            bret = DeleteObject(hBrush)
+
+        end subroutine loadTimeSeriesArray
 
 ! PLOT HOVMOLLER AT LATITUDE -------------------------------------------
         ! Plot a hovmoller row at a specified latitude on the screen

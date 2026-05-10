@@ -27,12 +27,14 @@ module SettingsDialogModule
             use iso_c_binding
 
             use DialogHelpersModule, only: GetComboIndex, &
-                        moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, updateListViewValue ! List control helpers
-            use ModelParamsModule, only: gUserSettings, gModIntParams
+                        moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, updateListViewValue, &
+                        GetNameOfUserSelectedFile, GetUserSelectedSaveName  ! List control helpers
+            use SetupModule, only: SaveModelState, ReadSaveFile
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gNLevFile
             use ModelControlDialogModule, only: ModelControlDlgProc
             use KeyboardHooksModule, only: KeyboardForDlgSettingsProc
-
-
+            use ContoursAndRangesDialogModule, only: ContoursAndRangesDlgProc
+            use UtilitiesModule, only: openModelFile
 
             implicit none
 
@@ -48,22 +50,23 @@ module SettingsDialogModule
             integer(kind=4) :: iData
             integer(kind=4) :: iret
             integer(BOOL) ::   bret
-            integer(HANDLE) :: hHook
-            save hHook
+            integer(HANDLE), save :: hHook
     
             type(T_RECT) :: rc
             type(T_POINT) :: pt
 
             ! For the list view report rows
             integer(HANDLE) :: hList, hEdit, hStaticEdit, hCombo, hStaticCombo, hDoneButton
-            integer :: rowClicked
-            save rowClicked
-            CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
+            integer, save :: rowClicked
 
-            integer :: newValue      ! For editing the displayed value in the list box
+            CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
+            LOGICAL :: res              ! File loading and saving
+            character(len=270) :: selected_file
+
+            integer :: newValue         ! For editing the displayed value in the list box
 
             select case (dlgMsg)
-                case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
+                case (WM_INITDIALOG)    ! dlgMsg: initialize dialog box
                     rowClicked = -1
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgSettingsProc), NULL, GetCurrentThreadId())
@@ -172,6 +175,30 @@ module SettingsDialogModule
                     end if
 
                     select case (IAND(iData, 16#FFFF))
+!--- F1: Set countours and Ranges
+                        case (IDC_BUTTON_SET_SCALE_FACTORS)
+                            bret = DialogBoxParam(ghInstance, INT(IDD_CONTOURS, LONG_PTR), hDlg, LOC(ContoursAndRangesDlgProc), 0_LONG_PTR)
+                            SettingsDlgProc = 1
+
+! ---- F2:  Load Saved Flow
+                        case (IDC_BUTTON_LOAD_FROM_FILE)
+                            res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
+                            if (res) then
+                                if (len_trim(gNLevFile%fileName) == 0) return
+                                call LogMessage("Save file loaded: "// selected_file)
+                                iret = openModelFile(gNLevFile, .true., hDlg)
+                                if (iret == 0) iret = ReadSaveFile(gNLevFile)
+                            endif
+                            ghSettingsDlg = hDlg
+
+! ---- F3:  Save Current Flow
+                        case (IDC_BUTTON_SAVE_TO_FILE)
+                            res = GetUserSelectedSaveName(hDlg, gNLevFile)
+                            if (res) then
+                                iret = openModelFile(gNLevFile, .false., hDlg)
+                                if (iret == 0) iret = SaveModelState(gNLevFile, .false.)
+                            endif
+                            ghSettingsDlg = hDlg
 
 !--- F4: Model control dialog
                         case (IDC_BUTTON_MODEL_CONTROL)

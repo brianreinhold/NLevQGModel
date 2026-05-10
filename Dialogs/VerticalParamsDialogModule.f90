@@ -26,7 +26,7 @@ module VerticalParamsDialogModule
             use NLevQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
-            use ConstantsModule, only: REAL_TO_ASCII
+            use ConstantsModule, only: REAL_TO_ASCII, SQRT2
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit
@@ -146,6 +146,11 @@ module VerticalParamsDialogModule
                                         call moveEditBox(hDlg, hList, hEdit, rowClicked)
                                         ! Function returns pointer to the correct array based on which list view was clicked
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
+                                        if (gHorzArr%isDimensionalized) then
+                                            if (pnmv%hdr%idFrom .EQ. IDC_LIST_THERMAL_DRIVING) then
+                                                ptr(J + 1) = SQRT2 * ptr(J + 1)
+                                            endif
+                                        endif
                                         ! Converts real value to string for edit box
                                         ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(J + 1), str)
                                         !str = getStringFromRealForEditBox(ptr(J + 1))
@@ -248,11 +253,12 @@ module VerticalParamsDialogModule
                                         ios = 0
                                         
                                         ! Load the new value into the correct array index field
-                                        ios = readRealDataFromEditBox(str, rowClicked, ptr)
+                                        ios = readRealDataFromEditBox(str, rowClicked, ptr, GetDlgCtrlID(hList) == IDC_LIST_THERMAL_DRIVING)
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
-                                            !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
-                                            
+                                            if (gHorzArr%isDimensionalized) then
+                                                ptr(rowClicked + 1) = SQRT2 * ptr(rowClicked + 1)
+                                            endif
                                             ios = RealToAsciiToReal(REAL_TO_ASCII, ptr(rowClicked + 1), strC)
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
                                             bret = SetDlgItemText(hDlg, IDC_EDIT_VERTICAL, strC)
@@ -568,19 +574,27 @@ module VerticalParamsDialogModule
 
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
-        function readRealDataFromEditBox(str, rowClicked, vertArr) result(ios)
-            use ModelFieldsModule, only: gVertArr
+        function readRealDataFromEditBox(str, rowClicked, vertArr, is_thermal) result(ios)
+            use ConstantsModule, only: SQRT2
+            use ModelFieldsModule, only: gHorzArr
             
             implicit none
             
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
             integer, intent(in) :: rowClicked
             REAL, intent(inout) :: vertArr(:)
+            logical, intent(in) :: is_thermal
 
             integer :: ios
+            real :: val
 
             ios = 0
-            read(str, *, iostat = ios) vertArr(rowClicked + 1)
+            read(str, *, iostat = ios) val
+            if (is_thermal .and. gHorzArr%isDimensionalized) then
+                val = val / SQRT2
+            endif
+            vertArr(rowClicked + 1) = val
+
         end function readRealDataFromEditBox
 
 end module VerticalParamsDialogModule

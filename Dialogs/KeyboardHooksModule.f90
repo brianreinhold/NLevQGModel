@@ -49,8 +49,12 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, LogMessage
-            use DlgProcInterfacesModule, only: ModelControlDlgProc
+            use NLevQGModelGlobals, only: ghInstance, ghSettingsDlg, ghModelControlDlg, ghContoursAndRangesDlg, LogMessage
+            use DlgProcInterfacesModule, only: ModelControlDlgProc, ContoursAndRangesDlgProc
+            use DialogHelpersModule, only: GetNameOfUserSelectedFile, GetUserSelectedSaveName
+            use UtilitiesModule, only: openModelFile
+            use SetupModule, only: SaveModelState, ReadSaveFile
+            use ModelParamsModule, only: gNLevFile
             
             implicit none
 
@@ -63,6 +67,8 @@ module KeyboardHooksModule
             integer(LRESULT) ::  KeyboardForDlgSettingsProc ! LRESULT
             integer(kind=4) :: iret
             logical :: isDialogOpen = .false.
+            logical :: res
+            character(len=270) :: selected_file
             integer(BOOL) ::   bret
             integer(HANDLE) :: hFocus, hLB_User
 
@@ -72,6 +78,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
                         ! F1: Configure colors and set map contour intervals
                         call LogMessage('User pressed F1 key in Settings Dialog')
+                        bret = DialogBoxParam(ghInstance, INT(IDD_CONTOURS, LONG_PTR), ghContoursAndRangesDlg, LOC(ContoursAndRangesDlgProc), 0_LONG_PTR)
                         KeyboardForDlgSettingsProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -79,6 +86,13 @@ module KeyboardHooksModule
                     IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F2: Load data from a saved file
                         call LogMessage('User pressed F2 key in Settings Dialog')
+                        res = GetNameOfUserSelectedFile(ghSettingsDlg, gNLevFile)
+                        if (res) then
+                            if (len_trim(gNLevFile%fileName) == 0) return
+                            call LogMessage("Save file loaded: "// selected_file)
+                            iret = openModelFile(gNLevFile, .true., ghSettingsDlg)
+                            if (iret == 0) iret = ReadSaveFile(gNLevFile)
+                        endif
                         KeyboardForDlgSettingsProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -86,6 +100,11 @@ module KeyboardHooksModule
                     IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F3: Save data to a file
                         call LogMessage('User pressed F3 key in Settings Dialog')
+                        res = GetUserSelectedSaveName(ghSettingsDlg, gNLevFile)
+                        if (res) then
+                            iret = openModelFile(gNLevFile, .false., ghSettingsDlg)
+                            if (iret == 0) iret = SaveModelState(gNLevFile, .false.)
+                        endif
                         KeyboardForDlgSettingsProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -159,13 +178,14 @@ module KeyboardHooksModule
             USE IFWIN
             use user32
             use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghVerticalParamsDlg, ghInitVariablesDlg, ghContoursAndRangesDlg, LogMessage
-            use SetUpModule, only: CheckModelControlChanges
+            use SetUpModule, only: CheckModelControlChanges, SaveModelState, ReadSaveFile, DimensionalizeModRealParams
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
-            use ModelParamsModule, only: gModIntParams, gModRealParams
-            use DialogHelpersModule, only: HideMyEdit
+            use ModelParamsModule, only: gModIntParams, gModRealParams, gNLevFile
+            use DialogHelpersModule, only: HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use PlotModule, only: ClearScreen
             use DlgProcInterfacesModule, only: VerticalParamsDlgProc, InitVariablesDlgProc, ContoursAndRangesDlgProc
-            
+            use UtilitiesModule, only: openModelFile
+
             implicit none
 
             include '../resource.fd'
@@ -180,6 +200,9 @@ module KeyboardHooksModule
             !logical :: isDialogOpen = .false.
             integer(BOOL) ::   bret
             integer(HANDLE) :: hFocus, hLB_real, hLB_integer
+
+            logical :: res
+            character(len=270) :: selected_file
 
             IF (GetForegroundWindow() .EQ. ghModelControlDlg) then
 
@@ -198,6 +221,11 @@ module KeyboardHooksModule
                         iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                         iret = InitModelWithModelControlVals()
                         bret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), ghVerticalParamsDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
+                        paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                        paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                        paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                        paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                        call DimensionalizeModRealParams() 
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -205,9 +233,14 @@ module KeyboardHooksModule
                     IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F3: Initialize flow variables
                         call LogMessage('User pressed F3 key in Model Control Dialog')
-                            iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                            iret = InitModelWithModelControlVals()
-                            bret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
+                        iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        iret = InitModelWithModelControlVals()
+                        bret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
+                        paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                        paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                        paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                        paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                        call DimensionalizeModRealParams() 
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -215,6 +248,13 @@ module KeyboardHooksModule
                     IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F4: Save the current flow
                         call LogMessage('User pressed F4 key in Model Control Dialog')
+                        res = GetNameOfUserSelectedFile(ghModelControlDlg, gNLevFile)
+                        if (res) then
+                            if (len_trim(gNLevFile%fileName) == 0) return
+                            call LogMessage("Save file loaded: "// selected_file)
+                            iret = openModelFile(gNLevFile, .true., ghModelControlDlg)
+                            if (iret == 0) iret = ReadSaveFile(gNLevFile)
+                        endif
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -222,6 +262,11 @@ module KeyboardHooksModule
                     IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F5: Load saved flow
                         call LogMessage('User pressed F5 key in Model Control Dialog')
+                        res = GetUserSelectedSaveName(ghModelControlDlg, gNLevFile)
+                        if (res) then
+                            iret = openModelFile(gNLevFile, .false., ghModelControlDlg)
+                            if (iret == 0) iret = SaveModelState(gNLevFile, .false.)
+                        endif
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF

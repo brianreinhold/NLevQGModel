@@ -152,8 +152,6 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at longitude Y'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at longitude Y'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Phase space plot'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Wave-amplitude time series'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Wave-phase time series'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Skip plot for speed'//char(0)))
 
@@ -170,8 +168,8 @@ module ModelControlDialogModule
                     ! and maps or vice versa, and if so we reload FIELD1 with the appropriate options.
                     ! This is done in 'reloadComboBoxFields'
                     bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
-                    bret = reloadComboBoxFields(hDlg, WEATHER_MAP, IDC_COMBO_FIELD2)   ! Always load with map options
-                    bret = reloadComboBoxFields(hDlg, WEATHER_MAP, IDC_COMBO_FIELD3)   ! Always load with map options
+                    bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD2)   ! Always load with map options
+                    bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD3)   ! Always load with map options
                     ! initialize FIELD1
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
                     !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
@@ -183,7 +181,7 @@ module ModelControlDialogModule
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field2 - FIELD_START, UINT_PTR), 0)
                     ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map or phase space)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE)) ! Cast for logical to INTEGER(BOOL) to avoid warning
+                    !bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE)) ! Cast for logical to INTEGER(BOOL) to avoid warning
                     ! initialize FIELD3
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field3 - FIELD_START, UINT_PTR), 0)
@@ -302,7 +300,7 @@ module ModelControlDialogModule
                             ! We need this offset to map the combo box indicies with our indicies. Combo
                             ! box indicies begin with 0, our begin with 1 for maps and 18 for time series
                             addOffset = 1
-                            if (gModIntParams%plotType .GT. PHASE_SPACE) addOffset = FIELD_GRAPH_START
+                            if (gModIntParams%plotType .GT. NO_PLOT) addOffset = FIELD_GRAPH_START
                             select case(IAND(wParam, Z'FFFF'))
                                 ! The tricky thing here is if the user changes the plot type from map
                                 ! to time series or vice versa. Then we have to load different options
@@ -450,6 +448,11 @@ module ModelControlDialogModule
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
+                            paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                            paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                            paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                            paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                            call DimensionalizeModRealParams() 
                             ghModelControlDlg = hDlg
 
 ! ---- F3:  Initialize flow variables
@@ -457,6 +460,11 @@ module ModelControlDialogModule
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
+                            paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                            paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                            paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                            paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                            call DimensionalizeModRealParams() 
                             ghModelControlDlg = hDlg
 
 ! ---- F4:  Save Current Flow
@@ -623,8 +631,8 @@ module ModelControlDialogModule
             call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%field3Level], '(f10.4)')
             call addlistviewrowreal(hlist, "latitude of x-hovmoller and cross-sections", [gModRealParams%hovLat], '(f10.4)')
             call addlistviewrowreal(hlist, "longitude of y-hovmoller and cross-sections", [gModRealParams%hovLon], '(f10.4)')
-            call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%lonXPoint], '(f10.4)')
-            call addlistviewrowreal(hlist, "latitude of selected point for a weather station", [gModRealParams%latYPoint], '(f10.4)')
+            call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%lonPoint], '(f10.4)')
+            call addlistviewrowreal(hlist, "latitude of selected point for a weather station", [gModRealParams%latPoint], '(f10.4)')
             call addlistviewrowreal(hlist, "lowest level displayed in vertical cross sections", [gModRealParams%BOT], '(f10.4)')
             call addlistviewrowreal(hlist, "highest level displayed in vertical cross sections", [gModRealParams%TPP], '(f10.4)')
             call addlistviewrowreal(hlist, "convergence test threshold for sensitivity runs", [gModRealParams%CONV], '(f10.4)')
@@ -689,9 +697,9 @@ module ModelControlDialogModule
                 case (7)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLon, str)
                 case (8)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%lonXPoint, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%lonPoint, str)
                 case (9)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%latYPoint, str)
+                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%latPoint, str)
                 case (10)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BOT, str)
                 case (11)
@@ -782,9 +790,9 @@ module ModelControlDialogModule
                 case (7)
                     read(str, *, iostat = ios)  gModRealParams%hovLon
                 case (8)
-                    read(str, *, iostat = ios)  gModRealParams%lonXPoint
+                    read(str, *, iostat = ios)  gModRealParams%lonPoint
                 case (9)
-                    read(str, *, iostat = ios)  gModRealParams%latYPoint
+                    read(str, *, iostat = ios)  gModRealParams%latPoint
                 case (10)
                     read(str, *, iostat = ios)  gModRealParams%BOT
                 case (11)

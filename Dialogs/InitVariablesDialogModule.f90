@@ -160,13 +160,14 @@ module InitVariablesDialogModule
                                         else
                                             val = ptr(J + 1, 1) ! Orography case
                                         endif
-                                        if (J + 1 < gModIntParams%LMAX2) then
-                                            val = SQRT2 * val
-                                        else
-                                            val = 2.0 * val
+                                        if (gHorzArr%isDimensionalized) then
+                                            if (J + 1 < gModIntParams%LMAX2) then
+                                                val = SQRT2 * val
+                                            else
+                                                val = 2.0 * val
+                                            endif
                                         endif
                                         ios = RealToAsciiToReal(REAL_TO_ASCII, val, str)
-                                        !str = getStringFromRealForEditBox(ptr(J + 1))
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
@@ -215,7 +216,6 @@ module InitVariablesDialogModule
                             bret = EndDialog(hDlg, 0)
                             InitVariablesDlgProc = 1
 
-                            
                         case (IDC_CHECK_HORZ_DIMENSIONALIZE)
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
 
@@ -285,10 +285,12 @@ module InitVariablesDialogModule
                                             else
                                                 val = ptr(rowClicked + 1, levelIndex)
                                             endif
-                                            if (rowClicked + 1 < gModIntParams%LMAX2) then
-                                                val = SQRT2 * val
-                                            else
-                                                val = 2.0 * val
+                                            if (gHorzArr%isDimensionalized) then
+                                                if (rowClicked + 1 < gModIntParams%LMAX2) then
+                                                    val = SQRT2 * val
+                                                else
+                                                    val = 2.0 * val
+                                                endif
                                             endif
                                             ios = RealToAsciiToReal(REAL_TO_ASCII, val, strC)
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
@@ -506,9 +508,7 @@ module InitVariablesDialogModule
                         rowClicked = sfRowClicked
                     end if
                 end function getRowClickedFromId
-
         end function InitVariablesDlgProc
-
 
         subroutine handleIntListControl(hDlg, id, labels, horzArr, level)
             use ifwinty
@@ -584,8 +584,8 @@ module InitVariablesDialogModule
             endif
             do i = 1, gCurrentDims%ITOT
                 if (I <= gModIntParams%LMAX2) then
-                     write(description, '(A, I0, A)') "cos", i, "y"
-                     call AddListViewRowReal(hList, description, [zonalFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
+                        write(description, '(A, I0, A)') "cos", i, "y"
+                        call AddListViewRowReal(hList, description, [zonalFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
                 else
                     waveStart = (i - gModIntParams%LMAX2)
                     ! pattern is cosKnxsinLy, sinKnxsinLy, for all L and then for all K
@@ -603,7 +603,7 @@ module InitVariablesDialogModule
             end do
             i = SendMessage(hList, LVM_ENSUREVISIBLE, INT(gCurrentDims%ITOT - 1, INT_PTR_KIND()), TRUE)
         end subroutine loadLevelsValuesIntoListView
-        
+
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
         ! one of the real parameters and this method gets the real value and converts it
         ! to a string to load into the edit box. The routine that actually does the work
@@ -632,7 +632,7 @@ module InitVariablesDialogModule
             use ModelParamsModule, only: gModIntParams
             
             implicit none
-            
+
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
             integer, intent(in) :: rowClicked
             REAL, intent(inout) :: horzArr(:, :)
@@ -644,10 +644,12 @@ module InitVariablesDialogModule
 
             ios = 0
             read(str, *, iostat = ios) val
-            if (rowClicked + 1 < gModIntParams%LMAX2) then
-                val = val / SQRT2
-            else
-                val = val / 2.0
+            if (gHorzArr%isDimensionalized) then
+                if (rowClicked + 1 < gModIntParams%LMAX2) then
+                    val = val / SQRT2
+                else
+                    val = val / 2.0
+                endif
             endif
             horzArr(rowClicked + 1, level) = val
         end function readRealDataFromEditBox

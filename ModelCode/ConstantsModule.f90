@@ -81,10 +81,10 @@ module ConstantsModule
     integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LONG = 4   ! Latitude-pressure (meridional) cross section at a slected 'longitude'
     integer, parameter :: HOV_DIAG_AT_LONG = 5      ! Hovmoller diagram at specified 'longitude' and level
     integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
-    integer, parameter :: WAVE_AMP_TIME_SERIES = 7  ! Time series of a spectral wave ampltude at given levels
-    integer, parameter :: WAVE_PHASE_TIME_SERIES = 8! Time series of a spectral wave phase at given levels
-    integer, parameter :: WEATHER_STN = 9           ! Time series of a field at a particular point (lat-lon)
-    integer, parameter :: NO_PLOT = 10              ! Skip plotting (good for speed)
+    !integer, parameter :: WAVE_AMP_TIME_SERIES = 7  ! Time series of a spectral wave ampltude at given levels
+    !integer, parameter :: WAVE_PHASE_TIME_SERIES = 8! Time series of a spectral wave phase at given levels
+    integer, parameter :: WEATHER_STN = 7           ! Time series of a field at a particular point (lat-lon)
+    integer, parameter :: NO_PLOT = 8               ! Skip plotting (good for speed)
     
                                                     ! Display options for variables field1, field2, field3
                                                     ! Also used for the scale factor array 'gPlotScales' below

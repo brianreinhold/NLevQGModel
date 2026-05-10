@@ -233,9 +233,12 @@ module ModelModule
                     END IF
                     !------------------------------------------------ Time stepping variables:
                     KSTEPT = 0
+                    RD = 0.0
                     DDELT = 4. * gModRealParams%DELT
-                    RD = 1. / gModRealParams%DELT
-                    RDD = 1. / DDELT
+                    if (DDELT .GT. 0.0) then
+                        RD = 1. / gModRealParams%DELT
+                        RDD = 1. / DDELT
+                    endif
                     ITOTS = 1
                     !--------------------------------- Turn off integration of zonal fields:
                     IF(gModIntParams%modelType .EQ. BAROCLINIC_STRUCTS) ITOTS = gModIntParams%LMAX2 + 1
@@ -249,8 +252,7 @@ module ModelModule
                             !write(*, '(A, I4, A, I4, A, I4)') 'KSTEPT=', KSTEPT, ' KSTEP=', KSTEP, ' KCYC=', KCYC
                             !write(msg, '(A, I4, A, I4, A, I4)') 'KSTEPT=', KSTEPT, ' KSTEP=', KSTEP, ' KCYC=', KCYC
                             !call LogMessage(msg)
-                            !---------------------------------------------- Selecting when to output data:
-                            if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) call outputPlot()
+
                             ! Checking if user stopped model
                             if (gModelState%runState == STOPPED) return
                             ! Handling user pausing the model
@@ -258,11 +260,14 @@ module ModelModule
                                 CALL PumpMessages()
                                 call sleep(100) ! Suspends the thread for 100ms. 0% CPU usage.
                             end do
+                            !---------------------------------------------- Selecting when to output data:
+                            if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) call outputPlot()
                             !*************************************************************** N-Cycle loop:
                             A1 = 0.
                             B1 = RD
                             DO NCYC4 = 1, 4
                                 call EquationSystem(buffer)
+                                if (RD == 0.0) cycle
                                 ! FS() has streamfunction tendencies after this call
                                 ! ADS() has vorticity plus beta tendencies after this call
                                 ! ADT() has temperature tendencies after this call

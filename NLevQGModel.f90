@@ -465,7 +465,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     logical :: maps, graphs             ! Mousing over a map or a graph? Need both since both can be present on the screen
     real, save :: current_val1, current_val2 ! Value at moused over location of field1 and field2
     character*32 :: textbuffer
-    character*32, save :: valueStringStrm, valueStringTemp
+    character*32, save :: valueStringField1, valueStringField2
     INTEGER(4) :: textLen
     TYPE(T_SIZE) :: sz
     integer :: draw_x, i
@@ -599,20 +599,23 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
             ! --- 4. Draw (The "How") ---
             ret = SetBkMode(hDC, TRANSPARENT)
-            ret = MSFWIN$SetTextColor(hDC, RGB(10, 80, 10))
+
 
             ! Center Row
             call QuickText(draw_x, mouse_y, textBuffer)
 
             if (graphs) then
-                call QuickText(draw_x, mouse_y + 12, valueStringStrm)
-                call QuickText(draw_x, mouse_y - 12, valueStringTemp)
+                ret = MSFWIN$SetTextColor(hDC, RGB(10, 80, 10))
+                call QuickText(draw_x, mouse_y, textBuffer) ! Center Row
+                call QuickText(draw_x, mouse_y - 14, valueStringField1)
+                call QuickText(draw_x, mouse_y + 14, valueStringField2)
             else if (maps) then
+                ret = MSFWIN$SetTextColor(hDC, RGB(10, 10, 10))
+                call QuickText(draw_x, mouse_y, textBuffer) ! Center Row
                 call FormatField(textBuffer, gModIntParams%field1, current_val1)
-                call QuickText(draw_x, mouse_y - 12, textBuffer)
-
+                call QuickText(draw_x, mouse_y - 14, textBuffer)
                 call FormatField(textBuffer, gModIntParams%field2, current_val2)
-                call QuickText(draw_x, mouse_y + 12, textBuffer)
+                call QuickText(draw_x, mouse_y + 14, textBuffer)
             end if
 
             ! 3. End the paint process
@@ -645,8 +648,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 else if (graphs) then
                     i = gModIntParams%outputInterval * (mouse_x - (gBitMapInfo%width - 1)) + gElapsedTime%timeSteps
                     current_val1 = REAL(i) * gElapsedTime%dimensionalTime
-                    valueStringStrm = getYValues(mouse_y, gModIntParams%field1)
-                    valueStringTemp = getYValues(mouse_y, gModIntParams%field2)
+                    valueStringField1 = getYValues(mouse_y, gModIntParams%field1)
+                    valueStringField2 = getYValues(mouse_y, gModIntParams%field2)
                     ret = InvalidateRect(hWnd, NULL, .FALSE.)
                 end if
 
@@ -815,8 +818,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             real, intent(in) :: val
 
             select case (field)     ! semi colon allows more than one line of code on a single line like in C
-                case (HEIGHT);      write(buf, '(F10.2, " m")') val
-                case (TEMPERATURE); write(buf, '(F10.2, A, "C")') val, char(176)
+                case (HEIGHT);      write(buf, '("Heights ", F10.2, " m")') val
+                case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
+                case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/day")') val
+                case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
                 case default;       buf = ""
             end select
         end subroutine

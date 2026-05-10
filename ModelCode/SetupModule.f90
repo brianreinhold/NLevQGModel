@@ -961,7 +961,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IYMAX = gridPoints(I)
-                    if (arraySizes%IYMAX < 16) arraySizes%IXMAX = 16
+                    if (arraySizes%IYMAX < 16) arraySizes%IYMAX = 16
                     EXIT
                 ENDIF
             END DO
@@ -1157,7 +1157,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  DELT is the length of the time step
         !  field1Level is the height of the model to be displayed
         !  hovLat is the latitude of the Hovmoller and vertical structure plot
-        !  lonXPoint,latYPoint is the position of the selected point in the model
+        !  lonPoint,latPoint is the position of the selected point in the model
         !  BOT,TPP is the pressure range to be displayed in X sections
         !  CONV is a convergence test for equilibrated solutions
         !  SPINUP is a spinup time toss amount for SENSIV runs
@@ -1169,28 +1169,28 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! IF(RN.GT.0.)RN=gScaleFactors%longestWave/RN
             ! DELT=DELT*gScaleFactors%timeScale
             ! BETA=4.*BETA
-            ! lonXPoint=lonXPoint*RAD_TO_DEGREES
-            ! latYPoint=latYPoint*RAD_TO_DEGREES
+            ! lonPoint=lonPoint*RAD_TO_DEGREES
+            ! latPoint=latPoint*RAD_TO_DEGREES
             ! Non dimensionalize
             ! RN=gScaleFactors%longestWave/RN
             !--------------------------------Recompute interactions if needed:
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
             ! DELT=DELT/gScaleFactors%timeScale
             ! BETA=BETA/4.
-            ! lonXPoint=lonXPoint/RAD_TO_DEGREES
-            ! latYPoint=latYPoint/RAD_TO_DEGREES
+            ! lonPoint=lonPoint/RAD_TO_DEGREES
+            ! latPoint=latPoint/RAD_TO_DEGREES
         !-------------------------------------------------Set user default parameters:
             gModRealParams%isDimensionalized = .FALSE.
             gModRealParams%RN = gScaleFactors%longestWave/28000.
             gModRealParams%BETA = .25
-            gModRealParams%DELT = 90./gScaleFactors%timeScale
+            gModRealParams%DELT = 60./gScaleFactors%timeScale
             gModRealParams%field1Level = 900.
             gModRealParams%field2Level = 950.
             gModRealParams%field3Level = 500.
             gModRealParams%hovLat = PI/4.
             gModRealParams%hovLon = 0.
-            gModRealParams%lonXPoint = 0.
-            gModRealParams%latYPoint = PI/4.
+            gModRealParams%lonPoint = 0.
+            gModRealParams%latPoint = PI/4.
             gModRealParams%BOT = 1000.
             gModRealParams%TPP = 0.
             gModRealParams%CONV = 0.
@@ -1297,8 +1297,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%LMAX2 = gUserSettings%maxMeridWaves
             gModIntParams%NLEV = gUserSettings%maxLevels
             gModIntParams%ICYC = 1
-            gModIntParams%ISTEP = 5840
-            gModIntParams%outputInterval = 4 
+            gModIntParams%ISTEP = 10000
+            gModIntParams%outputInterval = 1
             gModIntParams%plotType = WEATHER_MAP
             gModIntParams%field1 = TEMPERATURE
             gModIntParams%field2 = HEIGHT
@@ -1378,7 +1378,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         !> Subroutine to dimensionalize the gModRealParams before displaying to the user
         !> Only three of the parameters are affected. DELT, BETA, RN
-        !> Two others lonXPoint, latYPoint go to degrees in 'dimensional' form, otherwise they are in radians.
+        !> Two others lonPoint, latPoint go to degrees in 'dimensional' form, otherwise they are in radians.
         subroutine DimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
@@ -1389,8 +1389,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
             gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeScale
             gModRealParams%BETA = 4. * gModRealParams%BETA
-            gModRealParams%lonXPoint = gModRealParams%lonXPoint * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%latYPoint = gModRealParams%latYPoint * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%lonPoint = gModRealParams%lonPoint * RAD_TO_DEGREES ! Convert to degrees for display
+            gModRealParams%latPoint = gModRealParams%latPoint * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%hovLat = gModRealParams%hovLat * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%hovLon = gModRealParams%hovLon * RAD_TO_DEGREES ! Convert to degrees for display
             gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
@@ -1398,7 +1398,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
         !> user has examined and or changed them. Only three of the parameters are affected. DELT, BETA, RN.
-        !> Two others lonXPoint, latYPoint go to radians 'nondimensional' form, otherwise they are in degrees.
+        !> Two others lonPoint, latPoint go to radians 'nondimensional' form, otherwise they are in degrees.
         subroutine NonDimensionalizeModRealParams()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
@@ -1411,8 +1411,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! IF(RNP.NE.RN)interactCoefsComputed = .false.
             gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeScale
             gModRealParams%BETA = gModRealParams%BETA / 4.
-            gModRealParams%lonXPoint = gModRealParams%lonXPoint / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%latYPoint = gModRealParams%latYPoint / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%lonPoint = gModRealParams%lonPoint / RAD_TO_DEGREES ! Restore to radians
+            gModRealParams%latPoint = gModRealParams%latPoint / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%hovLat = gModRealParams%hovLat / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%hovLon = gModRealParams%hovLon / RAD_TO_DEGREES ! Restore to radians
             gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
@@ -1597,7 +1597,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 RL = RU
             END DO
             gVertArr%A(gModIntParams%NLEV) = CP * gVertArr%PV(gModIntParams%NLEV)**KAPPA / (CORIOLIS * gVertArr%PP(1)**KAPPA)
-            !--------------------------------Compute sigma profile AND nondimensionalize:
+
+!--SIGMA:------------------------------Compute sigma profile AND nondimensionalize:
 
             R = gVertArr%PP(1) / gScaleFactors%temperatureScale
             ! gScaleFactors%temperatureScale = CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS = 2.6121725E+08 m*m/s

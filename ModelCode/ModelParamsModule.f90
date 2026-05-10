@@ -63,8 +63,8 @@ module ModelParamsModule
         REAL :: field3Level !  field3Level is the height of the model to be displayed in the third map overlay
         REAL :: hovLat      !  hovLat is the latitude of the Hovmoller and vertical structure cross section plot     
         REAL :: hovLon      !  hovLon is the longitude of the Hovmoller and vertical structure cross section plot
-        REAL :: lonXPoint   !  lonXPoint,latYPoint is the position of the selected (longitude, latitude) point in
-        REAL :: latYPoint   !  the model for plots of data like the weather station
+        REAL :: lonPoint   !  lonPoint,latPoint is the position of the selected (longitude, latitude) point in
+        REAL :: latPoint   !  the model for plots of data like the weather station
         REAL :: BOT     !  BOT,TPP is the pressure range to be displayed in cross section sections
         REAL :: TPP
 
