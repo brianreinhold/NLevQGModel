@@ -74,14 +74,12 @@ module Fftw3HelpersModule
 
             ! Clean up existing plans
             if (c_associated(plan_x_c2r_1d)) call fftw_destroy_plan(plan_x_c2r_1d)
-            !if (c_associated(plan_x_r2c_1d)) call fftw_destroy_plan(plan_x_r2c_1d)
-            !if (c_associated(plan_y_sint_1d)) call fftw_destroy_plan(plan_y_sint_1d)
+            if (c_associated(plan_x_r2c_1d)) call fftw_destroy_plan(plan_x_r2c_1d)
+
             if (c_associated(plan_y_FFTW_RODFT01)) call fftw_destroy_plan(plan_y_FFTW_RODFT01)
             if (c_associated(plan_y_FFTW_REDFT01)) call fftw_destroy_plan(plan_y_FFTW_REDFT01)
             if (c_associated(plan_y_FFTW_RODFT10)) call fftw_destroy_plan(plan_y_FFTW_RODFT10)
             if (c_associated(plan_y_FFTW_REDFT10)) call fftw_destroy_plan(plan_y_FFTW_REDFT10)
-            !if (c_associated(plan_y_sint_1d)) call fftw_destroy_plan(plan_y_sint_1d)
-            !if (c_associated(plan_y_cost_1d)) call fftw_destroy_plan(plan_y_cost_1d)
 
             ! Set normalization factors: 1/(Nx*Ny) total normalization
             norm_inv_wave = 2.0 / (REAL(Nx) * REAL(Ny))
@@ -93,8 +91,6 @@ module Fftw3HelpersModule
             allocate(dummy_r_1d(max(Nx, Ny))) ! Need size Nx for X output, size Ny for Y input/output
             allocate(dummy_c_1d(Nx + 1))    ! Need size Nx+1 for X input/output
 
-            !p_dummy_r_c = C_LOC(dummy_r_1d)
-            !p_dummy_c_c = C_LOC(dummy_c_1d)
 
             ! --- Plan 1D C2R (Spectral to Grid, X-direction) ---
             plan_x_c2r_1d = fftwf_plan_dft_c2r_1d(Nx, dummy_c_1d, dummy_r_1d, FFTW_MEASURE)
@@ -102,15 +98,14 @@ module Fftw3HelpersModule
             ! --- Plan 1D R2C (Grid to Spectral, X-direction) ---
             plan_x_r2c_1d = fftwf_plan_dft_r2c_1d(Nx, dummy_r_1d, dummy_c_1d, FFTW_MEASURE)
 
-            !plan_y_FFTW_REDFT00 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT00, FFTW_MEASURE)
+
             plan_y_FFTW_REDFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT10, FFTW_MEASURE) ! Grid to spectral for FFTW_REDFT01 spectral to grid
             plan_y_FFTW_REDFT01 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT01, FFTW_MEASURE)
-            !plan_y_FFTW_REDFT11 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT11, FFTW_MEASURE)
 
-            !plan_y_FFTW_RODFT00 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT00, FFTW_MEASURE)
+
             plan_y_FFTW_RODFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT10, FFTW_MEASURE)
             plan_y_FFTW_RODFT01 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT01, FFTW_MEASURE)
-            !plan_y_FFTW_RODFT11 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT11, FFTW_MEASURE)
+
 
             deallocate(dummy_r_1d)
             deallocate(dummy_c_1d)

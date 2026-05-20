@@ -128,6 +128,8 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
     REAL, ALLOCATABLE, TARGET :: AKL_pool(:)      !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: AKLI_pool(:)     !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+    REAL, ALLOCATABLE, TARGET :: RK_pool(:)       !  RK(maxZonalWaves) K wavenumber as a real value
+    REAL, ALLOCATABLE, TARGET :: RL_pool(:)       !  RL(maxMeridWaves) L wavenumber as a real value
     REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels)
     REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:,:) !  PSSAVE(ITOTD,maxLevels)
     
@@ -175,6 +177,8 @@ MODULE ModelFieldsModule
         REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
         REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+        real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
+        real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
         REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
         REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
 
@@ -332,7 +336,9 @@ MODULE ModelFieldsModule
                     DAT_pool(gArrayDims%itot),                         &
                     AKL_pool(gArrayDims%itot),                         &
                     AKLI_pool(gArrayDims%itot),                        &
-                    ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels),  &
+                    RK_pool(gUserSettings%maxZonalWaves),   &
+                    RL_pool(gUserSettings%maxMeridWaves),   &
+                    ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels), &
                     PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels), &
                     IXL_pool(gArrayDims%lyd),                &
                     IYL_pool(gArrayDims%lyd), STAT = status)
@@ -384,6 +390,8 @@ MODULE ModelFieldsModule
             if (skipSettings) return
             AKL_pool = 0.0
             AKLI_pool = 0.0
+            RK_pool = 0.0
+            RL_pool = 0.0
             TOP_pool = 0.0
             IXL_pool = 0.0
             IYL_pool = 0.0
@@ -456,6 +464,8 @@ MODULE ModelFieldsModule
             gHorzArr%DAT(1 : itot) => DAT_pool(1 : itot)
             gHorzArr%AKL(1 : itot) => AKL_pool(1 : itot)
             gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
+            gHorzArr%RK(1 : zonal_waves) => RK_pool(1 : zonal_waves)
+            gHorzArr%RL(1 : merid_waves) => RL_pool(1 : merid_waves)
 
             ! Transform arrays
             gHorzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
@@ -509,6 +519,8 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(DAT_pool))     DEALLOCATE(DAT_pool)
             IF (ALLOCATED(AKL_pool))     DEALLOCATE(AKL_pool)
             IF (ALLOCATED(AKLI_pool))    DEALLOCATE(AKLI_pool)
+            IF (ALLOCATED(RK_pool))      DEALLOCATE(RK_pool)
+            IF (ALLOCATED(RL_pool))      DEALLOCATE(RL_pool)
             IF (ALLOCATED(ZS_pool))      DEALLOCATE(ZS_pool)
             IF (ALLOCATED(PSSAVE_pool))  DEALLOCATE(PSSAVE_pool)
             IF (ALLOCATED(IXL_pool))     DEALLOCATE(IXL_pool)
@@ -551,6 +563,8 @@ MODULE ModelFieldsModule
             gHorzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
             gHorzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
             gHorzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+            gHorzArr%RK  => null()       !  RK(maxZonalWaves) K wavenumber as a real value
+            gHorzArr%RL => null()        !  RL(maxMeridWaves) L wavenumber as a real value
             gHorzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)
             gHorzArr%PSSAVE  => NULL()  !  PSSAVE(ITOTD,maxLevels)
 

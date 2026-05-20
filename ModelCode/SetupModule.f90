@@ -982,7 +982,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     EXIT
                 ENDIF
             END DO
-            J = 3 * meridWaves + 1      ! We don't need to double the meridional length as the FFTW3 r2r handles our boundaries
+            J = 6 * meridWaves + 1      ! We don't need to double the meridional length as the FFTW3 r2r handles our boundaries
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IYMAX = gridPoints(I)

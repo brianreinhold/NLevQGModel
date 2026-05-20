@@ -362,10 +362,10 @@ module PlotModule
                     call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .false.)
                 endif
 
-            else if (gModIntParams%plotType == PHASE_AND_MAP) then 
+            endif 
 
 ! ------ WEATHER MAP & COMBO -----------------------------
-            else if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
+            if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gWeatherMap1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field1, gWeatherMap1, .true.)
@@ -393,7 +393,7 @@ module PlotModule
         !>               as the legend.
         subroutine initializePhaseSpaceType(field, phaseSpaceType, colorLead, color)
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ConstantsModule, only: SQRT2
+            use ConstantsModule, only: SQRT2, PHASE_AND_MAP
             use ModelParamsModule, only: gModIntParams, gPlotScales, gContourIntervals, gIsTemperature
             use ModelFieldsModule, only: gVertArr
 
@@ -402,6 +402,8 @@ module PlotModule
             integer, intent(in) :: field
             type(PhaseSpace), intent(inout) :: phaseSpaceType
             integer(4), intent(in) :: colorLead, color
+            
+            integer :: factor
             
             phaseSpaceType%field = field
             
@@ -457,17 +459,26 @@ module PlotModule
                     phaseSpaceType%yScale = SQRT2 * gPlotScales(field)
                 endif
             endif
+            factor = 2
+            if (gModIntParams%plotType == PHASE_AND_MAP) factor = 4
             ! Now take into account the screen size and the range that it is supposed to represent.
-            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (2.0 * gContourIntervals%Ranges(field))
-            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (2.0 * gContourIntervals%Ranges(field))
+            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (REAL(factor) * gContourIntervals%Ranges(field))
+            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (REAL(factor) * gContourIntervals%Ranges(field))
+            
+            phaseSpaceType%xcenter = gBitMapInfo%width / factor
+            phaseSpaceType%ycenter = gBitMapInfo%height / factor
+            
+            if (gModIntParams%plotType == PHASE_AND_MAP) then
+                phaseSpaceType%xcenter = 3 * gBitMapInfo%width / factor
+                phaseSpaceType%ycenter = 3 * gBitMapInfo%height / factor
+            endif
 
             ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
             call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
                 
             ! Now get the variable to be plotted along the y-axis. That will be gModIntParams%field1. 
             call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
-            phaseSpaceType%xcenter = gBitMapInfo%width / 2
-            phaseSpaceType%ycenter = gBitMapInfo%height / 2
+
             phaseSpaceType%colorLead = IOR(ISHFT(IAND(colorLead, Z'000000FF'), 16), & ! R: bit 0 -> 16
                         IOR(IAND(colorLead, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
                         ISHFT(IAND(colorLead, Z'00FF0000'), -16))) ! B: bit 16 -> 0
@@ -920,7 +931,7 @@ module PlotModule
                                                 -temp_calc * weatherMapType%value(index + 1), &    ! as(k,l) sinknxsinly part
                                                 kind=C_FLOAT_COMPLEX)
                 END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%GcS, grid(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, grid(:, L))
             END DO
 
             ! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
@@ -933,15 +944,15 @@ module PlotModule
             gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
             temp_calc = SQRT2 * norm_cosly * weatherMapType%scale
             do L = 2, gModIntParams%LMAX2 + 1
-                gHorzArr%GZonal(L) = REAL(L - 1) * temp_calc * weatherMapType%value(L - 1)  ! value(l) contains az(l) for cosly
+                gHorzArr%GZonal(L) = temp_calc * weatherMapType%value(L - 1)  ! value(l) contains az(l) for cosly
             end do
             ! Do transform: 
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%GZonalPlotS, gHorzArr%GZonalPlotS)
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%GZonalPlot, gHorzArr%GZonalPlot)
 
             ! 17. Add GZonal to grid for every x. G1 now has gridpoint space.
             do L = 1, gCurrentDims%IYMAX
                 DO K = 1, gCurrentDims%IXMAX
-                    grid(K, L) = grid(K, L) + gHorzArr%GZonalPlotS(L)
+                    grid(K, L) = grid(K, L) + gHorzArr%GZonalPlot(L)
                 end do
             end do
             ! Copy the first column to the column just after the FFT data
@@ -1520,9 +1531,9 @@ module PlotModule
             end do
 
             ! 3. Transform the accumulated 1D row
-            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%GcS, gHorzArr%G1plot_1DS)
-            gHorzArr%G1plot_1DS(gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1DS(1)
-            gHorzArr%G1plot_1DS(1 : gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1DS(1 : gCurrentDims%IXMAX + 1) + zonalMean
+            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1plot_1D)
+            gHorzArr%G1plot_1D(gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1)
+            gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) + zonalMean
 
             if (latHovmoller%useSolidColor) then
                 if (.not. allocated(X)) allocate(X(gBitMapInfo%width, 3))
@@ -1538,7 +1549,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
 
             currentRow = mod(latHovmoller%row, 3) + 1 
-            call Interpolate1D(gHorzArr%G1plot_1DS, b, .true., Xptr(:, currentRow)) ! is periodic
+            call Interpolate1D(gHorzArr%G1plot_1D, b, .true., Xptr(:, currentRow)) ! is periodic
 
             if (latHovmoller%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
@@ -1701,14 +1712,14 @@ module PlotModule
 
             ! 3. Transform to Grid
             ! Background flow (using REDFT01 for Cosine)
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G1plot_1DS, gHorzArr%G1plot_1DS) 
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G1plot_1D, gHorzArr%G1plot_1D) 
 
             ! Waves (using RODFT01 for Sine)
             ! We use a temp buffer so we can add them to the background
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G2plot_1DS, gHorzArr%G2plot_1DS)
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G2plot_1D, gHorzArr%G2plot_1D)
 
             ! 4. Combine
-            gHorzArr%G1plot_1DS(1:gCurrentDims%IYMAX) = gHorzArr%G1plot_1DS(1:gCurrentDims%IYMAX) + gHorzArr%G2plot_1DS(1:gCurrentDims%IYMAX)
+            gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) = gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) + gHorzArr%G2plot_1D(1:gCurrentDims%IYMAX)
             
             if (lonHovmoller%useSolidColor) then
                 if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
@@ -1723,7 +1734,7 @@ module PlotModule
             b%KL = 1
             b%KU = gBitMapInfo%height
             currentColumn = MOD(lonHovmoller%row, 3) + 1
-            call Interpolate1D(gHorzArr%G1plot_1DS, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            call Interpolate1D(gHorzArr%G1plot_1D, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
@@ -1840,7 +1851,7 @@ module PlotModule
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
         
             ! This routine also dimensionalizes the values
-            call createGrid(gHorzArr%G1plotS, weatherMapType)
+            call createGrid(gHorzArr%G1plot, weatherMapType)
             
             ! --- RESIZE LOGIC ---
             ! Check if X needs allocation or resizing based on the DIB size
@@ -1877,7 +1888,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
-            call Interpolate2D(gHorzArr%G1plotS, b, Xptr)
+            call Interpolate2D(gHorzArr%G1plot, b, Xptr)
             ! However, we need to map these interpolated values in X to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
@@ -1979,7 +1990,7 @@ module PlotModule
             
             if (field == PLOTTING_OFF) return
 
-            call createGrid(gHorzArr%G1plotS, getWeatherMapType(field))
+            call createGrid(gHorzArr%G1plot, getWeatherMapType(field))
             ! Generate the interpolated 2D array X
             b%il = 1
             b%iu = gCurrentDims%IXMAX + 1
@@ -1989,7 +2000,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
-            call Interpolate2D(gHorzArr%G1plotS, b, X)   ! X is populated here
+            call Interpolate2D(gHorzArr%G1plot, b, X)   ! X is populated here
         
         end subroutine populateInterpolatedGrid
 

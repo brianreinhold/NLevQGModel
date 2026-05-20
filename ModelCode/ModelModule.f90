@@ -862,7 +862,7 @@ module ModelModule
             !call plotDiagnostic(gHorzArr%G4, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
 
             ! 2. INVERSE TRANSFORM OF THE ZONAL PROFILE
-            call fftw_execute_r2r(d_plan_y_FFTW_REDFT10, gHorzArr%GZonal, gHorzArr%GZonal)
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gHorzArr%GZonal, gHorzArr%GZonal)
 
             inverseValue = norm_inv_cosly / SQRT2
             ! Load cosly tendencies into FS with full-array slicing and normalization
@@ -872,7 +872,7 @@ module ModelModule
             ! Note: Because we use the MKL 1D plans, this column-loop remains, but we cache 
             ! the indices cleanly to minimize lookup overheads
             do K = 1, IXMAX
-                call fftw_execute_r2r(d_plan_y_FFTW_RODFT10, gHorzArr%G4(K, :), gHorzArr%G4(K, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gHorzArr%G4(K, :), gHorzArr%G4(K, :))
             end do
 
             ! 4. TRANSFORM PERIODIC X PART AND UNPACK (With Split Index Optimization)
@@ -883,7 +883,7 @@ module ModelModule
                 gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)
     
                 ! Real-to-Complex 1D transform on row L
-                call fftw_execute_dft_r2c(plan_x_r2c_1d, gHorzArr%G4(:, L), gHorzArr%Gc)
+                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gHorzArr%G4(:, L), gHorzArr%Gc)
     
                 ! The base index mirrors your exact 'base_idx' packing formula
                 base_idx = LMAX2 + 2 * (L - 1) + 1
@@ -985,13 +985,13 @@ module ModelModule
                                              -temp_calc_k * A(idx_A), &       ! ac(k,l) sinknxsinly part
                                              kind=C_FLOAT_COMPLEX)
                 END DO
-                call fftw_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1(:, L))
             END DO
 
             ! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
             DO K = 1, IXMAX
                 ! Pass the column slice directly
-                call fftw_execute_r2r(d_plan_y_FFTW_RODFT01, gHorzArr%G1(K, :), gHorzArr%G1(K, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G1(K, :), gHorzArr%G1(K, :))
             END DO
             ! dA/dx is now in G1
         end subroutine DoDADX
@@ -1038,12 +1038,12 @@ module ModelModule
                                                temp_calc * A(idx_A + 1), &  ! as(k,l) sinknxcosly part
                                              kind=C_FLOAT_COMPLEX)
                 END DO
-                call fftw_execute_dft_c2r(d_plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G2(:, L + 1)) ! Need to ignore the cos(0)y part. We do not have it.
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G2(:, L + 1)) ! Need to ignore the cos(0)y part. We do not have it.
             END DO
             ! 2. Now transform the cosly part which is bounded and uses r2r transforms column by column
             DO L = 1, IXMAX
                 ! Pass the column slice directly
-                call fftw_execute_r2r(d_plan_y_FFTW_REDFT01, gHorzArr%G2(L, :), gHorzArr%G2(L, :))
+                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G2(L, :), gHorzArr%G2(L, :))
             END DO
 
             ! 3. Zonal components: Load   -l*sqrt(2)*az(l)sinly into GZonal
@@ -1054,7 +1054,7 @@ module ModelModule
                 gHorzArr%GZonal(L) = gHorzArr%RL(L - 1) * temp_calc * A(L - 1)  ! A(l) contains az(l) for cosly
             end do
             ! Do transform: 
-            call fftw_execute_r2r(d_plan_y_FFTW_RODFT01, gHorzArr%GZonal, gHorzArr%GZonal)
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%GZonal, gHorzArr%GZonal)
 
             ! 17. Add GZonal to G2 for every x. G2 now has dA/dy in gridpoint space.
             do L = 1, IYMAX
