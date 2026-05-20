@@ -89,6 +89,8 @@
 #define IDC_STATIC_RANGES               1078
 #define IDC_BUTTON_EXIT_CONTOURS        1079
 #define IDC_EDIT_CONTOURS               1080
+#define IDC_CHECK1                      1081
+#define IDC_CHECK_RUN_INVISCID          1081
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -98,7 +100,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        114
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1081
+#define _APS_NEXT_CONTROL_VALUE         1082
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

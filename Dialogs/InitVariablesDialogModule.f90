@@ -161,7 +161,7 @@ module InitVariablesDialogModule
                                             val = ptr(J + 1, 1) ! Orography case
                                         endif
                                         if (gHorzArr%isDimensionalized) then
-                                            if (J + 1 < gModIntParams%LMAX2) then
+                                            if (J + 1 .LE. gModIntParams%LMAX2) then
                                                 val = SQRT2 * val
                                             else
                                                 val = 2.0 * val
@@ -286,7 +286,7 @@ module InitVariablesDialogModule
                                                 val = ptr(rowClicked + 1, levelIndex)
                                             endif
                                             if (gHorzArr%isDimensionalized) then
-                                                if (rowClicked + 1 < gModIntParams%LMAX2) then
+                                                if (rowClicked + 1 .LE. gModIntParams%LMAX2) then
                                                     val = SQRT2 * val
                                                 else
                                                     val = 2.0 * val
@@ -645,7 +645,7 @@ module InitVariablesDialogModule
             ios = 0
             read(str, *, iostat = ios) val
             if (gHorzArr%isDimensionalized) then
-                if (rowClicked + 1 < gModIntParams%LMAX2) then
+                if (rowClicked + 1 .LE. gModIntParams%LMAX2) then
                     val = val / SQRT2
                 else
                     val = val / 2.0

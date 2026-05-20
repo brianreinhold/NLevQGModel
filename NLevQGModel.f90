@@ -745,6 +745,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (VK_F3)
                     call ClearScreen()
                     call LogMessage("User cleared screen")
+    ! Up/Down: Change Levels
                 case (VK_UP)
                     call LogMessage("User moving up a level")
                     gModIntParams%LEVP = gModIntParams%LEVP + 1
@@ -822,6 +823,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
                 case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/day")') val
                 case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
+                case (ADV_BETA_HGT_TEND); write(buf, '("Adv height ", F10.2, " m/day")') val
                 case default;       buf = ""
             end select
         end subroutine

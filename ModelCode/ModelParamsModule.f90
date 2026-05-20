@@ -41,9 +41,9 @@ module ModelParamsModule
         integer :: maxZonalWaves        ! Maximum number of zonal waves
         integer :: maxMeridWaves        ! Maximum number of meridional waves
         integer :: maxLevels            ! Maximum number of levels
-        logical :: useTransformMethod    ! Integration method One of:
-                                        !    USE_INTERACTION_COEFFICIENTS = .false. 
-                                        !    USE_TRANSFORM = .true. (Spectral transform method)
+        integer :: integrationMethod    ! Integration method One of:
+                                        !    USE_INTERACTION_COEFFICIENTS = 1
+                                        !    USE_TRANSFORM = 2 (Spectral transform method)
         integer :: statsOption         ! Statistics options One of:
                                         !   STATS_OPT_NONE = 0  Compute no statistics
                                         !   STATS_OPT_MEAN = 1  Compute averages and energy cycle
@@ -203,6 +203,8 @@ module ModelParamsModule
     
     type :: ModelState
         integer :: runState = STOPPED    ! STOPPED, PAUSED, RUNNING
+        LOGICAL :: runInviscid = .FALSE. ! True if the model is running with no dissipation or driving (inviscid)
+                                         ! which we do by skipping the STERMS and TTERMS subroutines.
     end type ModelState
 
     type(Settings) :: gUserSettings          !Settings(10, 5, 10, USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE) ! Initialize to defaults
@@ -327,6 +329,7 @@ module ModelParamsModule
             gFieldLabels(VORTICITY)%s =  "Vorticity in 10**-5/s"
             gFieldLabels(HEIGHT)%s =  "Height in meters"
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
+            gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ß m/day"
 
         end subroutine initConstants
     

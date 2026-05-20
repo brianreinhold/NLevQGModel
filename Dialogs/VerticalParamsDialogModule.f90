@@ -97,10 +97,25 @@ module VerticalParamsDialogModule
                     call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer", gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer", gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer", gModIntParams%NLEV)
+                    hList = GetDlgItem(hDlg, IDC_LIST_TURB_MIXING)
+                    bret = EnableWindow(hList, MERGE(1, 0, gModIntParams%NLEV < 2))
+                    ! Disabling does not 'gray out' the control. So one has to do it manually.
+                    IF (gModIntParams%NLEV > 1) THEN
+                        ! RESTORE to standard colors (Black text on White background)
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(0, 0, 0), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                    ELSE
+                        ! SET to "Grayed" colors
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(128, 128, 128), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                    END IF
                     call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface", gModIntParams%NLEV - 1)
                     call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface", gModIntParams%NLEV - 2)
                     pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_THERMAL_DRIVING, ["Interfaces", ACHAR(176)//"C"], pTempDriving, "Interface", gModIntParams%NLEV - 1)
+
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -171,7 +186,7 @@ module VerticalParamsDialogModule
                     !if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
                     !    select case(IAND(wParam, Z'FFFF'))
                     !        case (IDC_COMBO_USERSETTINGS1)
-                    !            gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
+                    !            gUserSettings%integrationMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
                     !        case (IDC_COMBO_USERSETTINGS2)
                     !            gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
                     !    end select
@@ -208,6 +223,20 @@ module VerticalParamsDialogModule
                                 bret = PostMessage(hDlg, WM_APP + 400, 0, 0)
                                 call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer", gModIntParams%NLEV)
                                 call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer", gModIntParams%NLEV)
+                                hList = GetDlgItem(hDlg, IDC_LIST_TURB_MIXING)
+                                bret = EnableWindow(hList, MERGE(1, 0, gModIntParams%NLEV < 2))
+                                ! Disabling does not 'gray out' the control. So one has to do it manually.
+                                IF (gModIntParams%NLEV > 1) THEN
+                                    ! RESTORE to standard colors (Black text on White background)
+                                    bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(0, 0, 0), kind=8))
+                                    bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                                    bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                                ELSE
+                                    ! SET to "Grayed" colors
+                                    bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(128, 128, 128), kind=8))
+                                    bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                                    bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                                END IF
                                 call handleIntListControl(hDlg, IDC_LIST_NEWT_COOLING, ["Interfaces", "1/days"], gVertArr%H, "Interface", gModIntParams%NLEV - 1)
                                 call handleIntListControl(hDlg, IDC_LIST_TEMP_MIXING, ["Interfaces", "1/days"], gVertArr%G, "Interface", gModIntParams%NLEV - 2)
                                 pTempDriving => ghorzArr%TF(1, 1:gModIntParams%NLEV)

@@ -155,6 +155,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> This method allocates all the model arrays assuming that nothing has been allocated yet BUT
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
+            use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
             use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateVerticalArrays, AllocateStatsArrays, createHorzArr, createVertArr, &
                        DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
             use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr, DeallocateCintArrays
@@ -181,7 +182,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             error = DeallocateStatsArrays()
             error = AllocateStatsArrays()
             if (error .NE. 0) return
-            if (gUserSettings%useTransformMethod .EQV. .FALSE.) then ! Equivalent to  if (.NOT. gUserSettings%useTransformMethod)
+            if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) then
                 ! Using interaction coefficients
                 error = DeallocateCintArrays()
                 error = AllocateCintArrays()
@@ -491,6 +492,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> A change in the integration method will effect gCintArr
         !! @returns 0 on success. Any other value means the user should check.
         function CheckUserSettingsChanges() result(errorCode)
+            use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
             use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams, gModRealParams
             use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, createHorzArr, createVertArr, &
                 AllocateHorizontalArrays, AllocateVerticalArrays, gVertArr, gHorzArr
@@ -520,7 +522,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF((gUserSettings%maxZonalWaves .NE. gUserSettingsPrev%maxZonalWaves) .OR. &
                (gUserSettings%maxMeridWaves .NE. gUserSettingsPrev%maxMeridWaves)) boolHorzResult = .true.
             if(gUserSettings%maxLevels .NE. gUserSettingsPrev%maxLevels) boolVertResult = .true.
-            if(gUserSettings%useTransformMethod .NEQV. gUserSettingsPrev%useTransformMethod) boolCoeffResult = .true.
+            if(gUserSettings%integrationMethod .NE. gUserSettingsPrev%integrationMethod) boolCoeffResult = .true.
             IF(gUserSettings%statsOption .NE. gUserSettingsPrev%statsOption) boolStatsResult = .true.
             
             if (boolHorzResult .OR. boolVertResult) then
@@ -535,9 +537,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 if(errorCode .NE. 0) return
             end if
-
-
-            if ((gUserSettings%useTransformMethod .EQV. .FALSE.) .AND. & ! If we are using interaction coefficients and
+            if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
                                                      boolHorzResult)) then      ! the horizontal array dimensions have changed
                 ! Handle interaction coefficient array changes:
@@ -561,6 +561,19 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 if (errorCode .NE. 0) return
                 CALL DFDIAB(.true.) ! recreate the vertical profiles. This uses gModIntParams%NLEV as the number of levels
             endif
+
+            !if (boolCoeffResult .AND. gUserSettings%integrationMethod) then
+            !        gHorzArr%WW = 0.0      !  WW(ITOT,maxLevels) is the omega spectral components
+            !        gHorzArr%FS = 0.0      !  FS(ITOT,maxLevels) is the streamfunction tendency
+            !        gHorzArr%ADS = 0.0     !  ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+            !        gHorzArr%WS = 0.0      !  WS(ITOT,maxLevels) is the omega forcing on the streamfunction
+            !        gHorzArr%S = 0.0       !  S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
+            !        gHorzArr%FT = 0.0      !  FT(ITOT,maxLevels) is the temperature tendency
+            !        gHorzArr%ADT = 0.0     !  ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+            !        gHorzArr%WT = 0.0      !  WT(ITOT,maxLevels) is the omega forcing on the temperature
+            !        gHorzArr%T = 0.0       !  T(ITOT,maxLevels) is the diabatic forcing on the temperature
+            !        gHorzArr%ADO = 0.0     !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
+            !endif
             !-------------------------------------------Introduce perturbation if there have been reallocations:
             if (boolHorzResult .OR. boolVertResult) CALL CreatePerturbation()         ! Subroutine 1ocated in this file
 
@@ -638,8 +651,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gModIntParams%LMAX2 = 1
                 mCode = mCode .AND. .false.
             ENDIF
-            IF(gModIntParams%NLEV .LT. 2) THEN       ! Does the model support only level?
-                gModIntParams%NLEV = 2
+            IF(gModIntParams%NLEV .LT. 1) THEN
+                gModIntParams%NLEV = 1
                 mCode = mCode .AND. .false.
             ENDIF
         end function CheckModelResolutions
@@ -665,8 +678,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gModIntParams%LMAX2 = 1
                 errorCode = IOR(errorCode, MERIDIONAL_WAVES_CHANGED)
             end if
-            IF(gModIntParams%NLEV .LT. 2) then
-                gModIntParams%NLEV = 2  ! Again can we support the barotropic one level case?
+            IF(gModIntParams%NLEV .LT. 1) then
+                gModIntParams%NLEV = 1
                 errorCode = IOR(errorCode, LEVELS_CHANGED)
             end if
 
@@ -742,7 +755,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         
             IF(gModPlotParams%ISCRN .GT. 1 .OR. gModPlotParams%ISCRN .LT. 0) gModPlotParams%ISCRN = 0
             !---------------------------------------------Some idiot tests:
-            IF(gModRealParams%RN .LE. 0. .OR. gModRealParams%DELT .LE. 0.) errorCode = IOR(errorCode, RN_BAD)
+            IF(gModRealParams%RN .LE. 0. .OR. gModRealParams%DELT .LT. 0.) errorCode = IOR(errorCode, RN_BAD)
             IF(gModRealParams%TPP .LT. 0) gModRealParams%TPP = 0.
             IF(gModRealParams%BOT .LE. gModRealParams%TPP) errorCode = IOR(errorCode, PRESSURE_LEVELS_BAD)
 
@@ -778,8 +791,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Check the current gModIntParams values are okay and consistent with the gUserSettings values
             if (CheckModelResolutions() .EQV. .false.) then
-                errorCode = -1
-                return  ! There is a problem. So we return to the ModelControl Menu for the user to fix
+                ! Put a message here that the resolutions were changed
             end if
             errorCode = CheckModParams()  ! Check all the other possible values the user may have changed.
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
@@ -798,7 +810,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ALLOCATE(DAT(itot_new, gModIntParams%NLEV)) ! Temporary array for reshuffling
 
                 ! Signal that we need to update the interaction coefficents if using interaction coefficients and the horizontal resolution has changed
-                if (gUserSettings%useTransformMethod .EQV. .false. .AND. boolHorzChange) boolUpdateCint = .true.
+                if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS .AND. boolHorzChange) boolUpdateCint = .true.
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
@@ -808,6 +820,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(13 * total + 1 : 14 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, itot_old, 1, itot_new, 1, gArrayDims%itot)
+                
+                ! Zero out the dissipative terms in case we are going inviscid. All other field tendencies are calculated every time step
+                ! and their initial values are inconsequential. These will not get reset since the dissipative routines are skipped.
+                gHorzArr%S = 0.0
+                gHorzArr%T = 0.0
             !  !===================================================Reshuffle stats arrays:
             !        IF(gUserSettings%statsOption .NE. STATS_OPT_NONE) THEN
             !            CALL ReshuffleArrays(DAT, gStatsArr%APE(:, N), prevZonalWaves, prevMeridWaves)
@@ -939,13 +956,21 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             type (Dims) :: arraySizes
             
             !--------  The number of grid points that satisfy both 3*maxWavenumber + 1 that have factors 2,3,5,7 or 11.
-            integer, parameter :: gridPoints(*) = [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 21, 22, 24, 25, 27, 28, 30, &
-                                      32, 33, 35, 36, 40, 42, 44, 45, 48, 49, 50, 54, 55, 56, 60, 63, 64, 66, 70, 72, 75, 77, &
-                                      80, 81, 84, 88, 90, 96, 99, 100, 105, 108, 110, 112, 120, 121, 125, 126, 128, 132, 135, &
-                                      140, 144, 147, 150, 154, 160, 162, 165, 168, 175, 176, 180, 189, 192, 198, 200, 210, 216, &
-                                      220, 224, 225, 231, 240, 243, 245, 250, 252, 256, 264, 270, 275, 280, 288, 297, 300, 308, &
-                                      315, 320, 324, 330, 336, 343, 350, 360, 363, 375, 378, 384, 385, 396, 400, 405, 420, 432, &
-                                      440, 441, 448, 450, 462, 480, 486, 495, 500, 504, 512]
+            !integer, parameter :: gridPoints(*) = [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 18, 20, 21, 22, 24, 25, 27, 28, 30, &
+            !                          32, 33, 35, 36, 40, 42, 44, 45, 48, 49, 50, 54, 55, 56, 60, 63, 64, 66, 70, 72, 75, 77, &
+            !                          80, 81, 84, 88, 90, 96, 99, 100, 105, 108, 110, 112, 120, 121, 125, 126, 128, 132, 135, &
+            !                          140, 144, 147, 150, 154, 160, 162, 165, 168, 175, 176, 180, 189, 192, 198, 200, 210, 216, &
+            !                          220, 224, 225, 231, 240, 243, 245, 250, 252, 256, 264, 270, 275, 280, 288, 297, 300, 308, &
+            !                          315, 320, 324, 330, 336, 343, 350, 360, 363, 375, 378, 384, 385, 396, 400, 405, 420, 432, &
+            !                          440, 441, 448, 450, 462, 480, 486, 495, 500, 504, 512]
+            
+            integer, parameter :: gridPoints(*) = [ &
+                            32, 36, 40, 42, 44, 48, 50, 54, 56, 60, 64, 66, 70, 72, &
+                            80, 84, 88, 90, 96, 100, 108, 110, 112, 120, 126, 128, 132, &
+                            140, 144, 150, 154, 160, 162, 168, 176, 180, 192, 198, 200, 210, 216, &
+                            220, 224, 240, 250, 252, 256, 264, 270, 280, 288, 300, 308, &
+                            320, 324, 330, 336, 350, 360, 378, 384, 396, 400, 420, &
+                            440, 448, 450, 462, 480, 486, 500, 504, 512]
 
             call ZeroArrayDims(arraySizes)  ! This subroutine initializes all dimensions in gArrayDims to zero.
             !------------------------------------------------------------ Set up FFTs:
@@ -953,7 +978,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IXMAX = gridPoints(I)
-                    if (arraySizes%IXMAX < 32) arraySizes%IXMAX = 32
+                    !if (arraySizes%IXMAX < 32) arraySizes%IXMAX = 32
                     EXIT
                 ENDIF
             END DO
@@ -961,7 +986,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IYMAX = gridPoints(I)
-                    if (arraySizes%IYMAX < 16) arraySizes%IYMAX = 16
+                   ! if (arraySizes%IYMAX < 16) arraySizes%IYMAX = 16
                     EXIT
                 ENDIF
             END DO
@@ -1120,7 +1145,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gHorzArr%PS(1, N) = .1 * REAL(N - 1) / REAL(gModIntParams%NLEV)
             END DO
         !---------------------------------Perturb ALL surface components:
-            gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
+            gHorzArr%PS(gModIntParams%LMAX2 + 1, 1) = .001
+            !gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
         END SUBROUTINE CreatePerturbation
 
         !***************************************************** SetDefaults:
@@ -1131,7 +1157,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
                 OROG_HGT_TEND, HGT_FORCING, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAP, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
-                AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3
+                AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3, USE_INTERACTION_COEFFICIENTS
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
                 gContourIntervals, gModPlotParams, gModSensParams, gPlotScales
             use NLevQGModelGlobals, only: LogMessage
@@ -1145,7 +1171,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gUserSettings%maxZonalWaves = 10
             gUserSettings%maxMeridWaves = 5
             gUserSettings%maxLevels = 10
-            gUserSettings%useTransformMethod = .false.
+            gUserSettings%integrationMethod = USE_INTERACTION_COEFFICIENTS
             gUserSettings%statsOption = STATS_OPT_NONE
 
             gUserSettingsPrev = gUserSettings
@@ -1279,7 +1305,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  maxZonalWaves,maxMeridWaves: are the 'frame' maximum horizontal resolutions
         !  maxLevels: is the maximum vertical resolution
         !  statsOption: is the statistics option
-        !  useTransformMethod: indicates interaction/transform model
+        !  integrationMethod: indicates interaction/transform model
         !  videoMode is the video resolution
         !----------------------------------------------------JCN values
         !  ISTRM is the type of streamline/contour plot to make
@@ -1489,7 +1515,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! The height of a 'standard' pressure level PP(n) is given by z = (R*T/g)ln(PP(1)/PP(N))
             ! T is the virtual temperature of the column in K which is given by (THS(1) + THS(2))/2
-            topScale = GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2) )/ (2.0 * GRAVITY)
+            if (gModIntParams%NLEV > 1) then
+                topScale = GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2) )/ (2.0 * GRAVITY)
+            else
+                topScale = 500 * 11 ! 11 meters / mb with a 500 mb barotopic layer
+            endif
             gHorzArr%TOP = topScale * gHorzArr%TOP ! Convert to dimensional heights
             gHorzArr%isDimensionalized = .true.
         end subroutine DimensionalizeHorizontalParams
@@ -1518,7 +1548,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gHorzArr%PS = heightsScale * gHorzArr%PS ! Convert to nondimensional 
             gHorzArr%SF = heightsScale * gHorzArr%SF ! Convert to nondimensional 
 
-            topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))
+            if (gModIntParams%NLEV > 1) then
+                topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))
+            else 
+                topScale = 1.0 / (500 * 11) ! 11 meters / mb with a 500 mb barotopic layer
+            endif
             gHorzArr%TOP = topScale * gHorzArr%TOP ! Convert to nondimensional
             gHorzArr%isDimensionalized = .false.
         end subroutine NonDimensionalizeHorizontalParams
@@ -1534,7 +1568,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  
         SUBROUTINE ComputeVerticalProfiles()
             use ModelFieldsModule, only: gVertArr
-            use ConstantsModule, only: OROGRAPHY, CP, CORIOLIS, KAPPA
+            use ConstantsModule, only: OROGRAPHY, CP, CORIOLIS, KAPPA, GAS_CONSTANT_R, GRAVITY
             use ModelParamsModule, only: gModIntParams, gScaleFactors, gPlotScales
 
             !---------------------------------Order of storage:
@@ -1551,18 +1585,21 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !--------------------------------------Local variables:
             INTEGER :: N
             REAL :: PU, PL, R, RL, RU, X
-
+            
+            if (gModIntParams%NLEV == 1) then
+                gPlotScales(OROGRAPHY) = (500) * 11.    ! Set scale height for orography as 11m/mb 500 mb barotropic layer
+                return
+            endif
             !-----------------------------Compute PP by setting to the middle of PV's:
             DO N = 2, gModIntParams%NLEV
                 gVertArr%PP(N) = (gVertArr%PV(N - 1) + gVertArr%PV(N)) / 2.
             END DO
-            !-----------------------------Compute the delta P's and the ratio PP(1)/DP(n)
+            !-----------------------------Compute the ratio PP(1)/DP(n)
             DO N = 1, gModIntParams%NLEV
-                !gVertArr%DP(N) = gVertArr%PP(N) - gVertArr%PP(N + 1)
                 gVertArr%DPI(N) = gVertArr%PP(1) / (gVertArr%PP(N) - gVertArr%PP(N + 1))
             END DO
-            !--------------------------------Set scale height for orography as 11m/mb:
-            gPlotScales(OROGRAPHY) = (gVertArr%PP(1) - gVertArr%PP(2)) * 11.
+            !--------------------------------Set scale height for orography
+            gPlotScales(OROGRAPHY) = GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2) )/ (2.0 * GRAVITY)
             !--------------------------------------------Compute ratio array AU:
             !  This ratio is needed in the turbulent transfer term. At each layer inter-
             !  face we need the ratios AU(N)=A(N)/A(N+1) and AL(N)=A(N)/A(N-1)=1./AU(N-1).

@@ -35,6 +35,7 @@ module SettingsDialogModule
             use KeyboardHooksModule, only: KeyboardForDlgSettingsProc
             use ContoursAndRangesDialogModule, only: ContoursAndRangesDlgProc
             use UtilitiesModule, only: openModelFile
+            use ModelFieldsModule, only: gHorzArr
 
             implicit none
 
@@ -66,6 +67,22 @@ module SettingsDialogModule
             integer :: newValue         ! For editing the displayed value in the list box
 
             select case (dlgMsg)
+                
+                case (WM_ACTIVATE)
+                    ! Check if window is being activated (WA_ACTIVE or WA_CLICKACTIVE)
+                    if (IAND(uParam, 16#FFFF) /= WA_INACTIVE) then
+                        ! The dialog just got focus. Update the selection here.
+                        call handleIntListControl(hDlg)
+                        hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
+                        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%integrationMethod, UINT_PTR), 0)
+
+                        ! Force the visual refresh
+                        iret = InvalidateRect(hDlg, NULL, .TRUE.) 
+                        iret = UpdateWindow(hDlg) 
+                    end if
+                    SettingsDlgProc = 0
+                    return
+
                 case (WM_INITDIALOG)    ! dlgMsg: initialize dialog box
                     rowClicked = -1
                     ! Set up a hook to trap key presses before the dialog message loop handles them
@@ -75,33 +92,8 @@ module SettingsDialogModule
                     !bret = SendMessage(hEdit, WM_SETFONT, gFont, .TRUE.)
                     !hStaticEdit = GetDlgItem(hDlg, IDC_STATIC_EDIT_SETTINGS)
                     !bret = SendMessage(hStaticEdit, WM_SETFONT, gFont, .TRUE.)
-
-                    ! Combo boxes require manual editing of their height if you want the list of options
-                    ! to be exposed on click only.
-                    ! Integration Method
-                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
-                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
-                    ! Initialize the combo box
-                    iret = 0
-                    if (gUserSettings%useTransformMethod) iret = 1
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(iret, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
-                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
-                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
-
-                    ! Statistics Options
-                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
-                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
-                    ! Initialize the combo box
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
-                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
-                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
                     
-                    call handleIntListControl(hDlg)
+                    call initializeDialog()
 
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -168,7 +160,7 @@ module SettingsDialogModule
                     if (ISHFT(iData, -16) == CBN_SELCHANGE) then
                         select case(IAND(iData, Z'FFFF'))
                             case (IDC_COMBO_USERSETTINGS1)
-                                gUserSettings%useTransformMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
+                                gUserSettings%integrationMethod = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS1) 
                             case (IDC_COMBO_USERSETTINGS2)
                                 gUserSettings%statsOption = GetComboIndex(hDlg, IDC_COMBO_USERSETTINGS2) 
                         end select
@@ -188,6 +180,9 @@ module SettingsDialogModule
                                 call LogMessage("Save file loaded: "// selected_file)
                                 iret = openModelFile(gNLevFile, .true., hDlg)
                                 if (iret == 0) iret = ReadSaveFile(gNLevFile)
+                                call initializeDialog()
+                                gHorzArr%S = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
+                                gHorzArr%T = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
                             endif
                             ghSettingsDlg = hDlg
 
@@ -274,6 +269,38 @@ module SettingsDialogModule
                     ghSettingsDlg = 0
             end select
             SettingsDlgProc = 0 ! Didn't process the dialog message dlgMsg
+            
+            contains
+                subroutine initializeDialog()
+                    implicit none
+                    ! Combo boxes require manual editing of their height if you want the list of options
+                    ! to be exposed on click only.
+                    ! Integration Method
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS1)
+                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use interaction coefficients'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Use spectral transforms'//char(0)))
+                    ! Initialize the combo box
+                    !iret = 0
+                    !if (gUserSettings%integrationMethod == USE_TRANSFORM) iret = 1
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%integrationMethod, UINT_PTR), 0)    ! Cast avoids warning. Not necessary to run
+                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS1)
+                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
+
+                    ! Statistics Options
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_USERSETTINGS2)
+                    !bret = SendMessage(hCombo, WM_SETFONT, gFont, .TRUE.)
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Time averages and variances'//char(0)))
+                    ! Initialize the combo box
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gUserSettings%statsOption, UINT_PTR), 0) ! Cast gets rid of warning. Not needed to run.
+                    hStaticCombo = GetDlgItem(hDlg, IDC_STATIC_COMBO_SETTINGS2)
+                    !bret = SendMessage(hStaticCombo, WM_SETFONT, gFont, .TRUE.)
+
+                    call handleIntListControl(hDlg)
+                end subroutine initializeDialog
+
         end function SettingsDlgProc
 
         subroutine handleIntListControl(hDlg)

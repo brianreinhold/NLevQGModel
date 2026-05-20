@@ -52,6 +52,7 @@
       integer, parameter :: IDC_LIST_INIT_TEMP_DRIVING = 1064
       integer, parameter :: IDC_STATIC_LEVELS = 1044
       integer, parameter :: IDC_STATIC_COMBO_FIELD2 = 1034
+      integer, parameter :: IDC_CHECK_RUN_INVISCID = 1081
       integer, parameter :: ID_CONFIGURATION_SETTINGS = 30016
       integer, parameter :: IDC_STATIC_COMBO_LEVEL = 1074
       integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
@@ -85,6 +86,7 @@
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY2 = 1070
       integer, parameter :: IDC_LIST_LEVELS = 1043
       integer, parameter :: IDC_BUTTON_INIT_FLOW_VARIABLES = 1043
+      integer, parameter :: IDC_CHECK1 = 1081
       integer, parameter :: IDC_COMBO1 = 1073
       integer, parameter :: IDC_STATIC_TEMP_MIXING = 1056
       integer, parameter :: IDC_BUTTON_SETUP_BOMB = 1049

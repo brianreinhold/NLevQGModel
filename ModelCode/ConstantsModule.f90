@@ -26,9 +26,9 @@ module ConstantsModule
     real, parameter :: CP = 1005.                  ! Heat capacity at constant pressure Joules/(kg·K)
     real, parameter :: KAPPA = GAS_CONSTANT_R / CP      ! 0.2855721
 
-                                                     ! Options for 'useTransformMethod'
-    LOGICAL, parameter :: USE_INTERACTION_COEFFICIENTS = .false. ! Used to set a boolean. When false, use interaction coefficients!
-    LOGICAL, parameter :: USE_TRANSFORM = .true.    ! Used to set a boolean. When true, use spectral transform method
+                                                     ! Options for 'integrationMethod'
+    integer, parameter :: USE_INTERACTION_COEFFICIENTS = 0 ! Use interaction coefficients!
+    integer, parameter :: USE_TRANSFORM = 1         ! Use spectral transform method
     integer, parameter :: FORWARD_TRANSFORM = 1     ! Do forward (spectral to grid) transform in FFT991 routine
     integer, parameter :: INVERSE_TRANSFORM = -1    ! Do inverse (grid to spectral) transform in FFT991 routine
     
