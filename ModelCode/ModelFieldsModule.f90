@@ -40,6 +40,8 @@
 
 MODULE ModelFieldsModule
     IMPLICIT NONE
+    
+    !include 'fftw3.f03'
 
     ! Subroutines and functions
     public :: AllocateVerticalArrays, DeallocateVerticalArrays
@@ -118,12 +120,6 @@ MODULE ModelFieldsModule
                                                     !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
     REAL, ALLOCATABLE, TARGET :: ADO_pool(:)      !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
     REAL, ALLOCATABLE, TARGET :: TOP_pool(:)      !  TOP(ITOT) is the surface orographic field
-    REAL, ALLOCATABLE, TARGET :: G1_pool(:)       !  G1(KX*LY) grid point arrays for transform routine
-    REAL, ALLOCATABLE, TARGET :: G2_pool(:)       !  G2(KX*LY) grid point arrays for transform routine
-    REAL, ALLOCATABLE, TARGET :: G3_pool(:)       !  G3(KX*LY) grid point arrays for transform routine
-    REAL, ALLOCATABLE, TARGET :: G4_pool(:)       !  G4(KX*LY) grid point arrays for transform routine
-    COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc(KX) complex grid point array for the periodic transform routine
-    real, allocatable, target :: GZonal_pool(:)   !  G1Zonal(LY) grid point array for zonal component of transform 
     REAL, ALLOCATABLE, TARGET :: TMP_pool(:)      !  TMP(gArrayDims%LYD)
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
     REAL, ALLOCATABLE, TARGET :: AKL_pool(:)      !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
@@ -135,6 +131,13 @@ MODULE ModelFieldsModule
     
     INTEGER, ALLOCATABLE, TARGET :: IXL_pool(:)   !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
     INTEGER, ALLOCATABLE, TARGET :: IYL_pool(:)   !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
+
+    REAL, ALLOCATABLE, TARGET :: G1_pool(:)       !  G1(KX*LY) grid point arrays for transform routine
+    REAL, ALLOCATABLE, TARGET :: G2_pool(:)       !  G2(KX*LY) grid point arrays for transform routine
+    REAL, ALLOCATABLE, TARGET :: G3_pool(:)       !  G3(KX*LY) grid point arrays for transform routine
+    REAL, ALLOCATABLE, TARGET :: G4_pool(:)       !  G4(KX*LY) grid point arrays for transform routine
+    COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc(KX or LY) complex grid point array for the periodic transform routine
+    real, allocatable, target :: GZonal_pool(:)   !  G1Zonal(KX or LY) grid point array for zonal component of transform 
 
     TYPE :: HorzArrays
         LOGICAL :: allocated = .FALSE.          !  Flag to indicate if arrays are allocated and defined
@@ -158,7 +161,23 @@ MODULE ModelFieldsModule
         REAL, POINTER :: SF(:,:) => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
         REAL, POINTER :: ADO(:) => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
         REAL, POINTER :: TOP(:) => null()       !  TOP(ITOT) is the surface orographic field
-        COMPLEX, POINTER :: Gc(:) => null()     !  Gc(KX) complex grid point array for the periodic transform routine
+        REAL, POINTER :: TMP(:) => null()       !  TMP(gArrayDims%LYD)
+        REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
+        REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
+        REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+        real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
+        real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
+        REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
+        REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
+
+        INTEGER, POINTER :: IXL(:) => null()    !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
+        INTEGER, POINTER :: IYL(:) => null()    !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
+    END TYPE HorzArrays
+    
+    type :: TransArrays
+        LOGICAL :: allocated = .FALSE.          !  Flag to indicate if arrays are allocated and defined
+        LOGICAL :: defined = .FALSE.            !  Flag to indicate if arrays are defined with proper sizes
+        COMPLEX, POINTER :: Gc(:) => null()     !  Gc(KX or LY) complex grid point array for the periodic transform routine
         REAL, POINTER :: G1(:, :) => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
         REAL, POINTER :: G1plot(:, :) => null() !  G1plot(KX, LY) grid point arrays for transform routines in 2 d
         REAL, POINTER :: G1plot_1D(:) => null() !  G1plot(KX*LY) grid point arrays for transform routines in 1 d
@@ -173,21 +192,11 @@ MODULE ModelFieldsModule
         REAL, POINTER :: G4plot_1D(:) => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
         REAL, POINTER :: GZonal(:) => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
         REAL, POINTER :: GZonalplot(:) => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
-        REAL, POINTER :: TMP(:) => null()       !  TMP(gArrayDims%LYD)
-        REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
-        REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
-        REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
-        real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
-        real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
-        REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
-        REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
-
-        INTEGER, POINTER :: IXL(:) => null()    !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
-        INTEGER, POINTER :: IYL(:) => null()    !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
-    END TYPE HorzArrays
+    end type TransArrays
 
     !TYPE(HorzArraysPool) :: horzArr_pool
     TYPE(HorzArrays) :: gHorzArr
+    type(TransArrays) :: gTransArr
     !REAL, ALLOCATABLE, TARGET :: BH(:)      ! Define one array that encompasses all real horizontal arrays
     !INTEGER, ALLOCATABLE, TARGET :: BHI(:)  ! Define one array that encompasses all integer horizontal arrays
 
@@ -318,7 +327,7 @@ MODULE ModelFieldsModule
             !gArrayDims%ITRXD = 3 * gArrayDims%IXMAX / 2 + 1
             !gArrayDims%ITRYD = 3 * gArrayDims%IYMAX / 2 + 1
 
-            ! Sample allocation — continue as needed
+
             ALLOCATE(GQ_pool(gArrayDims%itot , gUserSettings%maxLevels),&
                     BTA_pool(gArrayDims%itot),                         &
                     PSB_pool(gArrayDims%itot),                         &
@@ -326,12 +335,6 @@ MODULE ModelFieldsModule
 
                     ADO_pool(gArrayDims%itot),                         &
                     TOP_pool(gArrayDims%itot),                         &
-                    Gc_pool(gArrayDims%KX),                            &
-                    G1_pool(gArrayDims%KXLYD),                         &
-                    G2_pool(gArrayDims%KXLYD),                         &
-                    G3_pool(gArrayDims%KXLYD),                         &
-                    G4_pool(gArrayDims%KXLYD),                         &
-                    GZonal_pool(gArrayDims%LY),                        &
                     TMP_pool(gArrayDims%lyd),                          &
                     DAT_pool(gArrayDims%itot),                         &
                     AKL_pool(gArrayDims%itot),                         &
@@ -342,18 +345,47 @@ MODULE ModelFieldsModule
                     PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels), &
                     IXL_pool(gArrayDims%lyd),                &
                     IYL_pool(gArrayDims%lyd), STAT = status)
-
             IF (status /= 0) RETURN
+
             ! Zero everything
             CALL ZeroHorzArrays(.false.)
             gHorzArr%ALLOCATED = .TRUE.
         END FUNCTION AllocateHorizontalArrays
+        
+        FUNCTION AllocateTransformArrays() RESULT(status)
+            USE ISO_FORTRAN_ENV
+            use ArrayDimensionsModule
+            use ModelParamsModule, only: gUserSettings
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+
+            IMPLICIT NONE
+
+            INTEGER :: status
+            complex(C_FLOAT_COMPLEX), pointer :: dummy_c_2d(:, :)
+            type(C_PTR) :: p_dummy_r, p_dummy_c
+
+            status = 0
+
+
+            allocate(Gc_pool(max(gArrayDims%KX, gArrayDims%LY)),       &
+                    G1_pool(gArrayDims%KXLYD),                         &
+                    G2_pool(gArrayDims%KXLYD),                         &
+                    G3_pool(gArrayDims%KXLYD),                         &
+                    G4_pool(gArrayDims%KXLYD),                         &
+                    GZonal_pool(max(gArrayDims%KX, gArrayDims%LY)),    &
+                    STAT = status)
+
+            IF (status /= 0) RETURN
+            ! Zero everything
+            CALL ZeroTransArrays()
+            gTransArr%ALLOCATED = .TRUE.
+        END FUNCTION AllocateTransformArrays
+
 
         !> This subroutine zeros all horizontal arrays in the horzArr_pool type
         SUBROUTINE ZeroHorzArrays(skipSettings)
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
             use ModelParamsModule, only: gModIntParams
-            
+
             implicit none
 
             LOGICAL, intent(in) :: skipSettings
@@ -374,12 +406,6 @@ MODULE ModelFieldsModule
                 PS_pool = 0.0
             end if
             ADO_pool = 0.0
-            Gc_pool = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
-            G1_pool = 0.0
-            G2_pool = 0.0
-            G3_pool = 0.0
-            G4_pool = 0.0
-            GZonal_pool = 0.0
             TMP_pool = 0.0
             DAT_pool = 0.0
             AKL_pool = 0.0
@@ -396,6 +422,18 @@ MODULE ModelFieldsModule
             IXL_pool = 0.0
             IYL_pool = 0.0
         end subroutine ZeroHorzArrays
+        
+        subroutine ZeroTransArrays()
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+
+            implicit none
+            Gc_pool = (0.0, 0.0)
+            G1_pool = 0.0
+            G2_pool = 0.0
+            G3_pool = 0.0
+            G4_pool = 0.0
+            GZonal_pool = 0.0
+        end subroutine ZeroTransArrays
 
         !> This function creates the horizontal arrays by associating the pointers in the gHorzArr type
         !> This function needs to be called after the AllocateHorizontalArrays() method when first allocating
@@ -416,7 +454,7 @@ MODULE ModelFieldsModule
             integer :: status
 
             ! local variables
-            integer :: itot, size2d
+            integer :: itot, size2d, mx
 
             status = 0
             if (.not. gHorzArr%allocated) then
@@ -467,28 +505,49 @@ MODULE ModelFieldsModule
             gHorzArr%RK(1 : zonal_waves) => RK_pool(1 : zonal_waves)
             gHorzArr%RL(1 : merid_waves) => RL_pool(1 : merid_waves)
 
-            ! Transform arrays
             gHorzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
             gHorzArr%IYL(1 : arraySizes%lyd) => IYL_pool(1 : arraySizes%lyd)
-            gHorzArr%Gc(1 : arraySizes%KX) => Gc_pool(1 : arraySizes%KX)
-            gHorzArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gHorzArr%G1plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G1plot_1D(1 : arraySizes%KX * arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gHorzArr%G2plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G2plot_1D(1 : arraySizes%KX * arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gHorzArr%G3plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G3plot_1D(1 : arraySizes%KX * arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gHorzArr%G4plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%G4plot_1D(1 : arraySizes%KX * arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
-            gHorzArr%GZonal(1 : gArrayDims%IYMAX) => GZonal_pool(1 : arraySizes%IYMAX)
-            gHorzArr%GZonalplot(1 : gArrayDims%LY) => GZonal_pool(1 : arraySizes%LY)
+
             gHorzArr%TMP(1 : arraySizes%lyd) => TMP_pool(1 : arraySizes%lyd)
             gHorzArr%defined = .TRUE. ! Set defined flag to true
 
         end function createHorzArr
+        
+        function createTransArr(arraySizes) result(status)
+            use ArrayDimensionsModule
+            use ModelParamsModule, only: gUserSettings
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+            
+            implicit none
+            type(Dims), intent(in) :: arraySizes
+            
+            integer :: status, mx
+
+            status = 0
+            if (.not. gTransArr%allocated) then
+                status = 1
+                return
+            end if
+            ! Transform arrays
+            mx = max(arraySizes%KX, arraySizes%LY)
+            gTransArr%Gc(1 : mx) => Gc_pool(1 : mx)
+            gTransArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G1plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G1plot_1D(1 : arraySizes%KX * arraySizes%LY) => G1_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G2plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G2plot_1D(1 : arraySizes%KX * arraySizes%LY) => G2_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G3plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G3plot_1D(1 : arraySizes%KX * arraySizes%LY) => G3_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G4plot(1 : arraySizes%KX, 1 : arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%G4plot_1D(1 : arraySizes%KX * arraySizes%LY) => G4_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
+            gTransArr%GZonalplot(1 : mx) => GZonal_pool(1 : mx)
+
+            call ZeroTransArrays()
+        end function createTransArr
 
         !> This function deallocates the horizontal arrays allocated by the AllocateHorizontalArrays method.
         !! @return statusErr An integer status code. 0 on success, non-zero on failure.
@@ -509,12 +568,6 @@ MODULE ModelFieldsModule
 
             IF (ALLOCATED(ADO_pool))     DEALLOCATE(ADO_pool)
             IF (ALLOCATED(TOP_pool))     DEALLOCATE(TOP_pool)
-            IF (ALLOCATED(Gc_pool))      DEALLOCATE(Gc_pool)
-            IF (ALLOCATED(G1_pool))      DEALLOCATE(G1_pool)
-            IF (ALLOCATED(G2_pool))      DEALLOCATE(G2_pool)
-            IF (ALLOCATED(G3_pool))      DEALLOCATE(G3_pool)
-            IF (ALLOCATED(G4_pool))      DEALLOCATE(G4_pool)
-            IF (ALLOCATED(GZonal_pool))  DEALLOCATE(GZonal_pool)
             IF (ALLOCATED(TMP_pool))     DEALLOCATE(TMP_pool)
             IF (ALLOCATED(DAT_pool))     DEALLOCATE(DAT_pool)
             IF (ALLOCATED(AKL_pool))     DEALLOCATE(AKL_pool)
@@ -544,21 +597,6 @@ MODULE ModelFieldsModule
             gHorzArr%SF  => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
             gHorzArr%ADO => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
             gHorzArr%TOP => null()       !  TOP(ITOT) is the surface orographic field
-            gHorzArr%Gc  => null()        !  Gc(KX) complex grid point array for the periodic transform routine
-            gHorzArr%G1  => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            gHorzArr%G1plot => null() !  G1plot(KX, LY) grid point arrays for transform routines in 2 d
-            gHorzArr%G1plot_1D  => null() !  G1plot(KX*LY) grid point arrays for transform routines in 1 d
-            gHorzArr%G2  => null()     !  G2(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            gHorzArr%G2plot  => null() !  G2plot(KX*LY) grid point arrays for transform routines (?)
-            gHorzArr%G2plot_1D  => null() !  G2plot(KX*LY) grid point arrays for transform routines in 1 d
-            gHorzArr%G3  => null()     !  G3(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            gHorzArr%G3plot  => null() !  G3plot(KX*LY) grid point arrays for transform routines (?)
-            gHorzArr%G3plot_1D  => null() !  G3plot(KX*LY) grid point arrays for transform routines in 1 d
-            gHorzArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
-            gHorzArr%G4plot  => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
-            gHorzArr%G4plot_1D  => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
-            gHorzArr%GZonal  => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
-            gHorzArr%GZonalplot  => null()!  GZonal(LY) grid point array for zonal (cosly) transforms
             gHorzArr%TMP  => null()       !  TMP(gArrayDims%LYD)
             gHorzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
             gHorzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
@@ -574,6 +612,37 @@ MODULE ModelFieldsModule
             gHorzArr%allocated = .FALSE.
             gHorzArr%defined = .FALSE.
         END function DeallocateHorizontalArrays
+        
+        function DeallocateTransformArrays() result(statusErr)
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+            implicit none
+            integer :: statusErr
+            statusErr = 0
+            IF (gTransArr%allocated .EQV. .FALSE.) RETURN
+            IF (ALLOCATED(Gc_pool))      DEALLOCATE(Gc_pool)
+            IF (ALLOCATED(G1_pool))     DEALLOCATE(G1_pool)
+            IF (ALLOCATED(G2_pool))     DEALLOCATE(G2_pool)
+            IF (ALLOCATED(G3_pool))     DEALLOCATE(G3_pool)
+            IF (ALLOCATED(G4_pool))     DEALLOCATE(G4_pool)
+            IF (ALLOCATED(GZonal_pool)) DEALLOCATE(GZonal_pool)
+            gTransArr%Gc  => null()        !  Gc(KX or LY) complex grid point array for the periodic transform routine
+            gTransArr%G1  => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gTransArr%G1plot => null() !  G1plot(KX, LY) grid point arrays for transform routines in 2 d
+            gTransArr%G1plot_1D  => null() !  G1plot(KX*LY) grid point arrays for transform routines in 1 d
+            gTransArr%G2  => null()     !  G2(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gTransArr%G2plot  => null() !  G2plot(KX*LY) grid point arrays for transform routines (?)
+            gTransArr%G2plot_1D  => null() !  G2plot(KX*LY) grid point arrays for transform routines in 1 d
+            gTransArr%G3  => null()     !  G3(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gTransArr%G3plot  => null() !  G3plot(KX*LY) grid point arrays for transform routines (?)
+            gTransArr%G3plot_1D  => null() !  G3plot(KX*LY) grid point arrays for transform routines in 1 d
+            gTransArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
+            gTransArr%G4plot  => null() !  G4plot(KX*LY) grid point arrays for transform routines (?)
+            gTransArr%G4plot_1D  => null() !  G4plot(KX*LY) grid point arrays for transform routines in 1 d
+            gTransArr%GZonal  => null()    !  GZonal(IYMAX) grid point array for zonal (cosly) transforms
+            gTransArr%GZonalplot  => null()!  GZonal(LY or KX) grid point array for zonal (cosly) and siny transforms
+            gTransArr%allocated = .FALSE.
+            gTransArr%defined = .FALSE.
+        END function DeallocateTransformArrays
 
     ! ================================== Allocate and deallocate Statistics arrays
         !> This function allocates the statistics arrays used in the model and sets sizes in the gArrayDims.

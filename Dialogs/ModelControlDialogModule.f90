@@ -125,92 +125,6 @@ module ModelControlDialogModule
                     end if
                     
                     call initializeDialog()
-                    !! If we get here we need to save some of the fields in modelIntParams and modelRealParams in case
-                    !! the user changes them.
-                    !paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                    !paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                    !paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                    !paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                    !                                               ! The saved RN value here is non dimensional
-                    !
-                    !call DimensionalizeModRealParams()
-                    !hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
-                    !bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
-                    !
-                    !hCheckBox = GetDlgItem(hDlg, IDC_CHECK_RUN_INVISCID)
-                    !if (gModelState%runInviscid) then
-                    !    bret = CheckDlgButton(hDlg, IDC_CHECK_RUN_INVISCID, BST_CHECKED)
-                    !else
-                    !    bret = CheckDlgButton(hDlg, IDC_CHECK_RUN_INVISCID, BST_UNCHECKED)
-                    !end if
-                    !
-                    !! Set up a hook to trap key presses before the dialog message loop handles them
-                    !hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgModelControlProc), NULL, GetCurrentThreadId())
-                    !ghModelControlDlg = hDlg
-                    !
-                    !!! Combo boxes require manual editing of their height if you want the list of options
-                    !!! to be exposed on click only. Do it in the rc file. You have to increase the height
-                    !!! by 25 * (number of rows - 1) for times new roman 14 font, in any case.
-                    !
-                    !!! Map type
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps and phase space combo'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at latitude X '//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at latitude X'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at longitude Y'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at longitude Y'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Phase space plot'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Skip plot for speed'//char(0)))
-                    !
-                    !! Initialize the plotType combo box
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%plotType, UINT_PTR), 0)
-                    !
-                    !!! Fields 1, 2, 3
-                    !! These are made difficult as the quantities that can be displayed depend upon
-                    !! the type of plot plotType. For map-type plots, there can be three fields. For time
-                    !! series plots, field2 and field3 are ignored.
-                    !! If plotType is a map type, we load field1 with map options, otherwise we load with 
-                    !! time series options. Fields 2 and 3 are always loaded with map options.
-                    !! When plotType changes, we have to check and see if we have switched between time series
-                    !! and maps or vice versa, and if so we reload FIELD1 with the appropriate options.
-                    !! This is done in 'reloadComboBoxFields'
-                    !bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
-                    !bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD2)   ! Always load with map options
-                    !bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD3)   ! Always load with map options
-                    !! initialize FIELD1
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
-                    !!if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0) ! Silly cast avoids warning.Still runs without it
-                    !!else
-                    !!    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_GRAPH_START, UINT_PTR), 0)
-                    !!end if
-                    !! initialize FIELD2
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field2 - FIELD_START, UINT_PTR), 0)
-                    !! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map or phase space)
-                    !!bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE)) ! Cast for logical to INTEGER(BOOL) to avoid warning
-                    !! initialize FIELD3
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field3 - FIELD_START, UINT_PTR), 0)
-                    !! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
-                    !bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! No three fields in phase space
-                    !
-                    !!! Model type
-                    !hCombo = GetDlgItem(hDlg, IDC_COMBO_MODEL_TYPE)
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Fully nonlinear N-level QG model'//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('G-Q linearized initial-value model '//char(0)))
-                    !bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Not implemented yet - dont use'//char(0)))
-                    !! initialize
-                    !bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%modelType, UINT_PTR), 0) ! These are zero based in our code
-                    !
-                    !!---------- LIST CONTROLS
-                    !! REAL:
-                    !call handleRealListControl(hDlg)
-                    !
-                    !! INTEGER:
-                    !call handleIntListControl(hDlg)
 
                     ! Center the dialog over the application window  !
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
@@ -306,6 +220,9 @@ module ModelControlDialogModule
                     if (ISHFT(wParam, -16) == CBN_SELCHANGE) then ! Combo box select
                         BLOCK
                             integer :: previousMPLOT, addoffset
+                            
+                            ! In case they are sill open with focus
+                            call cleanUpEditBoxes()
                             ! We need this offset to map the combo box indicies with our indicies. Combo
                             ! box indicies begin with 0, our begin with 1 for maps and 18 for time series
                             addOffset = 1
@@ -318,30 +235,7 @@ module ModelControlDialogModule
                                 case (IDC_COMBO_MAP_TYPE)
                                     previousMPLOT = gModIntParams%plotType
                                     gModIntParams%plotType = GetComboIndex(hDlg, IDC_COMBO_MAP_TYPE) ! These are zero based
-                                    ! Did plotType change from maps to time series?
-                                    ! plotType <= 4 is map plotType > 4 is time series
-                                    !if ((gModIntParams%plotType .GT. HOV_DIAG_AT_LONG .AND. previousMPLOT .LE. HOV_DIAG_AT_LONG) .OR. &
-                                    !    (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG .AND. previousMPLOT .GT. HOV_DIAG_AT_LONG)) Then
-                                    !    ! We need to change the contents of what is in the COMBO_FIELD1 dropdown
-                                    !    ! Field2 and Field3 can only be used with maps and will be enabled/disabled appropriately
-                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
-                                    !    ! This loads the new set of options (clearing the old first)
-                                    !    bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD1)
-                                    !    ! Set a new default value for the field since the existing one is for time series
-                                    !    !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
-                                    !        gModIntParams%field1 = TEMPERATURE
-                                    !        bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0)
-                                    !    !else
-                                    !    !    gModIntParams%field1 = TOT_HGT_TEND_GRAF
-                                    !    !    ! This is for getting by NO_PLOT which is the first field in the graphs options (check this)
-                                    !    !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - NO_PLOT, UINT_PTR), 0)
-                                    !    !end if
-                                    !    ! Enable or disable as the case may be
-                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD2)
-                                    !    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. PHASE_SPACE))
-                                    !    hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
-                                    !    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG))
-                                    !end if
+
                                 case (IDC_COMBO_FIELD1)
                                     gModIntParams%field1 = GetComboIndex(hDlg, IDC_COMBO_FIELD1) + addOffset
                                 case (IDC_COMBO_FIELD2)
@@ -412,13 +306,14 @@ module ModelControlDialogModule
                         CASE (IDC_EDIT_INTEGERVALUES) ! The ID of the integer edit box
                             SELECT CASE (ISHFT(wParam, -16))
                                 CASE (EN_CHANGE)
-                                    BLOCK
+                                    ENB: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
 
                                         call LogMessage("EN_CHANGE signaled from edit integer control ")
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES)
                                         ! Get the updated text from the edit control
                                         newValue = GetDlgItemInt(hDlg, IDC_EDIT_INTEGERVALUES, LOC(bret), .TRUE.)
+                                        if (bret == 0) exit ENB
                                         hList = GetDlgItem(hDlg, IDC_INTEGERVALUES)
 
                                         ! This should be the row that we clicked. Of course the original value of 'intRowClicked'
@@ -429,9 +324,11 @@ module ModelControlDialogModule
                                         ! Now get the item as a string to update the parameter in the list
                                         bret = GetDlgItemText(hDlg, IDC_EDIT_INTEGERVALUES, strC, LEN(strC))
                                         call updateListViewValue(hEdit, hList, intRowClicked, strC)
-                                    end BLOCK
+                                    end BLOCK ENB
                             END SELECT
                         case (IDC_CHECK_MODREAL_DIMENSIONALIZE)
+                            ! In case they are sill open with focus
+                            call cleanUpEditBoxes()
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
         
                                 ! Now we ask Windows: "Is it checked or not?"
@@ -463,7 +360,13 @@ module ModelControlDialogModule
 
 ! ---- F2:  Edit Vertical Parameters
                         case (IDC_BUTTON_VERTICAL_PARAMS)
+                            ! In case they are sill open with focus
+                            call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            if (ret /= 0) then
+                                call initializeDialog()
+                                return
+                            endif
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
                             paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
@@ -475,7 +378,13 @@ module ModelControlDialogModule
 
 ! ---- F3:  Initialize flow variables
                         case (IDC_BUTTON_INIT_FLOW_VARIABLES)
+                            ! In case they are sill open with focus
+                            call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            if (ret /= 0) then
+                                call initializeDialog()
+                                return
+                            endif
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
                             paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
@@ -498,8 +407,7 @@ module ModelControlDialogModule
                         case (IDC_BUTTON_LOAD_SAVED_FLOW)
                             res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
                             bret = SetFocus(GetDlgItem(hDlg, IDC_BUTTON_LOAD_SAVED_FLOW))
-                            call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_REALVALUES))
-                            call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES))
+                            call cleanUpEditBoxes()
                             if (res) then
                                 if (len_trim(gNLevFile%fileName) == 0) return
                                 call LogMessage("Save file loaded: "// selected_file)
@@ -542,13 +450,40 @@ module ModelControlDialogModule
             end select
 
             contains
+
+                subroutine cleanUpEditBoxes()
+                    TYPE(T_POINT) :: pt, pt2
+                    return
+                    ! In case they are sill open with focus
+                    pt%x = 0
+                    pt%y = 0
+                    pt2%x = 32
+                    pt2%y = 12
+                    if (realRowClicked > 0) then
+                        hEdit = GetDlgItem(hDlg, IDC_EDIT_REALVALUES)
+                        bret = SetDlgItemText(hDlg, IDC_EDIT_REALVALUES, ""//char(0))
+                        call HideMyEdit(hEdit)
+                        bret = SetFocus(GetDlgItem(hDlg, IDC_REALVALUES))
+                        bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                    else
+                        bret = SetDlgItemText(hDlg, IDC_EDIT_INTEGERVALUES, ""//char(0))
+                        hEdit = GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES)
+                        call HideMyEdit(hEdit)
+                        bret = SetFocus(hEdit)
+                        bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                    endif
+                end subroutine cleanUpEditBoxes
+                
+                
                 subroutine setupAndRunModel()
                     implicit none
+
+                    call cleanUpEditBoxes()
                     ! paramChange is defined in KeyboardHooksModule
                     ! Non dimensionalized in the following function
                     ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                    if (ret == -1) then
-                        bret = MessageBox(hDlg, "Some parameters were out of bounds and changed"C, "Error: Parameters out of bounds"C, MB_OK)
+                    if (ret /= 0) then
+                        call initializeDialog()
                         return
                     endif
                     ret = InitModelWithModelControlVals()

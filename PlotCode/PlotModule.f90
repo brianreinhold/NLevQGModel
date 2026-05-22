@@ -893,8 +893,9 @@ module PlotModule
             use ConstantsModule, only: PLOTTING_OFF, SQRT2
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
-            use ModelFieldsModule, only: gHorzArr
-            use Fftw3HelpersModule, only: norm_fwd, norm_cosly, plan_x_c2r_1d, plan_y_FFTW_RODFT01, plan_y_FFTW_REDFT01
+            use ModelFieldsModule, only: gTransArr
+            use Fftw3HelpersModule, only: norm_fwd, norm_cosly, plan_x_c2r_1d, plan_y_c2r_1d
+                    !plan_y_FFTW_RODFT01, plan_y_FFTW_REDFT01
             use, intrinsic :: ieee_arithmetic
         
             implicit none
@@ -904,12 +905,17 @@ module PlotModule
             real, intent(inout) :: grid(:, :)
             type(WeatherMap), intent(in) :: weatherMapType
 
-            integer :: index, K, L
+            integer :: index, K, L, IXMAX, IYMAX, KMAX2, LMAX2
             REAL :: temp_calc
 
             if (weatherMapType%field == PLOTTING_OFF) then
                 return
             endif
+            
+            IXMAX = gCurrentDims%IXMAX
+            IYMAX = gCurrentDims%IYMAX
+            KMAX2 = gModIntParams%KMAX2
+            LMAX2 = gModIntParams%LMAX2
             
             grid = 0.0    ! Fortran short cut to zero an entire array in all dimensions. This is the output array for the grid
 
@@ -921,44 +927,180 @@ module PlotModule
             ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
             temp_calc = 2. * norm_fwd * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
 
-            index = gModIntParams%LMAX2
-            DO L = 1, gModIntParams%LMAX2
-                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                DO K = 1, gModIntParams%KMAX2
-                    index = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * (K - 1) + 2 * (L - 1) + 1
+            index = LMAX2
+            DO L = 1, LMAX2
+                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                DO K = 1, KMAX2
+                    index = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    gHorzArr%Gc(K + 1) = CMPLX( temp_calc * weatherMapType%value(index), &         ! ac(k,l) cosknxsinly part
+                    gTransArr%Gc(K + 1) = CMPLX( temp_calc * weatherMapType%value(index), &         ! ac(k,l) cosknxsinly part
                                                 -temp_calc * weatherMapType%value(index + 1), &    ! as(k,l) sinknxsinly part
                                                 kind=C_FLOAT_COMPLEX)
                 END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, grid(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, grid(:, L))
             END DO
+            
+            ! Now transform the siny part. But we are treating the domain as as periodic in two dimensions. Thus all
+            ! the cosy parts are going to be zero
 
-            ! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
-            DO index = 1, gCurrentDims%IXMAX
-                ! Pass the column slice directly
-                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, grid(index, :), grid(index, :))
-            END DO
+            ! For each x column assemble IYMAX-length complex spectrum and do c2r -> gTransArr%GZonal
+            do K = 1, IXMAX
+              gTransArr%Gc = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
 
+              ! map stored l-modes (sine-only case; grid(K,L) holds s_l after x-transform )
+              do L = 1, LMAX2
+                index = L + 1             ! Fortran 1-based index for m = L
+                ! sine contribution: tmpC[pos] += -i * (s_l/2); tmpC[neg] += +i * (s_l/2)
+                gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX(0.0_C_FLOAT, -grid(K, L), kind=C_FLOAT_COMPLEX)
+                ! If you also had cosly c_l for this K/L, add:
+                ! gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX( c_l, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+
+                index = IYMAX - L + 1     ! index for IYMAX - L
+                gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX(0.0_C_FLOAT,  grid(K, L), kind=C_FLOAT_COMPLEX)
+                ! If you also had cosly c_l for this K/L, add:
+                ! gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX( c_l, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+              end do
+
+              ! Inverse complex->real along y (length IYMAX)
+              call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%Gc, gTransArr%GZonal)
+
+              ! Copy gTransArr%GZonal into the non-contiguous grid row
+              do L = 1, IYMAX
+                grid(K, L) = gTransArr%GZonal(L)
+              end do
+            end do
+
+
+            !! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
+            !DO index = 1, IXMAX
+            !    ! Pass the column slice directly
+            !    call fftwf_execute_r2r(plan_y_FFTW_RODFT01, grid(index, :), grid(index, :))
+            !END DO
+            !
             ! 3. Zonal components: Load   sqrt(2)*az(l)cosly into GZonal
-            gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            gTransArr%GZonalPlot = 0.0
+            gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! Fortran shortcut to zero an entire array
             temp_calc = SQRT2 * norm_cosly * weatherMapType%scale
-            do L = 2, gModIntParams%LMAX2 + 1
-                gHorzArr%GZonal(L) = temp_calc * weatherMapType%value(L - 1)  ! value(l) contains az(l) for cosly
+            do L = 1, LMAX2
+                gTransArr%Gc(L + 1) = CMPLX( temp_calc * weatherMapType%value(L), &         ! az(l)cosly part
+                                            0.0, &    ! No sinly part for the zonal component
+                                            kind=C_FLOAT_COMPLEX)
             end do
             ! Do transform: 
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%GZonalPlot, gHorzArr%GZonalPlot)
-
+            call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%Gc, gTransArr%GZonalPlot)
+            
             ! 17. Add GZonal to grid for every x. G1 now has gridpoint space.
-            do L = 1, gCurrentDims%IYMAX
-                DO K = 1, gCurrentDims%IXMAX
-                    grid(K, L) = grid(K, L) + gHorzArr%GZonalPlot(L)
+            do L = 1, IYMAX
+                DO K = 1, IXMAX
+                    grid(K, L) = grid(K, L) + gTransArr%GZonalPlot(L)
                 end do
             end do
+            
             ! Copy the first column to the column just after the FFT data
             ! where the FFT data occupies indices 1 to IXMAX
-            grid(gCurrentDims%IXMAX + 1, :) = grid(1, :)
+            ! Do loop is more efficient when copying non-contiguous data like this than array slicing
+            DO L = 1, IYMAX
+                grid(IXMAX + 1, L) = grid(1, L)
+            end do
         end subroutine createGrid
+        
+        subroutine inverseTransform(grid, weatherMapType)
+            use ConstantsModule, only: SQRT2
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelParamsModule, only: gModIntParams
+            use ModelFieldsModule, only: gHorzArr, gTransArr
+            use Fftw3HelpersModule, only: norm_inv_wave, norm_inv_cosly, plan_x_r2c_1d, plan_y_r2c_1d
+                    !plan_y_FFTW_RODFT01, plan_y_FFTW_REDFT01
+            use, intrinsic :: ieee_arithmetic
+        
+            implicit none
+            
+            include 'fftw3.f03'
+
+            real, intent(inout) :: grid(:, :)
+            type(WeatherMap), intent(in) :: weatherMapType
+
+            integer :: index, K, L, IXMAX, IYMAX, KMAX2, LMAX2
+            REAL :: temp_calc, inverseValue
+
+            IXMAX = gCurrentDims%IXMAX
+            IYMAX = gCurrentDims%IYMAX
+            KMAX2 = gModIntParams%KMAX2
+            LMAX2 = gModIntParams%LMAX2
+
+            gHorzArr%DAT = 0.0 
+            gTransArr%GZonalPlot = 0.0
+            inverseValue = 1.0 / REAL(IXMAX)
+
+            ! 1. HIGH-SPEED ZONAL AVERAGE AND REMOVAL (Replaces the first two heavy loops)
+            ! Fortran's 'SUM' along dim=1 vectorizes the row operations instantly via hardware registers
+            gTransArr%GZonal(1:IYMAX) = SUM(grid(1:IXMAX, 1:IYMAX), dim=1) * inverseValue
+
+            ! Remove the zonal average from the grid point data using full-array broad-casting syntax
+            do L = 1, IYMAX
+                grid(1:IXMAX, L) = grid(1:IXMAX, L) - gTransArr%GZonal(L)
+            end do
+            !call plotDiagnostic(grid, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
+
+            ! 2. INVERSE TRANSFORM OF THE ZONAL PROFILE
+            gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)
+            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%Gc)
+
+            inverseValue = norm_inv_cosly / (SQRT2 * weatherMapType%scale)
+            ! Load cosly tendencies into FS with full-array slicing and normalization
+            gHorzArr%DAT(1 : LMAX2) = REAL(gTransArr%Gc(2 : LMAX2 + 1)) * inverseValue
+
+            ! ==========================================================
+            ! STEP 1: EXTRACT THE Y-SINES SAFELY (Column by Column)
+            ! ==========================================================
+            inverseValue = norm_inv_wave / (2.0 * weatherMapType%scale)
+            gTransArr%G1 = 0.0
+            do K = 1, IXMAX
+    
+                ! Manually gather the non-contiguous Y-column into your contiguous 1D array
+                ! This is the vital step that stops the memory scrambling!
+                do L = 1, IYMAX
+                    gTransArr%GZonal(L) = grid(K, L)
+                end do
+    
+                ! Run your 1D Y-transform on the properly aligned vector
+                call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%Gc)
+    
+                ! Extract the pure, unpolluted sin(ly) wave amplitude
+                do L = 1, LMAX2
+                    gTransArr%G1(K, L) = -AIMAG(gTransArr%Gc(L + 1))
+                end do
+            end do
+
+            ! ==========================================================
+            ! STEP 2: RUN X-TRANSFORMS AND SCATTER TO YOUR 1D ARRAY
+            ! ==========================================================
+            do L = 1, LMAX2
+    
+                ! Since the first dimension of Y_Sine_Grid is X, this row-slice 
+                ! is perfectly contiguous and safe to pass straight to FFTW
+                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G1(1:IXMAX, L), gTransArr%Gc)
+    
+                ! Distribute the generated wave components using your explicit formula
+                do K = 1, KMAX2
+                    index = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
+        
+                    ! Cos(Kx)*Sin(Ly)
+                    gHorzArr%DAT(index)     =  REAL(gTransArr%Gc(K + 1)) * inverseValue
+        
+                    ! Sin(Kx)*Sin(Ly)
+                    gHorzArr%DAT(index + 1) = -AIMAG(gTransArr%Gc(K + 1)) * inverseValue
+                end do
+
+            end do
+
+            do K = 1, LMAX2 + 2 * KMAX2 * LMAX2
+                temp_calc = gHorzArr%DAT(K) / weatherMapType%value(K)
+            end do
+
+            temp_calc = SUM(ABS(gHorzArr%DAT - weatherMapType%value))
+
+        end subroutine inverseTransform
 
         !> This function gets the values of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
@@ -1477,7 +1619,7 @@ module PlotModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT2
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gHorzArr, gTransArr
             use ModelParamsModule, only: gModIntParams
             use Fftw3HelpersModule, only: norm_fwd, norm_cosly, plan_x_c2r_1d
             
@@ -1512,7 +1654,7 @@ module PlotModule
             zonalMean = sum(latHovmoller%value(1:LMAX) * latHovmoller%cosy(1:LMAX)) * SQRT2 * latHovmoller%scale
 
             ! 1. Initialize input with zeros (crucial since k=0 is empty)
-            gHorzArr%Gc = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
+            gTransArr%Gc = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
             
             temp_calc = 2. * norm_fwd * latHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
 
@@ -1523,7 +1665,7 @@ module PlotModule
                     ! Indexing for the 1-d storage of the zonal and wave components:
                     index = LMAX + 2 * LMAX * (K - 1) + 2 * (L - 1) + 1
                     ! Accumulate the weighted spectral components
-                    gHorzArr%Gc(K + 1) = gHorzArr%Gc(K + 1) + CMPLX( &
+                    gTransArr%Gc(K + 1) = gTransArr%Gc(K + 1) + CMPLX( &
                         temp_calc * latHovmoller%value(index) * sin_ly, &
                        -temp_calc * latHovmoller%value(index + 1) * sin_ly, &
                         kind=C_FLOAT_COMPLEX)
@@ -1531,9 +1673,9 @@ module PlotModule
             end do
 
             ! 3. Transform the accumulated 1D row
-            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1plot_1D)
-            gHorzArr%G1plot_1D(gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1)
-            gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) = gHorzArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) + zonalMean
+            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G1plot_1D)
+            gTransArr%G1plot_1D(gCurrentDims%IXMAX + 1) = gTransArr%G1plot_1D(1)
+            gTransArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) = gTransArr%G1plot_1D(1 : gCurrentDims%IXMAX + 1) + zonalMean
 
             if (latHovmoller%useSolidColor) then
                 if (.not. allocated(X)) allocate(X(gBitMapInfo%width, 3))
@@ -1549,7 +1691,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
 
             currentRow = mod(latHovmoller%row, 3) + 1 
-            call Interpolate1D(gHorzArr%G1plot_1D, b, .true., Xptr(:, currentRow)) ! is periodic
+            call Interpolate1D(gTransArr%G1plot_1D, b, .true., Xptr(:, currentRow)) ! is periodic
 
             if (latHovmoller%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
@@ -1639,7 +1781,7 @@ module PlotModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT22
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gTransArr, gTransArr
             use ModelParamsModule, only: gModIntParams
             use Fftw3HelpersModule, only: norm_cosly, plan_y_FFTW_REDFT01, plan_y_FFTW_RODFT01
 
@@ -1671,14 +1813,14 @@ module PlotModule
             ! 1. The cosLy components
             ! These are k=0, so they have no x-dependence. 
             ! Put them straight into the cosine buffer.
-            gHorzArr%G1plot_1D = 0
-            gHorzArr%G1plot_1D(2:LMAX+1) = lonHovmoller%value(1:LMAX) * lonHovmoller%scale * SQRT22
+            gTransArr%G1plot_1D = 0
+            gTransArr%G1plot_1D(2:LMAX+1) = lonHovmoller%value(1:LMAX) * lonHovmoller%scale * SQRT22
 
 
             temp_calc = 2. * norm_cosly * lonHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
 
             ! 2. The Waves (sinLy components)
-            gHorzArr%G2plot_1D = 0 ! Zero this array
+            gTransArr%G2plot_1D = 0 ! Zero this array
             !do K = 1, KMAX
             !    cos_kx = lonHovmoller%cosx(K)
             !    sin_kx = lonHovmoller%sinx(K)
@@ -1691,7 +1833,7 @@ module PlotModule
             !
             !        ! Collapse X: Sum the contributions of all K waves at longitude x0
             !        ! This creates the 1D spectral profile for the Sine transform
-            !        gHorzArr%G2plot_1D(L) = gHorzArr%G2plot_1D(L) + temp_calc * (wave_real * cos_kx - wave_imag * sin_kx)
+            !        gTransArr%G2plot_1D(L) = gTransArr%G2plot_1D(L) + temp_calc * (wave_real * cos_kx - wave_imag * sin_kx)
             !    end do
             !end do
             
@@ -1705,21 +1847,20 @@ module PlotModule
     
                 ! 2. Vectorized slice operation
                 ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
-                gHorzArr%G2plot_1D(1:LMAX) = gHorzArr%G2plot_1D(1:LMAX) + &
+                gTransArr%G2plot_1D(1:LMAX) = gTransArr%G2plot_1D(1:LMAX) + &
                     (lonHovmoller%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
                     (lonHovmoller%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
             end do
 
             ! 3. Transform to Grid
             ! Background flow (using REDFT01 for Cosine)
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G1plot_1D, gHorzArr%G1plot_1D) 
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%G1plot_1D, gTransArr%G1plot_1D) 
 
             ! Waves (using RODFT01 for Sine)
             ! We use a temp buffer so we can add them to the background
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G2plot_1D, gHorzArr%G2plot_1D)
-
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2plot_1D, gTransArr%G2plot_1D)
             ! 4. Combine
-            gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) = gHorzArr%G1plot_1D(1:gCurrentDims%IYMAX) + gHorzArr%G2plot_1D(1:gCurrentDims%IYMAX)
+            gTransArr%G1plot_1D(1:gCurrentDims%IYMAX) = gTransArr%G1plot_1D(1:gCurrentDims%IYMAX) + gTransArr%G2plot_1D(1:gCurrentDims%IYMAX)
             
             if (lonHovmoller%useSolidColor) then
                 if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
@@ -1734,7 +1875,7 @@ module PlotModule
             b%KL = 1
             b%KU = gBitMapInfo%height
             currentColumn = MOD(lonHovmoller%row, 3) + 1
-            call Interpolate1D(gHorzArr%G1plot_1D, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            call Interpolate1D(gTransArr%G1plot_1D, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
@@ -1824,7 +1965,7 @@ module PlotModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: PLOTTING_OFF, wp
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gTransArr, gTransArr
 
             IMPLICIT NONE
 
@@ -1851,7 +1992,7 @@ module PlotModule
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
         
             ! This routine also dimensionalizes the values
-            call createGrid(gHorzArr%G1plot, weatherMapType)
+            call createGrid(gTransArr%G1plot, weatherMapType)
             
             ! --- RESIZE LOGIC ---
             ! Check if X needs allocation or resizing based on the DIB size
@@ -1883,12 +2024,12 @@ module PlotModule
             b%il = 1
             b%iu = gCurrentDims%IXMAX + 1
             b%jl = 1
-            b%ju = gCurrentDims%IYMAX
+            b%ju = gCurrentDims%IYMAX/2 + 1
             b%KL = 1
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
-            call Interpolate2D(gHorzArr%G1plot, b, Xptr)
+            call Interpolate2D(gTransArr%G1plot, b, Xptr)
             ! However, we need to map these interpolated values in X to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
@@ -1967,7 +2108,8 @@ module PlotModule
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(invalidate)
-        
+            call inverseTransform(gTransArr%G1plot, weatherMapType)
+
         end subroutine plotWeatherMap
 
         ! This method populates a grid X of all the interpolated values that are displayed on the
@@ -1980,7 +2122,7 @@ module PlotModule
             use ConstantsModule, only: PLOTTING_OFF
             use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gTransArr
             implicit none
 
             real, intent(out) :: X(:, :)
@@ -1990,17 +2132,17 @@ module PlotModule
             
             if (field == PLOTTING_OFF) return
 
-            call createGrid(gHorzArr%G1plot, getWeatherMapType(field))
+            call createGrid(gTransArr%G1plot, getWeatherMapType(field))
             ! Generate the interpolated 2D array X
             b%il = 1
             b%iu = gCurrentDims%IXMAX + 1
             b%jl = 1
-            b%ju = gCurrentDims%IYMAX
+            b%ju = gCurrentDims%IYMAX / 2 + 1
             b%KL = 1
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
-            call Interpolate2D(gHorzArr%G1plot, b, X)   ! X is populated here
+            call Interpolate2D(gTransArr%G1plot, b, X)   ! X is populated here
         
         end subroutine populateInterpolatedGrid
 

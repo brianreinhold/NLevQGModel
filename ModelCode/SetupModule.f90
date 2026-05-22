@@ -156,8 +156,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
-            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateVerticalArrays, AllocateStatsArrays, createHorzArr, createVertArr, &
-                       DeallocateHorizontalArrays, DeallocateVerticalArrays, DeallocateStatsArrays
+            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, &
+                       createHorzArr, createTransArr, createVertArr, &
+                       DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, DeallocateStatsArrays
             use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr, DeallocateCintArrays
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
 
@@ -170,6 +171,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             error = AllocateHorizontalArrays()
             if (error .NE. 0) return
             error = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
+            if (error .NE. 0) return
+            error = DeallocateTransformArrays()
+            error = AllocateTransformArrays()
+            if (error .NE. 0) return
+            error = createTransArr(gCurrentDims)
             if (error .NE. 0) return
             error = DeallocateVerticalArrays()
             error = AllocateVerticalArrays()
@@ -377,7 +383,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%TMP, gHorzArr%DAT, &
                   gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
                   gHorzArr%IXL, gHorzArr%IYL
 
@@ -466,7 +472,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%G1, gHorzArr%G2, gHorzArr%G3, gHorzArr%TMP, gHorzArr%DAT, &
+                  gHorzArr%TMP, gHorzArr%DAT, &
                   gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
                   gHorzArr%IXL, gHorzArr%IYL
 
@@ -494,8 +500,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         function CheckUserSettingsChanges() result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
             use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams, gModRealParams
-            use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateVerticalArrays, createHorzArr, createVertArr, &
-                AllocateHorizontalArrays, AllocateVerticalArrays, gVertArr, gHorzArr
+            use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, &
+                createHorzArr, createTransArr, createVertArr, &
+                AllocateHorizontalArrays, AllocateVerticalArrays, AllocateTransformArrays, gVertArr, gHorzArr, gTransArr
             use InteractionCoefficientsModule, only: DeallocateCintArrays, AllocateCintArrays, computeInteractionCoefficients, gCintArr
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
@@ -536,6 +543,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ! But use the model settings for KMAX2, LMAX2, NLEV for actual array dimensions.
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 if(errorCode .NE. 0) return
+                
+                ! Handle transform array changes
+                if (gTransArr%allocated) errorCode = DeallocateTransformArrays()  ! Deallocate transform arrays if allocated
+
+                errorCode = allocateTransformArrays()    ! Reallocate transform arrays
+                if(errorCode .NE. 0) return
+                errorCode = createTransArr(gCurrentDims)
+                if(errorCode .NE. 0) return
+
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
@@ -561,19 +577,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 if (errorCode .NE. 0) return
                 CALL DFDIAB(.true.) ! recreate the vertical profiles. This uses gModIntParams%NLEV as the number of levels
             endif
-
-            !if (boolCoeffResult .AND. gUserSettings%integrationMethod) then
-            !        gHorzArr%WW = 0.0      !  WW(ITOT,maxLevels) is the omega spectral components
-            !        gHorzArr%FS = 0.0      !  FS(ITOT,maxLevels) is the streamfunction tendency
-            !        gHorzArr%ADS = 0.0     !  ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
-            !        gHorzArr%WS = 0.0      !  WS(ITOT,maxLevels) is the omega forcing on the streamfunction
-            !        gHorzArr%S = 0.0       !  S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
-            !        gHorzArr%FT = 0.0      !  FT(ITOT,maxLevels) is the temperature tendency
-            !        gHorzArr%ADT = 0.0     !  ADT(ITOT,maxLevels) is the spectral form of the temperature advection
-            !        gHorzArr%WT = 0.0      !  WT(ITOT,maxLevels) is the omega forcing on the temperature
-            !        gHorzArr%T = 0.0       !  T(ITOT,maxLevels) is the diabatic forcing on the temperature
-            !        gHorzArr%ADO = 0.0     !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
-            !endif
             !-------------------------------------------Introduce perturbation if there have been reallocations:
             if (boolHorzResult .OR. boolVertResult) CALL CreatePerturbation()         ! Subroutine 1ocated in this file
 
@@ -645,15 +648,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ENDIF
             IF(gModIntParams%KMAX2 .LT. 1) THEN
                 gModIntParams%KMAX2 = 1
-                mCode = mCode .AND. .false.
             ENDIF
             IF(gModIntParams%LMAX2 .LT. 1) THEN
                 gModIntParams%LMAX2 = 1
-                mCode = mCode .AND. .false.
             ENDIF
             IF(gModIntParams%NLEV .LT. 1) THEN
                 gModIntParams%NLEV = 1
-                mCode = mCode .AND. .false.
             ENDIF
         end function CheckModelResolutions
 
@@ -763,6 +763,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         !! prevRN is always non dimensional.
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
+            use ifwinty
+            use ifwin
+            use NLevQGModelGlobals, only: ghModelControlDlg
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gScaleFactors
             use InteractionCoefficientsModule, only: gCintArr, createCintArr, computeInteractionCoefficients
@@ -791,7 +794,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Check the current gModIntParams values are okay and consistent with the gUserSettings values
             if (CheckModelResolutions() .EQV. .false.) then
-                ! Put a message here that the resolutions were changed
+                bret = MessageBox(ghModelControlDlg, "Resolution parameters exceeded the size set in the Settings Dialog. Update settings."C, &
+                     "Dimensions too large"C, MB_OK)
+                errorCode = 1
+                return
             end if
             errorCode = CheckModParams()  ! Check all the other possible values the user may have changed.
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.

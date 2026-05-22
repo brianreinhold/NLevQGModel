@@ -37,7 +37,15 @@ module Fftw3HelpersModule
 
     ! Handles for the mixed-mode (Periodic X, Bounded Y - Sin LY) transforms
     type(c_ptr) :: plan_x_c2r_1d = c_null_ptr ! X-dir C2R (Spectral to Grid). This uses a complex input and real output
-    type(c_ptr) :: plan_x_r2c_1d = c_null_ptr ! X-dir R2C (Grid to Spectral). This used a real input and complex output
+    type(c_ptr) :: plan_x_r2c_1d = c_null_ptr ! X-dir R2C (Grid to Spectral). This uses a real input and complex output
+    
+    type(c_ptr) :: plan_y_c2r_1d = c_null_ptr ! Y-dir C2R (Spectral to Grid). This uses a complex input and real output
+    type(c_ptr) :: plan_y_r2c_1d = c_null_ptr ! Y-dir R2C (Grid to Spectral). This uses a real input and complex output
+    
+    type(c_ptr) :: plan_c2r_2d = c_null_ptr ! Two-d C2R (Spectral to Grid). This uses a complex input and real output
+    type(c_ptr) :: plan_r2c_2d = c_null_ptr ! Two-d R2C (Grid to Spectral). This uses a real input and complex output
+
+
 
 
     type(c_ptr) :: plan_y_FFTW_REDFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_REDFT01 spectral to grid
@@ -70,11 +78,19 @@ module Fftw3HelpersModule
             ! Dummy arrays for planning, allocated with standard FORTRAN ALLOCATE
             real(C_FLOAT), allocatable :: dummy_r_1d(:)
             complex(C_FLOAT_COMPLEX), allocatable :: dummy_c_1d(:)
-            !type(C_PTR) :: p_dummy_r_c, p_dummy_c_c
+
+            real(C_FLOAT), pointer :: dummy_r_2d(:, :)
+            complex(C_FLOAT_COMPLEX), pointer :: dummy_c_2d(:, :)
+            type(C_PTR) :: p_dummy_r, p_dummy_c
 
             ! Clean up existing plans
             if (c_associated(plan_x_c2r_1d)) call fftw_destroy_plan(plan_x_c2r_1d)
             if (c_associated(plan_x_r2c_1d)) call fftw_destroy_plan(plan_x_r2c_1d)
+            if (c_associated(plan_y_c2r_1d)) call fftw_destroy_plan(plan_y_c2r_1d)
+            if (c_associated(plan_y_r2c_1d)) call fftw_destroy_plan(plan_y_r2c_1d)
+            
+            if (c_associated(plan_c2r_2d)) call fftw_destroy_plan(plan_c2r_2d)
+            if (c_associated(plan_r2c_2d)) call fftw_destroy_plan(plan_r2c_2d)
 
             if (c_associated(plan_y_FFTW_RODFT01)) call fftw_destroy_plan(plan_y_FFTW_RODFT01)
             if (c_associated(plan_y_FFTW_REDFT01)) call fftw_destroy_plan(plan_y_FFTW_REDFT01)
@@ -90,6 +106,17 @@ module Fftw3HelpersModule
             ! Allocate dummy arrays matching the size of the 1D buffers used during execution
             allocate(dummy_r_1d(max(Nx, Ny))) ! Need size Nx for X output, size Ny for Y input/output
             allocate(dummy_c_1d(Nx + 1))    ! Need size Nx+1 for X input/output
+            p_dummy_r = fftw_alloc_real(int(Nx * Ny, C_SIZE_T)) ! 
+            call c_f_pointer(p_dummy_r, dummy_r_2d, [Ny, Nx])
+            p_dummy_c = fftw_alloc_complex(int(Nx * Ny, C_SIZE_T))
+            call c_f_pointer(p_dummy_c, dummy_c_2d, [Ny, Nx])
+
+            
+            ! --- Plan 2D C2R (Spectral to Grid) ---
+            plan_c2r_2d = fftwf_plan_dft_c2r_2d(Nx, Ny / 2 + 1, dummy_c_2d, dummy_r_2d, FFTW_MEASURE)
+
+            ! --- Plan 2D R2C (Grid to Spectral) ---
+            plan_r2c_2d = fftwf_plan_dft_r2c_2d(Nx, Ny / 2 + 1, dummy_r_2d, dummy_c_2d, FFTW_MEASURE)
 
 
             ! --- Plan 1D C2R (Spectral to Grid, X-direction) ---
@@ -97,6 +124,12 @@ module Fftw3HelpersModule
 
             ! --- Plan 1D R2C (Grid to Spectral, X-direction) ---
             plan_x_r2c_1d = fftwf_plan_dft_r2c_1d(Nx, dummy_r_1d, dummy_c_1d, FFTW_MEASURE)
+            
+            ! --- Plan 1D C2R (Spectral to Grid, Y-direction) ---
+            plan_y_c2r_1d = fftwf_plan_dft_c2r_1d(Ny, dummy_c_1d, dummy_r_1d, FFTW_MEASURE)
+
+            ! --- Plan 1D R2C (Grid to Spectral, Y-direction) ---
+            plan_y_r2c_1d = fftwf_plan_dft_r2c_1d(Ny, dummy_r_1d, dummy_c_1d, FFTW_MEASURE)
 
 
             plan_y_FFTW_REDFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT10, FFTW_MEASURE) ! Grid to spectral for FFTW_REDFT01 spectral to grid
@@ -109,13 +142,16 @@ module Fftw3HelpersModule
 
             deallocate(dummy_r_1d)
             deallocate(dummy_c_1d)
+            call fftw_free(p_dummy_r)
+            call fftw_free(p_dummy_c)
+
 
         end subroutine setup_fftw_plans
 
 
         subroutine test_transforms()
             use ArrayDimensionsModule, only: gCurrentDims
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gTransArr
             use ModelParamsModule, only: gModIntParams
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
             use NLevQGModelGlobals, only: LogMessage
@@ -130,24 +166,24 @@ module Fftw3HelpersModule
 
             ! ========================= Print out the grid points for a single component coskxsinly for k=1,l=1
             call LogMessage("Test for spectral component coskxsinly + cosly for k,l = 1,1")
-            gHorzArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
+            gTransArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                if (L .EQ. 1) gHorzArr%Gc(2) = CMPLX( norm_fwd, norm_fwd, kind=C_FLOAT_COMPLEX)
+                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                if (L .EQ. 1) gTransArr%Gc(2) = CMPLX( norm_fwd, norm_fwd, kind=C_FLOAT_COMPLEX)
 
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G2(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G2(:, L))
             END DO
             ! Now transform the sinly part which is bounded and uses r2r transforms column by column
             DO I = 1, gCurrentDims%IYMAX
                 ! Pass the column slice directly
-                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%G2(I, :), gHorzArr%G2(I, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2(I, :), gTransArr%G2(I, :))
             END DO
 
             ! Print out the grid points
             call LogMessage("Wave part coskxsinly + sinkxsinly")
             do L = 1, gCurrentDims%IYMAX
-                write(msg, '(*(F9.6, 1X))') (gHorzArr%G2(K, L), K = 1, gCurrentDims%IXMAX)
+                write(msg, '(*(F9.6, 1X))') (gTransArr%G2(K, L), K = 1, gCurrentDims%IXMAX)
                 call LogMessage(msg)
             end do
 
@@ -156,93 +192,93 @@ module Fftw3HelpersModule
             ! sinly and cosly transforms.
 
             ! --------------- FFTW_REDFT11 and FFTW_RODFT11 plans
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(2) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_REDFT11, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(2) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_REDFT11, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_REDFT11")
             !
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(1) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_RODFT11, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(1) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_RODFT11, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_RODFT11")
 
             ! --------------- FFTW_REDFT01 and FFTW_RODFT01 plans
-            gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            gHorzArr%GZonal(1) = norm_sinly                      ! Note that the sinly transform does not have the l=0 mode
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gHorzArr%GZonal, gHorzArr%GZonal)
+            gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            gTransArr%GZonal(1) = norm_sinly                      ! Note that the sinly transform does not have the l=0 mode
+            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%GZonal, gTransArr%GZonal)
             call logZonal("Zonal case FFTW_RODFT01")
 
-            gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            gHorzArr%GZonal(2) = norm_cosly                      ! Note that the cosly transform has the l=0 mode
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%GZonal, gHorzArr%GZonal)
+            gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            gTransArr%GZonal(2) = norm_cosly                      ! Note that the cosly transform has the l=0 mode
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%GZonal, gTransArr%GZonal)
             call logZonal("Zonal case FFTW_REDFT01")
 
             ! --------------- FFTW_REDFT10 and FFTW_RODFT10 plans
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(2) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(2) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_REDFT10")
             !
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(1) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(1) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_RODFT10")
 
             ! --------------- FFTW_REDFT11 and FFTW_RODFT11 plans
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(2) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_REDFT00, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(2) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_REDFT00, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_REDFT00 cosly")
             !
-            !gHorzArr%GZonal = 0. ! Fortran shortcut to zero an entire array
-            !gHorzArr%GZonal(1) = 1
-            !call fftwf_execute_r2r(plan_y_FFTW_RODFT00, gHorzArr%GZonal, gHorzArr%GZonal)
+            !gTransArr%GZonal = 0. ! Fortran shortcut to zero an entire array
+            !gTransArr%GZonal(1) = 1
+            !call fftwf_execute_r2r(plan_y_FFTW_RODFT00, gTransArr%GZonal, gTransArr%GZonal)
             !call logZonal("Zonal case FFTW_RODFT00 sinly")
 
             ! Add the zonal part to each column in G2
             do L = 1, gCurrentDims%IYMAX
                 DO K = 1, gCurrentDims%IXMAX
-                    gHorzArr%G2(K, L) = gHorzArr%G2(K, L) + gHorzArr%GZonal(L)
+                    gTransArr%G2(K, L) = gTransArr%G2(K, L) + gTransArr%GZonal(L)
                 end do
             end do
             ! ---------- Print the grid with both wave and zonal parts
             call LogMessage("Wave plus zonal cosy")
             do L = 1, gCurrentDims%IYMAX
-                write(msg, '(*(F9.6, 1X))') (gHorzArr%G2(K, L), K = 1, gCurrentDims%IXMAX)
+                write(msg, '(*(F9.6, 1X))') (gTransArr%G2(K, L), K = 1, gCurrentDims%IXMAX)
                 call LogMessage(msg)
             end do
             
             ! Separate test for just cosxcosy (only comes up in Jacobian because of the derivatives)
             call LogMessage("Test for spectral component coskxcosly")
-            gHorzArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
+            gTransArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                if (L .EQ. 1) gHorzArr%Gc(2) = CMPLX( norm_fwd, 0, kind=C_FLOAT_COMPLEX)
+                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                if (L .EQ. 1) gTransArr%Gc(2) = CMPLX( norm_fwd, 0, kind=C_FLOAT_COMPLEX)
 
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gHorzArr%Gc, gHorzArr%G1(:, L + 1))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G1(:, L + 1))
             END DO
             ! Now transform the cosly part which is bounded and uses r2r transforms column by column
             DO I = 1, gCurrentDims%IYMAX
                 ! Pass the column slice directly
-                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gHorzArr%G1(I, :), gHorzArr%G1(I, :))
+                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%G1(I, :), gTransArr%G1(I, :))
             END DO
             do L = 1, gCurrentDims%IYMAX
-                write(msg, '(*(F9.6, 1X))') (gHorzArr%G1(K, L), K = 1, gCurrentDims%IXMAX)
+                write(msg, '(*(F9.6, 1X))') (gTransArr%G1(K, L), K = 1, gCurrentDims%IXMAX)
                 call LogMessage(msg)
             end do
 
             ! =========================== Now do the INVERSE transforms
             call LogMessage("Inverse transform")
             ! Get the zonal average
-            gHorzArr%GZonal = 0
+            gTransArr%GZonal = 0
             temp_var = 1. / REAL(gCurrentDims%IXMAX)
             do I = 1, gCurrentDims%IYMAX
-                gHorzArr%GZonal(I) = 0.0
+                gTransArr%GZonal(I) = 0.0
                 do K = 1, gCurrentDims%IXMAX
-                    gHorzArr%GZonal(I) = gHorzArr%GZonal(I) + gHorzArr%G2(K, I)
+                    gTransArr%GZonal(I) = gTransArr%GZonal(I) + gTransArr%G2(K, I)
                 end do
-                gHorzArr%GZonal(I) = gHorzArr%GZonal(I) * temp_var
+                gTransArr%GZonal(I) = gTransArr%GZonal(I) * temp_var
             end do
             ! Print out the zonal mean to check is has cosy structure
             call logZonal("Zonal mean")
@@ -250,16 +286,16 @@ module Fftw3HelpersModule
             ! Do this while we still have the zonal mean and the unaltered grid
             do L = 1, gCurrentDims%IYMAX
                 DO K = 1, gCurrentDims%IXMAX
-                    gHorzArr%G2(K, L) = gHorzArr%G2(K, L) - gHorzArr%GZonal(L)
+                    gTransArr%G2(K, L) = gTransArr%G2(K, L) - gTransArr%GZonal(L)
                 end do
             end do
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gHorzArr%GZonal, gHorzArr%GZonal)
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT10, gTransArr%GZonal, gTransArr%GZonal)
             ! Normalize the transformed spectral components. The l=0 component is ignored
             ! but the transform generates it. So the components that will have modes 1 to LMAX2 are
             ! in 2 to LMAX2 + 1. Modes 0 and those greater than LMAX2 are ignored in our model.
             ! But in this example the l=0 and l>(LMAX2 + 1) should all be zero
             do I = 2, gModIntParams%LMAX2 + 1
-                gHorzArr%GZonal(I) = gHorzArr%GZonal(I) * norm_inv_cosly
+                gTransArr%GZonal(I) = gTransArr%GZonal(I) * norm_inv_cosly
             end do
             call logZonal("Inverse zonal transform")
 
@@ -267,14 +303,14 @@ module Fftw3HelpersModule
             call LogMessage("Inverse wave transform")
             DO I = 1, gCurrentDims%IXMAX
                 ! Do the sinly transform 
-                call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gHorzArr%G2(I, :), gHorzArr%G2(I, :))
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT10, gTransArr%G2(I, :), gTransArr%G2(I, :))
             END DO
             ! Now the kx part
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gHorzArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                call fftwf_execute_dft_r2C(plan_x_r2c_1d, gHorzArr%G2(:, L), gHorzArr%Gc)
-                write(msg, '(*(F9.6, 1X))') (gHorzArr%Gc(K) * norm_inv_wave, K = 1, gModIntParams%KMAX2 + 1)
+                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                call fftwf_execute_dft_r2C(plan_x_r2c_1d, gTransArr%G2(:, L), gTransArr%Gc)
+                write(msg, '(*(F9.6, 1X))') (gTransArr%Gc(K) * norm_inv_wave, K = 1, gModIntParams%KMAX2 + 1)
                 call LogMessage(msg)
             END DO
             ! Note there is no need for a sign reversal on the sinkx terms like there was in FFT991
@@ -284,7 +320,7 @@ module Fftw3HelpersModule
 
         subroutine logZonal(str)
             use ArrayDimensionsModule
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: LogMessage
             implicit none
             
@@ -294,7 +330,7 @@ module Fftw3HelpersModule
             character(len=256) :: msg
 
             call LogMessage(str)
-            write(msg, '(*(F9.6, 1X))') (gHorzArr%GZonal(L), L = 1, gCurrentDims%IYMAX)
+            write(msg, '(*(F9.6, 1X))') (gTransArr%GZonal(L), L = 1, gCurrentDims%IYMAX)
             call LogMessage(msg)
 
         end subroutine LogZonal
