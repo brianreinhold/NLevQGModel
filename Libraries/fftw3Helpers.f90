@@ -44,8 +44,8 @@ module Fftw3HelpersModule
     
     type(c_ptr) :: plan_c2r_2d = c_null_ptr ! Two-d C2R (Spectral to Grid). This uses a complex input and real output
     type(c_ptr) :: plan_r2c_2d = c_null_ptr ! Two-d R2C (Grid to Spectral). This uses a real input and complex output
-
-
+    
+    type(c_ptr) :: plan_y_c2c_1d = c_null_ptr 
 
 
     type(c_ptr) :: plan_y_FFTW_REDFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_REDFT01 spectral to grid
@@ -89,6 +89,8 @@ module Fftw3HelpersModule
             if (c_associated(plan_y_c2r_1d)) call fftw_destroy_plan(plan_y_c2r_1d)
             if (c_associated(plan_y_r2c_1d)) call fftw_destroy_plan(plan_y_r2c_1d)
             
+            if (c_associated(plan_y_c2c_1d)) call fftw_destroy_plan(plan_y_c2c_1d)
+            
             if (c_associated(plan_c2r_2d)) call fftw_destroy_plan(plan_c2r_2d)
             if (c_associated(plan_r2c_2d)) call fftw_destroy_plan(plan_r2c_2d)
 
@@ -117,6 +119,8 @@ module Fftw3HelpersModule
 
             ! --- Plan 2D R2C (Grid to Spectral) ---
             plan_r2c_2d = fftwf_plan_dft_r2c_2d(Nx, Ny / 2 + 1, dummy_r_2d, dummy_c_2d, FFTW_MEASURE)
+
+            plan_y_c2c_1d = fftwf_plan_dft_1d(Ny, dummy_c_1d, dummy_c_1d, FFTW_FORWARD, FFTW_MEASURE)
 
 
             ! --- Plan 1D C2R (Spectral to Grid, X-direction) ---

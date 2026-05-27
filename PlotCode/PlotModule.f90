@@ -927,11 +927,10 @@ module PlotModule
             ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
             temp_calc = 2. * norm_fwd * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
 
-            index = LMAX2
             DO L = 1, LMAX2
                 gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
                 DO K = 1, KMAX2
-                    index = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
+                    index = 2 * LMAX2 * (K - 1) + LMAX2 + 2 * (L - 1) + 1
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
                     gTransArr%Gc(K + 1) = CMPLX( temp_calc * weatherMapType%value(index), &         ! ac(k,l) cosknxsinly part
                                                 -temp_calc * weatherMapType%value(index + 1), &    ! as(k,l) sinknxsinly part
@@ -952,13 +951,6 @@ module PlotModule
                 index = L + 1             ! Fortran 1-based index for m = L
                 ! sine contribution: tmpC[pos] += -i * (s_l/2); tmpC[neg] += +i * (s_l/2)
                 gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX(0.0_C_FLOAT, -grid(K, L), kind=C_FLOAT_COMPLEX)
-                ! If you also had cosly c_l for this K/L, add:
-                ! gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX( c_l, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-
-                index = IYMAX - L + 1     ! index for IYMAX - L
-                gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX(0.0_C_FLOAT,  grid(K, L), kind=C_FLOAT_COMPLEX)
-                ! If you also had cosly c_l for this K/L, add:
-                ! gTransArr%Gc(index) = gTransArr%Gc(index) + CMPLX( c_l, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
               end do
 
               ! Inverse complex->real along y (length IYMAX)
@@ -970,13 +962,6 @@ module PlotModule
               end do
             end do
 
-
-            !! 2. Now transform the sinly part which is bounded and uses r2r transforms column by column
-            !DO index = 1, IXMAX
-            !    ! Pass the column slice directly
-            !    call fftwf_execute_r2r(plan_y_FFTW_RODFT01, grid(index, :), grid(index, :))
-            !END DO
-            !
             ! 3. Zonal components: Load   sqrt(2)*az(l)cosly into GZonal
             gTransArr%GZonalPlot = 0.0
             gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! Fortran shortcut to zero an entire array
@@ -1009,7 +994,7 @@ module PlotModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gHorzArr, gTransArr
-            use Fftw3HelpersModule, only: norm_inv_wave, norm_inv_cosly, plan_x_r2c_1d, plan_y_r2c_1d
+            use Fftw3HelpersModule, only: norm_inv_wave, norm_inv_cosly, plan_x_r2c_1d, plan_y_r2c_1d, plan_y_c2c_1d
                     !plan_y_FFTW_RODFT01, plan_y_FFTW_REDFT01
             use, intrinsic :: ieee_arithmetic
         
@@ -1030,7 +1015,7 @@ module PlotModule
 
             gHorzArr%DAT = 0.0 
             gTransArr%GZonalPlot = 0.0
-            inverseValue = 1.0 / REAL(IXMAX)
+            inverseValue = 2.0 / REAL(IXMAX)
 
             ! 1. HIGH-SPEED ZONAL AVERAGE AND REMOVAL (Replaces the first two heavy loops)
             ! Fortran's 'SUM' along dim=1 vectorizes the row operations instantly via hardware registers
@@ -1054,21 +1039,25 @@ module PlotModule
             ! STEP 1: EXTRACT THE Y-SINES SAFELY (Column by Column)
             ! ==========================================================
             inverseValue = norm_inv_wave / (2.0 * weatherMapType%scale)
-            gTransArr%G1 = 0.0
+            gTransArr%G2 = 0.0
             do K = 1, IXMAX
     
-                ! Manually gather the non-contiguous Y-column into your contiguous 1D array
-                ! This is the vital step that stops the memory scrambling!
+                ! 1. Clear your 1D complex scratchpad
+                gTransArr%Gc = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+    
+                ! 2. Gather your real grid column into the REAL part of Gc
                 do L = 1, IYMAX
-                    gTransArr%GZonal(L) = grid(K, L)
+                    gTransArr%Gc(L) = CMPLX(grid(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
                 end do
     
                 ! Run your 1D Y-transform on the properly aligned vector
-                call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%Gc)
+                call fftwf_execute_dft(plan_y_c2c_1d, gTransArr%Gc, gTransArr%Gc)
     
-                ! Extract the pure, unpolluted sin(ly) wave amplitude
+                ! 4. Directly decode the exact manual mapping your forward model used!
+                !    Forward wrote: Gc(L+1) = (0, -grid) and Gc(IYMAX-L+1) = (0, grid)
+                !    The exact inverse to extract this amplitude from a C2C spectrum is:
                 do L = 1, LMAX2
-                    gTransArr%G1(K, L) = -AIMAG(gTransArr%Gc(L + 1))
+                    gTransArr%G2(K, L) = AIMAG(gTransArr%Gc(IYMAX - L + 1)) - AIMAG(gTransArr%Gc(L + 1))
                 end do
             end do
 
@@ -1079,7 +1068,7 @@ module PlotModule
     
                 ! Since the first dimension of Y_Sine_Grid is X, this row-slice 
                 ! is perfectly contiguous and safe to pass straight to FFTW
-                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G1(1:IXMAX, L), gTransArr%Gc)
+                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G2(1:IXMAX, L), gTransArr%Gc)
     
                 ! Distribute the generated wave components using your explicit formula
                 do K = 1, KMAX2
@@ -1091,7 +1080,6 @@ module PlotModule
                     ! Sin(Kx)*Sin(Ly)
                     gHorzArr%DAT(index + 1) = -AIMAG(gTransArr%Gc(K + 1)) * inverseValue
                 end do
-
             end do
 
             do K = 1, LMAX2 + 2 * KMAX2 * LMAX2
@@ -1101,6 +1089,162 @@ module PlotModule
             temp_calc = SUM(ABS(gHorzArr%DAT - weatherMapType%value))
 
         end subroutine inverseTransform
+
+        subroutine plotDiagnostic(grid, contourInterval, scale)
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc, C_F_POINTER
+            use Kernel32, only: RtlMoveMemory
+            
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ConstantsModule, only: PLOTTING_OFF, wp
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelFieldsModule, only: gHorzArr
+
+            IMPLICIT NONE
+
+
+            real, intent(in) :: grid(:,:)
+            real, intent(in) :: contourInterval
+            real, intent(in) :: scale
+
+            LOGICAL(BOOL)   :: bret
+            REAL :: cntInt
+            type (InterpolationBounds) b
+        
+            REAL, save, ALLOCATABLE, TARGET :: X(:,:), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:,:)
+            integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
+        
+            integer(RGB32), target :: Pixels(gBitMapInfo%width)
+            integer ::  iVal, iValRight, iValDown, i, j, J1, colorIdx
+            
+            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
+            integer(c_intptr_t) :: bytesPerRow
+            integer(4) :: colorToDraw
+            
+            logical :: useSolidColor = true
+            
+            call PumpMessages()
+
+            ! --- RESIZE LOGIC ---
+            ! Check if X needs allocation or resizing based on the DIB size
+            if (useSolidColor) then
+                if (.not. allocated(X)) then
+                    allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
+                else if (size(X, 1) /= gBitMapInfo%width .or. size(X, 2) /= gBitMapInfo%height / 2) then
+                    deallocate(X)
+                    allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
+                end if
+            end if
+            ! Check if X_Overlay needs allocation or resizing based on the DIB size
+            if (.NOT. useSolidColor) then
+                if (.not. allocated(X_Overlay)) then
+                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height / 2))
+                else if (size(X_Overlay, 1) /= gBitMapInfo%width .or. size(X_Overlay, 2) /= gBitMapInfo%height / 2) then
+                    deallocate(X_Overlay)
+                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height / 2))
+                end if
+            end if
+        
+            if (useSolidColor) then
+                Xptr => X        ! Note the pointer and not the equals! Not like C!
+            else
+                Xptr => X_Overlay
+            endif
+            ! Interpolate the grid array to a resolution that matches the size of the display of the
+            ! weather map on the screen.
+            b%il = 1
+            b%iu = gCurrentDims%IXMAX
+            b%jl = 1
+            b%ju = gCurrentDims%IYMAX/2
+            b%KL = 1
+            b%KU = gBitMapInfo%width
+            b%LL = 1
+            b%LU = gBitMapInfo%height / 2
+            call Interpolate2D(REAL(grid), b, Xptr)
+            Xptr = Xptr * scale
+            ! However, we need to map these interpolated values in X to colors for each pixel. We will
+            ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
+            ! a lot more efficient than creating a 2d array of color values and then writing that to
+            ! the DIBSection.
+            
+            ! In order to make contours instead of color that continuously transition for each value,
+            ! We create a color ram of 18 values and let the user determine the contour interval. 
+            
+            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
+            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
+            ! 2. Calculate base address
+            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
+
+            if (useSolidColor) then
+                ! Turn X into an integer array of 32-pixel values
+                do J = gBitMapInfo%height / 2, 1, -1
+                    J1 = gBitMapInfo%height / 2 - J + 1
+                    do I = 1, gBitMapInfo%width
+                        ! Calculate value based on the contour interval
+                        iVal = FLOOR(Xptr(I, J1) / contourInterval) + NUM_RAM_COLORS / 2
+                        ! Cycle through the colorRam if iVal exceeds its size
+                        ! Use ABS to handle negative iVal if necessary
+                        ! Modulo keeps the recycling positive versus mod which does not
+                        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+                        Pixels(I) = RAM_COLORS(colorIdx)
+                    end do
+                    ! 2. Calculate memory address for the desired row 'targetY'
+                    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+                    targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
+
+                    ! 3. Get the address of your source array
+                    ! Pixels must have the TARGET attribute
+                    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
+        
+                    ! 4. Move the interpolated array of Pixels into the DIBSection memory
+                    ! Call the Intel-defined interface
+                    ! Since the interface defines these as integers, pass them directly.
+                    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
+                end do
+            else
+                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
+                ! 2. Calculate borders by comparing current pixel to its neighbors.
+                ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
+                ! Mapping X_Overlay to the upper half of the screen
+                do J = 1, (gBitMapInfo%height / 2) - 1
+        
+                    ! J_data maps Screen Top (J=1) to Array North (Height/2)
+                    J1 = (gBitMapInfo%height / 2) - J + 1
+                    ! J_next is the row physically below J on the screen (one step South in data)
+                    !J_next = J_data - 1
+        
+                    do I = 1, gBitMapInfo%width - 1
+        
+                        ! Calculate interval bins
+                        iVal      = floor(X_Overlay(I, J1) / contourInterval)
+                        iValRight = floor(X_Overlay(I + 1, J1) / contourInterval)
+                        iValDown  = floor(X_Overlay(I, J1 - 1) * contourInterval)
+        
+                        ! Detect boundary
+                        if (iVal /= iValRight .or. iVal /= iValDown) then
+                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
+                            if (colorIdx > 0) then
+                                colorToDraw = z'00DD0077' ! Reddish-pink
+                            else if (colorIdx < 0) then
+                                colorToDraw = z'000000FF' ! Blue
+                            else 
+                                colorToDraw = z'00000000' ! White for the 0-contour
+                            end if
+                            
+                            ! J=1 is the top row of the pixelArray
+                            pixelArray(I, J) = colorToDraw
+                        end if
+                    end do
+                end do
+            endif
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawGridLines(.true.)
+
+        end subroutine plotDiagnostic
 
         !> This function gets the values of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
@@ -2108,7 +2252,7 @@ module PlotModule
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(invalidate)
-            call inverseTransform(gTransArr%G1plot, weatherMapType)
+            !call inverseTransform(gTransArr%G1plot, weatherMapType)
 
         end subroutine plotWeatherMap
 
