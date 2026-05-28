@@ -98,7 +98,7 @@ module VerticalParamsDialogModule
                     call handleIntListControl(hDlg, IDC_LIST_EKMAN_FRICTION, ["Layers", "1/days"], gVertArr%FK, "Layer", gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_TURB_MIXING, ["Layers", "1/days"], gVertArr%FJ, "Layer", gModIntParams%NLEV)
                     hList = GetDlgItem(hDlg, IDC_LIST_TURB_MIXING)
-                    bret = EnableWindow(hList, MERGE(1, 0, gModIntParams%NLEV < 2))
+                    bret = EnableWindow(hList, MERGE(1, 0, gModIntParams%NLEV >= 2))
                     ! Disabling does not 'gray out' the control. So one has to do it manually.
                     IF (gModIntParams%NLEV > 1) THEN
                         ! RESTORE to standard colors (Black text on White background)

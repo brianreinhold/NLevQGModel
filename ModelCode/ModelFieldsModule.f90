@@ -139,7 +139,6 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: G4_pool(:)       !  G4(IXMAX*IYMAX) grid point arrays for transform routine
     real, allocatable, target :: plot_pool(:)     !  plot(IXMAX*IYMAX) grid point array for plotting with fftw3
     real, allocatable, target :: plotFull_pool(:) !  plotFull(KX*LY) grid point array for plotting to screen
-    COMPLEX, ALLOCATABLE, TARGET :: GcZ_pool(:)   !  Gc(KX or LY) complex grid point array for the periodic transform routine
     real, allocatable, target :: GZonal_pool(:)   !  GZonal(KX or LY) grid point array for zonal component of transform 
     real, allocatable, target :: G2Zonal_pool(:)  !  G2Zonal(KX or LY) grid point array for zonal component of transform 
 
@@ -375,7 +374,6 @@ MODULE ModelFieldsModule
                     plotFull_pool(gArrayDims%KX * gArrayDims%LY),              &
                     GZonal_pool(max(gArrayDims%KX, gArrayDims%LY)),            &
                     G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY)),           &
-                    GcZ_pool(max(gArrayDims%KX, gArrayDims%LY)),               &
                     STAT = status)
 
             IF (status /= 0) RETURN
@@ -437,8 +435,8 @@ MODULE ModelFieldsModule
             G4_pool = 0.0
             plot_pool = 0.0
             plotFull_pool = 0.0
-            GcZ_pool = (0.0, 0.0)
             GZonal_pool = 0.0
+            G2Zonal_pool = 0.0
         end subroutine ZeroTransArrays
 
         !> This function creates the horizontal arrays by associating the pointers in the gHorzArr type
@@ -544,7 +542,6 @@ MODULE ModelFieldsModule
             ! Plot array
             gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             gTransArr%plotFull(1: arraySizes%KX, 1 : arraySizes%LY) => plotFull_pool(1 : arraySizes%KX * arraySizes%LY)
-            gTransArr%GcZ(1 : mx) => GcZ_pool(1 : mx)
             gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
             gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)
 
@@ -629,7 +626,7 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(plot_pool))   DEALLOCATE(plot_pool)
             IF (ALLOCATED(plotFull_pool))   DEALLOCATE(plotFull_pool)
             IF (ALLOCATED(GZonal_pool)) DEALLOCATE(GZonal_pool)
-            IF (ALLOCATED(GcZ_pool))    DEALLOCATE(GcZ_pool)
+            IF (ALLOCATED(G2Zonal_pool)) DEALLOCATE(G2Zonal_pool)
             gTransArr%Gc  => null()     !  Gc(IXMAX/2 + 1, IYMAX) complex grid point array for the periodic transform routine
             gTransArr%G1  => null()     !  G1(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
             gTransArr%G2  => null()     !  G2(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
@@ -639,7 +636,6 @@ MODULE ModelFieldsModule
             gTransArr%plotFull  => null()   !  plotFull(KX, LY) grid point array for full plot
             gTransArr%GZonal  => null() !  GZonal(KX or LY) grid point array for zonal (cosly) transforms
             gTransArr%G2Zonal  => null() !  G2Zonal(KX or LY) grid point array for zonal (cosly) transforms
-            gTransArr%GcZ  => null()    !  GcZ(KX or LY) complex grid point array for the periodic transform routine
             gTransArr%allocated = .FALSE.
             gTransArr%defined = .FALSE.
         END function DeallocateTransformArrays

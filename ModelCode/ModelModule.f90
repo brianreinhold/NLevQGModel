@@ -742,13 +742,13 @@ module ModelModule
             ! dB/dy:  Done in subroutine DODADY result in G2(IXMAX, IYMAX) this involves a transform of the zonal parts
 
             ! 1. dA/dx: 
-            call DODADX(A)
+            call DODADX(A, gTransArr%G1)
             ! ================= dA/dx is now in G1
             !call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
             !call pauseRun()
 
             ! 2. dB/dy: 
-            call DODADY(B)
+            call DODADY(B, gTransArr%G2)
             !call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
             !call pauseRun()
             ! ================ dB/dy is now in G2
@@ -776,13 +776,13 @@ module ModelModule
             !   dB/dx is -2*k*n*bc(k,l)sinknxsinly and 2*k*n*bs(k,l)cosknxsinly
 
             ! 4. dB/dx:
-            call DODADX(B)
+            call DODADX(B, gTransArr%G1)
             !call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
             !call pauseRun()
             ! ================= dB/dx is now in G1
 
             ! 5. dA/dy:
-            call DODADY(A)
+            call DODADY(A, gTransArr%G2)
             !call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
             !call pauseRun()
             ! ================ dA/dy is now in G2
@@ -817,240 +817,253 @@ module ModelModule
             ! Get the cosly components. We do this by first computing the zonal average of G4 and
             ! placing it in gTransArr%GZonal and taking the inverse transform with plan_y_FFTW_REDFT10
             ! We also need to remove the zonal average from the grid point data before we do the wave transforms.
-
-            FS = 0.0 
-            gTransArr%GZonal = 0.0
-            inverseValue = 2.0 / REAL(IXMAX)
-
-            ! 1. HIGH-SPEED ZONAL AVERAGE AND REMOVAL (Replaces the first two heavy loops)
-            ! Fortran's 'SUM' along dim=1 vectorizes the row operations instantly via hardware registers
-            gTransArr%GZonal(1:IYMAX) = SUM(gTransArr%G4(1:IXMAX, 1:IYMAX), dim=1) * inverseValue
-
-            ! Remove the zonal average from the grid point data using full-array broad-casting syntax
-            do L = 1, IYMAX
-                gTransArr%G4(1:IXMAX, L) = gTransArr%G4(1:IXMAX, L) - gTransArr%GZonal(L)
-            end do
-
-            ! 2. INVERSE TRANSFORM OF THE ZONAL PROFILE
-            gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)
-            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%GcZ)
-
-            inverseValue = norm_inv_cosly / SQRT2
-            ! Load cosly tendencies into FS with full-array slicing and normalization
-            FS(1 : LMAX2) = REAL(gTransArr%GcZ(2 : LMAX2 + 1)) * inverseValue
-
-            ! ==========================================================
-            ! STEP 1: EXTRACT THE Y-SINES SAFELY (Column by Column)
-            ! ==========================================================
-            inverseValue = norm_inv_wave / 2.0
-            gTransArr%G1 = 0.0
-            do K = 1, IXMAX
-    
-                ! 1. Clear your 1D complex scratchpad
-                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-    
-                ! 2. Gather your real grid column into the REAL part of Gc
-                do L = 1, IYMAX
-                    gTransArr%GcZ(L) = CMPLX(gTransArr%G4(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-                end do
-    
-                ! Run your 1D Y-transform on the properly aligned vector
-                call fftwf_execute_dft(plan_y_c2c_1d, gTransArr%GcZ, gTransArr%GcZ)
-    
-                ! 4. Directly decode the exact manual mapping your forward model used!
-                !    Forward wrote: Gc(L+1) = (0, -grid) and Gc(IYMAX-L+1) = (0, grid)
-                !    The exact inverse to extract this amplitude from a C2C spectrum is:
-                do L = 1, LMAX2
-                    gTransArr%G1(K, L) = AIMAG(gTransArr%GcZ(IYMAX - L + 1)) - AIMAG(gTransArr%GcZ(L + 1))
-                end do
-            end do
-
-            ! ==========================================================
-            ! STEP 2: RUN X-TRANSFORMS AND SCATTER TO YOUR 1D ARRAY
-            ! ==========================================================
-            do L = 1, LMAX2
-    
-                ! Since the first dimension of Y_Sine_Grid is X, this row-slice 
-                ! is perfectly contiguous and safe to pass straight to FFTW
-                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G1(1:IXMAX, L), gTransArr%GcZ)
-    
-                ! Distribute the generated wave components using your explicit formula
-                do K = 1, KMAX2
-                    I = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
-        
-                    ! Cos(Kx)*Sin(Ly)
-                    FS(I)     =  REAL(gTransArr%GcZ(K + 1)) * inverseValue
-        
-                    ! Sin(Kx)*Sin(Ly)
-                    FS(I + 1) = -AIMAG(gTransArr%GcZ(K + 1)) * inverseValue
-                end do
-            end do
+            
+            call DoGridToSpectral(FS)
 
         end subroutine ComputeJacobianByTransform
 
         !> Does the transform of the d/dx part of the Jacobian calculation. The result is placed in gTransArr%G1.
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
         !!          Since this is the d/dx part of the Jacobian calculation the az(l) derivative is 0.
-        subroutine DoDADX(A)
+        subroutine DoDADX(A, out_grid)
             use ArrayDimensionsModule, only: gCurrentDims
-            use ModelFieldsModule, only: gTransArr, gHorzArr
-            use ModelParamsModule, only: gModRealParams, gModIntParams
+            use ModelFieldsModule,     only: gTransArr, gHorzArr
+            use ModelParamsModule,     only: gModRealParams, gModIntParams
             use Fftw3HelpersModule
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX, C_FLOAT
             implicit none
             include 'fftw3.f03'
-
-            REAL, intent(in) :: A(:)
-
-            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, base_idx, idx_A
-            REAL :: temp_calc, temp_calc_k
-
+    
+            REAL, intent(in)   :: A(:)
+            REAL, intent(out)  :: out_grid(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
+    
+            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, index
+            real(C_FLOAT) :: temp_calc, temp_calc_k, wave_cos, wave_sin
+            real(C_FLOAT) :: deriv_cos, deriv_sin
+    
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
             KMAX2 = gModIntParams%KMAX2
             LMAX2 = gModIntParams%LMAX2
-
+    
+            ! Clear the entire 2D spectral working array
+            gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+            
             !------------------------------------------------------ Start for Transform method FFTW3 MKL:
             ! Computing J(A,B)=dA/dx * dB/dy - dA/dy * dB/dx where A(k,l) = 2*(ac(k,l)*cosknx + as(k,l)*sinknx)sinly + sqrt(2)*az(l)*cosly
             !                                                  and B(k,l) = 2*(bc(k,l)*cosknx + bs(k,l)*sinknx)sinly + sqrt(2)*bz(l)*cosly
 
+            ! dA/dx where A = A(k,l) = 2*(ac(k,l)*cosknx + as(k,l)*sinknx)sinly + sqrt(2)*az(l)*cosly
+            ! equals -2*k*n*ac(k,l)sinknxsinly and 2*k*n*as(k,l)cosknxsinly
             ! 1. Load -2*k*n*ac(k,l)sinknxsinly and 2*k*n*as(k,l)cosknxsinly into the imaginary and real parts of Gc for each L
-            !  We zero the G1Plot version which is the same memory as G1 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
-            temp_calc = 2.0 * gModRealParams%RN * norm_fwd ! Do the normalization first so we dont have to normalize after the transform
+            ! We zero out_grid. This is to assure no 'leaks' of garbage
 
-            DO L = 1, LMAX2
-                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                base_idx = LMAX2 + 2 * (L - 1) + 1
-                DO K = 1, KMAX2
-                    idx_A = base_idx + 2 * LMAX2 * (K - 1)
-                    temp_calc_k = temp_calc * gHorzArr%RK(K)
-                    ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    gTransArr%GcZ(K + 1) = CMPLX( temp_calc_k * A(idx_A + 1), & ! as(k,l) cosknxsinly part
-                                             -temp_calc_k * A(idx_A), &       ! ac(k,l) sinknxsinly part
-                                             kind=C_FLOAT_COMPLEX)
-                END DO
-                !call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%G1(:, L))
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
-                DO K = 1, IXMAX
-                    gTransArr%G1(K, L) = gTransArr%GZonal(K)
-                END DO
-            END DO
-
-            ! For each x column assemble IYMAX-length complex spectrum and do c2r -> gTransArr%GZonal
-            do K = 1, IXMAX
-                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-
-                ! map stored l-modes (sine-only case; grid(K,L) holds s_l after x-transform )
+            ! ====================================================================
+            ! PART A: LOAD THE ZONAL MODES (d/dx of Zonal is zero)
+            ! ====================================================================
+            ! Column 1 (K=0) is left as 0.0 because zonal terms have no x-dependence.
+    
+            ! ====================================================================
+            ! PART B: LOAD THE WAVE MODES (Apply d/dx)
+            ! ====================================================================
+            ! 0.5 comes from basis function wave multiplier split, scaled by FFTW norm factor
+            temp_calc = 0.5_C_FLOAT 
+    
+            do K = 1, KMAX2
+                ! Compute Kn factor for this wave wavenumber (RN is domain scale factor)
+                temp_calc_k = temp_calc * gHorzArr%RK(K) * gModRealParams%RN
+        
                 do L = 1, LMAX2
-                    base_idx = L + 1             ! Fortran 1-based index for m = L
-                    ! sine contribution: tmpC[pos] += -i * (s_l/2); tmpC[neg] += +i * (s_l/2)
-                    gTransArr%GcZ(base_idx) = gTransArr%GcZ(base_idx) + CMPLX(0.0_C_FLOAT, -gTransArr%G1(K, L), kind=C_FLOAT_COMPLEX)
-                end do
-
-                ! Inverse complex->real along y (length IYMAX)
-                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
-
-                ! Copy gTransArr%GZonal into the non-contiguous grid row
-                do L = 1, IYMAX
-                    gTransArr%G1(K, L) = gTransArr%GZonal(L)
+                    ! Linear vector index calculations matching your layout
+                    index = LMAX2 + (K - 1) * (LMAX2 * 2) + (L - 1) * 2 + 1
+            
+                    wave_cos = A(index) * temp_calc_k      ! A(index) is the cosknxsinly part of the streamfunction spectral coefficient
+                    wave_sin = A(index + 1) * temp_calc_k  ! A(index + 1) is the sinknxsinly part of the streamfunction spectral coefficient
+            
+                    ! Apply d/dx analytical derivative rules:
+                    deriv_cos =  wave_sin
+                    deriv_sin = -wave_cos
+            
+                    ! Map to positive Y-frequency (+L slot)
+                    gTransArr%Gc(K + 1, L + 1) = CMPLX(-deriv_sin, -deriv_cos, kind=C_FLOAT_COMPLEX)
+            
+                    ! Map to negative Y-frequency (-L slot) with sine sign inversion
+                    gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(deriv_sin, deriv_cos, kind=C_FLOAT_COMPLEX)
                 end do
             end do
-
-            ! dA/dx is now in G1
+    
+            ! ====================================================================
+            ! PART C: EXECUTE 2D TRANSFORM
+            ! ====================================================================
+            call fftwf_execute_dft_c2r(plan_c2r_2d, gTransArr%Gc, out_grid)
+    
         end subroutine DoDADX
+        
 
         !> Does the transform of the d/dy part of the Jacobian calculation. The result is placed in gTransArr%G2.
         !! @param A The spectral coefficients of the streamfunction A = (ac(k,l)cosknx + as(k,l)sinknx)sinly + az(l)cosly
-        subroutine DODADY(A)
+        subroutine DoDADY(A, out_grid)
             use ArrayDimensionsModule, only: gCurrentDims
-            use ConstantsModule, only: SQRT2
-            use ModelFieldsModule, only: gTransArr, gHorzArr
-            use ModelParamsModule, only: gModRealParams, gModIntParams
+            use ConstantsModule, only: SQRT22
+            use ModelFieldsModule,     only: gTransArr
+            use ModelParamsModule,     only: gModIntParams
             use Fftw3HelpersModule
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX, C_FLOAT
             implicit none
             include 'fftw3.f03'
-
-            REAL , intent(in) :: A(:)
-
-            ! Local variables
-            integer :: K, L,  IXMAX, IYMAX, KMAX2, LMAX2, base_idx, idx_A
-            REAL :: temp_calc, tmp
-            
+    
+            REAL, intent(in)   :: A(:)
+            REAL, intent(out)  :: out_grid(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
+    
+            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, index
+            real(C_FLOAT) :: temp_calc, temp_calc_l, wave_cos, wave_sin, zonal_val
+            real(C_FLOAT) :: deriv_cos, deriv_sin, deriv_zonal
+    
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
             KMAX2 = gModIntParams%KMAX2
             LMAX2 = gModIntParams%LMAX2
+    
+            ! Clear the entire 2D spectral working array
+            gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+
+            ! ====================================================================
+            ! PART A: LOAD THE ZONAL MODES (d/dy turns cos(Ly) into -L*sin(Ly))
+            ! ====================================================================
+            ! SQRT2 multiplier comes from original basis function
+            temp_calc = SQRT22
+    
+            do L = 1, LMAX2
+                ! Analytical y-wavenumber L scaling
+                temp_calc_l = temp_calc * REAL(L, C_FLOAT) 
+        
+                zonal_val = A(L) * temp_calc_l
+                deriv_zonal = -zonal_val ! d/dy[cos(Ly)] = -L*sin(Ly)
+        
+                ! Pure sine wave components in 2D FFT mapping:
+                ! Positive frequency slot gets -deriv*i
+                gTransArr%Gc(1, L + 1) = CMPLX(0.0_C_FLOAT, -deriv_zonal, kind=C_FLOAT_COMPLEX)
+                ! Negative frequency slot gets +deriv*i (conjugate symmetry)
+                gTransArr%Gc(1, IYMAX - L + 1) = CMPLX(0.0_C_FLOAT, deriv_zonal, kind=C_FLOAT_COMPLEX)
+            end do
 
             !------------------------------------------------------ Start for Transform method FFTW3 MKL:
             ! Computing J(A,B)=dA/dx * dB/dy - dA/dy * dB/dx where A(k,l) = 2*(ac(k,l)*cosknx + as(k,l)*sinknx)sinly + sqrt(2)*az(l)*cosly
             !                                                  and B(k,l) = 2*(bc(k,l)*cosknx + bs(k,l)*sinknx)sinly + sqrt(2)*bz(l)*cosly
 
             ! 1. Load  2*l*ac(k,l)cosknxcosly and 2*l*as(k,l)sinknxcosly into the real and imaginary parts of Gc for each L
-            !  We zero the G2Plot version which is the same memory as G2 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            !  We zero the out_grid. This is to assure no 'leaks' of garbage
 
-            temp_calc = 2.0 * norm_fwd
-            DO L = 1, LMAX2
-                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                base_idx = LMAX2 + 2 * (L - 1) + 1
-                tmp = gHorzArr%RL(L) * temp_calc ! Do the normalization first so we dont have to normalize after the transform
-                DO K = 1, KMAX2
-                    idx_A = base_idx + 2 * LMAX2 * (K - 1)
-                    ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    ! Need to ignore the cos(0)y part. We do not have it.
-                    gTransArr%GcZ(K + 1) = CMPLX( tmp * A(idx_A), &     ! ac(k,l) cosknxcosly part
-                                               -tmp * A(idx_A + 1), &  ! as(k,l) sinknxcosly part
-                                             kind=C_FLOAT_COMPLEX)
-                END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
-                DO K = 1, IXMAX
-                    gTransArr%G2(K, L + 1) = gTransArr%GZonal(K)
-                END DO
-            END DO
-
-            ! For each x column assemble IYMAX-length complex spectrum and do c2r -> gTransArr%GZonal
-            do K = 1, IXMAX
-                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-
-                ! map stored l-modes (sine-only case; grid(K,L) holds s_l after x-transform )
+            ! ====================================================================
+            ! PART B: LOAD THE WAVE MODES (d/dy turns sin(Ly) into L*cos(Ly))
+            ! ====================================================================
+            ! 0.5 multiplier comes from original wave basis function split, scaled by FFTW norm factor
+            temp_calc = 0.5_C_FLOAT
+    
+            do K = 1, KMAX2
                 do L = 1, LMAX2
-                    base_idx = L             ! Fortran 1-based index for m = L
-                    gTransArr%GcZ(base_idx) = gTransArr%GcZ(base_idx) + CMPLX( gTransArr%G2(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-                end do
-
-                ! Inverse complex->real along y (length IYMAX)
-                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
-
-                do L = 1, IYMAX
-                    gTransArr%G2(K, L) = gTransArr%GZonal(L)
+                    temp_calc_l = temp_calc * REAL(L, C_FLOAT)
+            
+                    index = LMAX2 + (K - 1) * (LMAX2 * 2) + (L - 1) * 2 + 1
+            
+                    wave_cos = A(index) * temp_calc_l
+                    wave_sin = A(index + 1) * temp_calc_l
+            
+                    ! d/dy [ sin(Ly) ] = L * cos(Ly)
+                    ! The wave basis was sin(Ly), now it behaves as cos(Ly)
+                    deriv_cos = wave_cos
+                    deriv_sin = wave_sin
+            
+                    ! Map to positive Y-frequency (+L slot)
+                    ! For cos(Kx)*cos(Ly) -> Real part, positive sign
+                    ! For sin(Kx)*cos(Ly) -> Imaginary part, negative sign
+                    gTransArr%Gc(K + 1, L + 1) = CMPLX(deriv_cos, -deriv_sin, kind=C_FLOAT_COMPLEX)
+            
+                    ! Map to negative Y-frequency (-L slot)
+                    ! Because cos(-Ly) = cos(Ly), signs DO NOT invert across the boundary!
+                    gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(deriv_cos, -deriv_sin, kind=C_FLOAT_COMPLEX)
                 end do
             end do
+    
+            ! ====================================================================
+            ! PART C: EXECUTE 2D TRANSFORM
+            ! ====================================================================
+            call fftwf_execute_dft_c2r(plan_c2r_2d, gTransArr%Gc, out_grid)
+    
+        end subroutine DoDADY
 
-            ! 3. Zonal components: Load   -l*sqrt(2)*az(l)sinly into GZonal
-            gTransArr%GZonal = 0.0
-            gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! Fortran shortcut to zero an entire array
-            temp_calc = -SQRT2 * norm_cosly
+        subroutine DoGridToSpectral(FS)
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ConstantsModule, only: SQRT2
+            use ModelFieldsModule,     only: gTransArr
+            use ModelParamsModule,     only: gModRealParams, gModIntParams
+            use Fftw3HelpersModule
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX, C_FLOAT
+            implicit none
+            include 'fftw3.f03'
+    
+            REAL, intent(out)  :: FS(:)
+    
+            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I
+            real(C_FLOAT) :: norm_factor_2d, wave_cos, wave_sin, zonal_val
+    
+            IXMAX = gCurrentDims%IXMAX
+            IYMAX = gCurrentDims%IYMAX
+            KMAX2 = gModIntParams%KMAX2
+            LMAX2 = gModIntParams%LMAX2
+    
+            ! Initialize output vector to zero
+            FS = 0.0_C_FLOAT
+    
+            ! Clear 2D spectral scratch array before running the plan
+            gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+    
+            ! ====================================================================
+            ! STEP 1: EXECUTE COMPREHENSIVE 2D REAL-TO-COMPLEX FFT
+            ! ====================================================================
+            ! Input:  gTransArr%G4 (Real array of size IXMAX, IYMAX)
+            ! Output: gTransArr%Gc (Complex array of size IXMAX/2 + 1, IYMAX)
+            call fftwf_execute_dft_r2c(plan_r2c_2d, gTransArr%G4, gTransArr%Gc)
+    
+            ! Global inverse scaling factor to normalize the raw FFTW accumulation
+            ! norm_inv_wave is 2.0 / (IXMAX * IYMAX)
+            norm_factor_2d = 0.5_C_FLOAT * norm_inv_wave
+    
+            ! ====================================================================
+            ! STEP 2: EXTRACT ZONAL PROFILE (cosLy boundaries at K=0)
+            ! ====================================================================
             do L = 1, LMAX2
-                gTransArr%GcZ(L + 1) = CMPLX( 0.0, &         ! cosly part which is 0
-                                            -temp_calc * gHorzArr%RL(L) * A(L), &    ! az(l)sinly
-                                            kind=C_FLOAT_COMPLEX)
+                ! Extract and average between positive and negative Y frequencies 
+                ! to enforce pure cos(Ly) projection symmetry.
+                zonal_val = REAL(gTransArr%Gc(1, L + 1)) + REAL(gTransArr%Gc(1, IYMAX - L + 1))
+                FS(L) = zonal_val * norm_factor_2d
             end do
-            ! Do transform: 
-            call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
-
-            ! 17. Add GZonal to grid for every x. G2 now has gridpoint space.
-            do L = 1, IYMAX
-                DO K = 1, IXMAX
-                    gTransArr%G2(K, L) = gTransArr%G2(K, L) + gTransArr%GZonal(L)
+    
+            ! ====================================================================
+            ! STEP 3: EXTRACT WAVE COMPONENTS (sinLy boundaries at K > 0)
+            ! ====================================================================
+            norm_factor_2d = norm_inv_wave
+            do K = 1, KMAX2
+                do L = 1, LMAX2
+                    ! Structural address pointer inside the compacted linear array
+                    I = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
+            
+                    ! Decode the components by tracking the anti-symmetric behavior of sin(Ly)
+                    ! Forward model set Gc(L+1) = (-sin, -cos) and Gc(-L) = (sin, cos)
+            
+                    ! 1. Extract Cos(Kx)*Sin(Ly) -> Mapped to Imaginary parts
+                    wave_cos = AIMAG(gTransArr%Gc(K + 1, IYMAX - L + 1)) - AIMAG(gTransArr%Gc(K + 1, L + 1))
+            
+                    ! 2. Extract Sin(Kx)*Sin(Ly) -> Mapped to Real parts
+                    wave_sin = REAL(gTransArr%Gc(K + 1, IYMAX - L + 1)) - REAL(gTransArr%Gc(K + 1, L + 1))
+            
+                    ! Store values normalized 
+                    FS(I)     = wave_cos * norm_factor_2d
+                    FS(I + 1) = wave_sin * norm_factor_2d
                 end do
             end do
-            ! ================ dA/dy is now in G2
-        end subroutine DODADY
 
+        end subroutine DoGridToSpectral
         !*****************************Routines to compute the diabatic tendency terms:
         SUBROUTINE STERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams
