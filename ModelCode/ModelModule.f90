@@ -760,7 +760,7 @@ module ModelModule
 
             ! 3. Multiply G2 * G1 pointwise. Store in G4. G4 now has dA/dx * dB/dy in grid point space.
             !  We zero the G4Plot version which is the same memory as G4 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G4Plot = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            gTransArr%G4 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
             !do L = 1, IYMAX
             !    DO K = 1, IXMAX
             !        gTransArr%G4(K, L) = gTransArr%G1(K, L) * gTransArr%G2(K, L)
@@ -794,7 +794,7 @@ module ModelModule
             !    end do
             !end do
             !  We zero the G3Plot version which is the same memory as G3 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G3Plot = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            gTransArr%G3 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
 
             gTransArr%G3(1:IXMAX, 1:IYMAX) = gTransArr%G1(1:IXMAX, 1:IYMAX) * gTransArr%G2(1:IXMAX, 1:IYMAX)
             !call plotDiagnostic(gTransArr%G3, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
@@ -819,7 +819,7 @@ module ModelModule
             ! We also need to remove the zonal average from the grid point data before we do the wave transforms.
 
             FS = 0.0 
-            gTransArr%GZonalPlot = 0.0
+            gTransArr%GZonal = 0.0
             inverseValue = 2.0 / REAL(IXMAX)
 
             ! 1. HIGH-SPEED ZONAL AVERAGE AND REMOVAL (Replaces the first two heavy loops)
@@ -832,12 +832,12 @@ module ModelModule
             end do
 
             ! 2. INVERSE TRANSFORM OF THE ZONAL PROFILE
-            gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)
-            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%Gc)
+            gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)
+            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%GcZ)
 
             inverseValue = norm_inv_cosly / SQRT2
             ! Load cosly tendencies into FS with full-array slicing and normalization
-            FS(1 : LMAX2) = REAL(gTransArr%Gc(2 : LMAX2 + 1)) * inverseValue
+            FS(1 : LMAX2) = REAL(gTransArr%GcZ(2 : LMAX2 + 1)) * inverseValue
 
             ! ==========================================================
             ! STEP 1: EXTRACT THE Y-SINES SAFELY (Column by Column)
@@ -847,21 +847,21 @@ module ModelModule
             do K = 1, IXMAX
     
                 ! 1. Clear your 1D complex scratchpad
-                gTransArr%Gc = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
     
                 ! 2. Gather your real grid column into the REAL part of Gc
                 do L = 1, IYMAX
-                    gTransArr%Gc(L) = CMPLX(gTransArr%G4(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                    gTransArr%GcZ(L) = CMPLX(gTransArr%G4(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
                 end do
     
                 ! Run your 1D Y-transform on the properly aligned vector
-                call fftwf_execute_dft(plan_y_c2c_1d, gTransArr%Gc, gTransArr%Gc)
+                call fftwf_execute_dft(plan_y_c2c_1d, gTransArr%GcZ, gTransArr%GcZ)
     
                 ! 4. Directly decode the exact manual mapping your forward model used!
                 !    Forward wrote: Gc(L+1) = (0, -grid) and Gc(IYMAX-L+1) = (0, grid)
                 !    The exact inverse to extract this amplitude from a C2C spectrum is:
                 do L = 1, LMAX2
-                    gTransArr%G1(K, L) = AIMAG(gTransArr%Gc(IYMAX - L + 1)) - AIMAG(gTransArr%Gc(L + 1))
+                    gTransArr%G1(K, L) = AIMAG(gTransArr%GcZ(IYMAX - L + 1)) - AIMAG(gTransArr%GcZ(L + 1))
                 end do
             end do
 
@@ -872,17 +872,17 @@ module ModelModule
     
                 ! Since the first dimension of Y_Sine_Grid is X, this row-slice 
                 ! is perfectly contiguous and safe to pass straight to FFTW
-                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G1(1:IXMAX, L), gTransArr%Gc)
+                call fftwf_execute_dft_r2c(plan_x_r2c_1d, gTransArr%G1(1:IXMAX, L), gTransArr%GcZ)
     
                 ! Distribute the generated wave components using your explicit formula
                 do K = 1, KMAX2
                     I = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
         
                     ! Cos(Kx)*Sin(Ly)
-                    FS(I)     =  REAL(gTransArr%Gc(K + 1)) * inverseValue
+                    FS(I)     =  REAL(gTransArr%GcZ(K + 1)) * inverseValue
         
                     ! Sin(Kx)*Sin(Ly)
-                    FS(I + 1) = -AIMAG(gTransArr%Gc(K + 1)) * inverseValue
+                    FS(I + 1) = -AIMAG(gTransArr%GcZ(K + 1)) * inverseValue
                 end do
             end do
 
@@ -917,22 +917,22 @@ module ModelModule
 
             ! 1. Load -2*k*n*ac(k,l)sinknxsinly and 2*k*n*as(k,l)cosknxsinly into the imaginary and real parts of Gc for each L
             !  We zero the G1Plot version which is the same memory as G1 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G1Plot = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
+            gTransArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             temp_calc = 2.0 * gModRealParams%RN * norm_fwd ! Do the normalization first so we dont have to normalize after the transform
 
             DO L = 1, LMAX2
-                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
                 base_idx = LMAX2 + 2 * (L - 1) + 1
                 DO K = 1, KMAX2
                     idx_A = base_idx + 2 * LMAX2 * (K - 1)
                     temp_calc_k = temp_calc * gHorzArr%RK(K)
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
-                    gTransArr%Gc(K + 1) = CMPLX( temp_calc_k * A(idx_A + 1), & ! as(k,l) cosknxsinly part
+                    gTransArr%GcZ(K + 1) = CMPLX( temp_calc_k * A(idx_A + 1), & ! as(k,l) cosknxsinly part
                                              -temp_calc_k * A(idx_A), &       ! ac(k,l) sinknxsinly part
                                              kind=C_FLOAT_COMPLEX)
                 END DO
-                !call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G1(:, L))
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%GZonal)
+                !call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%G1(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
                 DO K = 1, IXMAX
                     gTransArr%G1(K, L) = gTransArr%GZonal(K)
                 END DO
@@ -940,17 +940,17 @@ module ModelModule
 
             ! For each x column assemble IYMAX-length complex spectrum and do c2r -> gTransArr%GZonal
             do K = 1, IXMAX
-                gTransArr%Gc = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
 
                 ! map stored l-modes (sine-only case; grid(K,L) holds s_l after x-transform )
                 do L = 1, LMAX2
                     base_idx = L + 1             ! Fortran 1-based index for m = L
                     ! sine contribution: tmpC[pos] += -i * (s_l/2); tmpC[neg] += +i * (s_l/2)
-                    gTransArr%Gc(base_idx) = gTransArr%Gc(base_idx) + CMPLX(0.0_C_FLOAT, -gTransArr%G1(K, L), kind=C_FLOAT_COMPLEX)
+                    gTransArr%GcZ(base_idx) = gTransArr%GcZ(base_idx) + CMPLX(0.0_C_FLOAT, -gTransArr%G1(K, L), kind=C_FLOAT_COMPLEX)
                 end do
 
                 ! Inverse complex->real along y (length IYMAX)
-                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%Gc, gTransArr%GZonal)
+                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
 
                 ! Copy gTransArr%GZonal into the non-contiguous grid row
                 do L = 1, IYMAX
@@ -991,22 +991,22 @@ module ModelModule
 
             ! 1. Load  2*l*ac(k,l)cosknxcosly and 2*l*as(k,l)sinknxcosly into the real and imaginary parts of Gc for each L
             !  We zero the G2Plot version which is the same memory as G2 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G2Plot = 0.0    ! Fortran short cut to zero an entire array of all dimensions
+            gTransArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
 
             temp_calc = 2.0 * norm_fwd
             DO L = 1, LMAX2
-                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
                 base_idx = LMAX2 + 2 * (L - 1) + 1
                 tmp = gHorzArr%RL(L) * temp_calc ! Do the normalization first so we dont have to normalize after the transform
                 DO K = 1, KMAX2
                     idx_A = base_idx + 2 * LMAX2 * (K - 1)
                     ! Skip the first entry as that is the k=0 component which we do not have for either the cosknx or sinknx parts
                     ! Need to ignore the cos(0)y part. We do not have it.
-                    gTransArr%Gc(K + 1) = CMPLX( tmp * A(idx_A), &     ! ac(k,l) cosknxcosly part
+                    gTransArr%GcZ(K + 1) = CMPLX( tmp * A(idx_A), &     ! ac(k,l) cosknxcosly part
                                                -tmp * A(idx_A + 1), &  ! as(k,l) sinknxcosly part
                                              kind=C_FLOAT_COMPLEX)
                 END DO
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%GZonal)
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
                 DO K = 1, IXMAX
                     gTransArr%G2(K, L + 1) = gTransArr%GZonal(K)
                 END DO
@@ -1014,16 +1014,16 @@ module ModelModule
 
             ! For each x column assemble IYMAX-length complex spectrum and do c2r -> gTransArr%GZonal
             do K = 1, IXMAX
-                gTransArr%Gc = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
 
                 ! map stored l-modes (sine-only case; grid(K,L) holds s_l after x-transform )
                 do L = 1, LMAX2
                     base_idx = L             ! Fortran 1-based index for m = L
-                    gTransArr%Gc(base_idx) = gTransArr%Gc(base_idx) + CMPLX( gTransArr%G2(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                    gTransArr%GcZ(base_idx) = gTransArr%GcZ(base_idx) + CMPLX( gTransArr%G2(K, L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
                 end do
 
                 ! Inverse complex->real along y (length IYMAX)
-                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%Gc, gTransArr%GZonal)
+                call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
 
                 do L = 1, IYMAX
                     gTransArr%G2(K, L) = gTransArr%GZonal(L)
@@ -1031,21 +1031,21 @@ module ModelModule
             end do
 
             ! 3. Zonal components: Load   -l*sqrt(2)*az(l)sinly into GZonal
-            gTransArr%GZonalPlot = 0.0
-            gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! Fortran shortcut to zero an entire array
+            gTransArr%GZonal = 0.0
+            gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! Fortran shortcut to zero an entire array
             temp_calc = -SQRT2 * norm_cosly
             do L = 1, LMAX2
-                gTransArr%Gc(L + 1) = CMPLX( 0.0, &         ! cosly part which is 0
+                gTransArr%GcZ(L + 1) = CMPLX( 0.0, &         ! cosly part which is 0
                                             -temp_calc * gHorzArr%RL(L) * A(L), &    ! az(l)sinly
                                             kind=C_FLOAT_COMPLEX)
             end do
             ! Do transform: 
-            call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%Gc, gTransArr%GZonalPlot)
+            call fftwf_execute_dft_c2r(plan_y_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
 
             ! 17. Add GZonal to grid for every x. G2 now has gridpoint space.
             do L = 1, IYMAX
                 DO K = 1, IXMAX
-                    gTransArr%G2(K, L) = gTransArr%G2(K, L) + gTransArr%GZonalPlot(L)
+                    gTransArr%G2(K, L) = gTransArr%G2(K, L) + gTransArr%GZonal(L)
                 end do
             end do
             ! ================ dA/dy is now in G2

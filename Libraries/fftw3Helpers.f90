@@ -79,9 +79,9 @@ module Fftw3HelpersModule
             real(C_FLOAT), allocatable :: dummy_r_1d(:)
             complex(C_FLOAT_COMPLEX), allocatable :: dummy_c_1d(:)
 
-            real(C_FLOAT), pointer :: dummy_r_2d(:, :)
-            complex(C_FLOAT_COMPLEX), pointer :: dummy_c_2d(:, :)
-            type(C_PTR) :: p_dummy_r, p_dummy_c
+            ! Dummy arrays for 2d array planning
+            real(C_FLOAT), allocatable :: dummy_r_2d(:, :)
+            complex(C_FLOAT_COMPLEX), allocatable :: dummy_c_2d(:, :)
 
             ! Clean up existing plans
             if (c_associated(plan_x_c2r_1d)) call fftw_destroy_plan(plan_x_c2r_1d)
@@ -108,20 +108,21 @@ module Fftw3HelpersModule
             ! Allocate dummy arrays matching the size of the 1D buffers used during execution
             allocate(dummy_r_1d(max(Nx, Ny))) ! Need size Nx for X output, size Ny for Y input/output
             allocate(dummy_c_1d(Nx + 1))    ! Need size Nx+1 for X input/output
-            p_dummy_r = fftw_alloc_real(int(Nx * Ny, C_SIZE_T)) ! 
-            call c_f_pointer(p_dummy_r, dummy_r_2d, [Ny, Nx])
-            p_dummy_c = fftw_alloc_complex(int(Nx * Ny, C_SIZE_T))
-            call c_f_pointer(p_dummy_c, dummy_c_2d, [Ny, Nx])
-
             
+            ! Allocate dummy 2D arrays for the 2D plans.
+            allocate(dummy_r_2d(Nx, Ny))
+            allocate(dummy_c_2d((Nx/2 + 1), Ny))
             ! --- Plan 2D C2R (Spectral to Grid) ---
-            plan_c2r_2d = fftwf_plan_dft_c2r_2d(Nx, Ny / 2 + 1, dummy_c_2d, dummy_r_2d, FFTW_MEASURE)
+            plan_c2r_2d = fftwf_plan_dft_c2r_2d(Ny, Nx, dummy_c_2d, dummy_r_2d, FFTW_MEASURE)
 
             ! --- Plan 2D R2C (Grid to Spectral) ---
-            plan_r2c_2d = fftwf_plan_dft_r2c_2d(Nx, Ny / 2 + 1, dummy_r_2d, dummy_c_2d, FFTW_MEASURE)
+            plan_r2c_2d = fftwf_plan_dft_r2c_2d(Ny, Nx, dummy_r_2d, dummy_c_2d, FFTW_MEASURE)
 
+
+            
+            
+            ! --- Plan 1D C2C (Spectral to grid) ---
             plan_y_c2c_1d = fftwf_plan_dft_1d(Ny, dummy_c_1d, dummy_c_1d, FFTW_FORWARD, FFTW_MEASURE)
-
 
             ! --- Plan 1D C2R (Spectral to Grid, X-direction) ---
             plan_x_c2r_1d = fftwf_plan_dft_c2r_1d(Nx, dummy_c_1d, dummy_r_1d, FFTW_MEASURE)
@@ -138,16 +139,16 @@ module Fftw3HelpersModule
 
             plan_y_FFTW_REDFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT10, FFTW_MEASURE) ! Grid to spectral for FFTW_REDFT01 spectral to grid
             plan_y_FFTW_REDFT01 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT01, FFTW_MEASURE)
-
-
-            plan_y_FFTW_RODFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT10, FFTW_MEASURE)
-            plan_y_FFTW_RODFT01 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_RODFT01, FFTW_MEASURE)
+            !
+            !
+            plan_y_fftw_rodft10 = fftwf_plan_r2r_1d(ny, dummy_r_1d, dummy_r_1d, fftw_rodft10, fftw_measure)
+            plan_y_fftw_rodft01 = fftwf_plan_r2r_1d(ny, dummy_r_1d, dummy_r_1d, fftw_rodft01, fftw_measure)
 
 
             deallocate(dummy_r_1d)
             deallocate(dummy_c_1d)
-            call fftw_free(p_dummy_r)
-            call fftw_free(p_dummy_c)
+            deallocate(dummy_r_2d)
+            deallocate(dummy_c_2d)
 
 
         end subroutine setup_fftw_plans
@@ -173,10 +174,10 @@ module Fftw3HelpersModule
             gTransArr%G2 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                if (L .EQ. 1) gTransArr%Gc(2) = CMPLX( norm_fwd, norm_fwd, kind=C_FLOAT_COMPLEX)
+                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                if (L .EQ. 1) gTransArr%GcZ(2) = CMPLX( norm_fwd, norm_fwd, kind=C_FLOAT_COMPLEX)
 
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G2(:, L))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%G2(:, L))
             END DO
             ! Now transform the sinly part which is bounded and uses r2r transforms column by column
             DO I = 1, gCurrentDims%IYMAX
@@ -257,10 +258,10 @@ module Fftw3HelpersModule
             gTransArr%G1 = 0.0    ! Fortran short cut to zero an entire array of all dimensions. This is the output array for the transform
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                if (L .EQ. 1) gTransArr%Gc(2) = CMPLX( norm_fwd, 0, kind=C_FLOAT_COMPLEX)
+                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                if (L .EQ. 1) gTransArr%GcZ(2) = CMPLX( norm_fwd, 0, kind=C_FLOAT_COMPLEX)
 
-                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%Gc, gTransArr%G1(:, L + 1))
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%G1(:, L + 1))
             END DO
             ! Now transform the cosly part which is bounded and uses r2r transforms column by column
             DO I = 1, gCurrentDims%IYMAX
@@ -312,9 +313,9 @@ module Fftw3HelpersModule
             ! Now the kx part
             DO L = 1, gModIntParams%LMAX2
                 ! Calculate loop-invariant values outside the inner loop
-                gTransArr%Gc = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
-                call fftwf_execute_dft_r2C(plan_x_r2c_1d, gTransArr%G2(:, L), gTransArr%Gc)
-                write(msg, '(*(F9.6, 1X))') (gTransArr%Gc(K) * norm_inv_wave, K = 1, gModIntParams%KMAX2 + 1)
+                gTransArr%GcZ = CMPLX(0.0, 0.0, kind=C_FLOAT_COMPLEX)  ! This is the input array for the transform
+                call fftwf_execute_dft_r2C(plan_x_r2c_1d, gTransArr%G2(:, L), gTransArr%GcZ)
+                write(msg, '(*(F9.6, 1X))') (gTransArr%GcZ(K) * norm_inv_wave, K = 1, gModIntParams%KMAX2 + 1)
                 call LogMessage(msg)
             END DO
             ! Note there is no need for a sign reversal on the sinkx terms like there was in FFT991
