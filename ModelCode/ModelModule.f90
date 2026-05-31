@@ -700,18 +700,7 @@ module ModelModule
             CALL ComputeJacobianByTransform(FS, A, B)
 
         END subroutine NONLIN
-        
-        subroutine pauseRun()
-            use ConstantsModule, only: PAUSED
-            use PlotModule, only: PumpMessages
-            use ModelParamsModule, only: gModelState
-            gModelState%runState = PAUSED
-            do while (gModelState%runState == PAUSED)
-                CALL PumpMessages()
-                call sleep(100) ! Suspends the thread for 100ms. 0% CPU usage.
-            end do
-        end subroutine pauseRun
-        
+
         !> Routine to compute the nonlinear Jacobian J(A,B) in gridpoint space
         !> and return the tendencies in spectral space in FS
         !! @param FS The spectral form of the computed Jacobian
@@ -731,10 +720,8 @@ module ModelModule
             REAL, intent(in) :: A(:), B(:)
             REAL, intent(out) :: FS(:)
 
-            integer I, K, L, i_temp, IXMAX, IYMAX, KMAX2, LMAX2, base_idx, idx_A
-            REAL :: inverseValue
-            ! In FFT991 the spectral coefficient for both cosknxsinly and sinknxsinly are loaded into the G1 arrays
-            ! prior to invoking the transform.
+            integer IXMAX, IYMAX
+
             !   dA/dx is -2*k*n*ac(k,l)sinknxsinly and 2*k*n*as(k,l)cosknxsinly
             !   dB/dy is    2*l*bc(k,l)cosknxcosly and   2*l*bs(k,l)sinknxcosly and -sqrt(2)*l*bz(l)sinly
 
@@ -744,72 +731,43 @@ module ModelModule
             ! 1. dA/dx: 
             call DODADX(A, gTransArr%G1)
             ! ================= dA/dx is now in G1
-            !call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
+            call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND) / 60.)
 
             ! 2. dB/dy: 
             call DODADY(B, gTransArr%G2)
-            !call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
+            call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND) / 240.)
             ! ================ dB/dy is now in G2
             
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
-            KMAX2 = gModIntParams%KMAX2
-            LMAX2 = gModIntParams%LMAX2
 
             ! 3. Multiply G2 * G1 pointwise. Store in G4. G4 now has dA/dx * dB/dy in grid point space.
-            !  We zero the G4Plot version which is the same memory as G4 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G4 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
-            !do L = 1, IYMAX
-            !    DO K = 1, IXMAX
-            !        gTransArr%G4(K, L) = gTransArr%G1(K, L) * gTransArr%G2(K, L)
-            !    end do
-            !end do
-            ! Equivalent to the above double do loop
             gTransArr%G4(1:IXMAX, 1:IYMAX) = gTransArr%G1(1:IXMAX, 1:IYMAX) * gTransArr%G2(1:IXMAX, 1:IYMAX)
-            !call plotDiagnostic(gTransArr%G4, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
+            call plotDiagnostic(gTransArr%G4, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
+
             ! ================================ G4 now has dA/dx * dB/dy in grid point space.
-            ! G1, G2, and G3 can be reused now.
+            ! G1 and G2 can be reused now.
             !   dA/dy is    2*l*ac(k,l)cosknxcosly and   2*l*as(k,l)sinknxcosly and -sqrt(2)*l*az(l)sinly
             !   dB/dx is -2*k*n*bc(k,l)sinknxsinly and 2*k*n*bs(k,l)cosknxsinly
 
             ! 4. dB/dx:
             call DODADX(B, gTransArr%G1)
-            !call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
+            call plotDiagnostic(gTransArr%G1, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND) / 60.)
             ! ================= dB/dx is now in G1
 
             ! 5. dA/dy:
             call DODADY(A, gTransArr%G2)
-            !call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
+            call plotDiagnostic(gTransArr%G2, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND) / 240.)
             ! ================ dA/dy is now in G2
 
             ! 6. Multiply G1 * G2 pointwise. Store in G3. G3 now has dA/dy * dB/x in grid point space.
-            !do L = 1, IYMAX
-            !    DO K = 1, IXMAX
-            !        gTransArr%G3(K, L) = gTransArr%G1(K, L) * gTransArr%G2(K, L)
-            !    end do
-            !end do
-            !  We zero the G3Plot version which is the same memory as G3 with two extra points each dimension. This is to assure no 'leaks' of garbage
-            gTransArr%G3 = 0.0    ! Fortran short cut to zero an entire array of all dimensions
 
             gTransArr%G3(1:IXMAX, 1:IYMAX) = gTransArr%G1(1:IXMAX, 1:IYMAX) * gTransArr%G2(1:IXMAX, 1:IYMAX)
-            !call plotDiagnostic(gTransArr%G3, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !Call pauseRun()
+            call plotDiagnostic(gTransArr%G3, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
 
             ! 7. Subtract G3 from G4 pointwise. Store in G4. G4 now has J(A,B) in grid point space.
-            !do L = 1, gCurrentDims%IYMAX
-            !    DO K = 1, gCurrentDims%IXMAX
-            !        gTransArr%G4(K, L) = gTransArr%G4(K, L) - gTransArr%G3(K, L)
-            !    end do
-            !end do
             gTransArr%G4(1:IXMAX, 1:IYMAX) = gTransArr%G4(1:IXMAX, 1:IYMAX) - gTransArr%G3(1:IXMAX, 1:IYMAX)
-            !call plotDiagnostic(gTransArr%G4, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
-            !call pauseRun()
-            !gTransArr%G3(1:IXMAX, 1:IYMAX) = gTransArr%G4(1:IXMAX, 1:IYMAX)
+            call plotDiagnostic(gTransArr%G4, gContourIntervals%Contours(ADV_BETA_HGT_TEND), gPlotScales(ADV_BETA_HGT_TEND))
 
 
             ! ========================== G4 now has the tendencies due to J(A,B) in grid point space.
@@ -817,7 +775,7 @@ module ModelModule
             ! Get the cosly components. We do this by first computing the zonal average of G4 and
             ! placing it in gTransArr%GZonal and taking the inverse transform with plan_y_FFTW_REDFT10
             ! We also need to remove the zonal average from the grid point data before we do the wave transforms.
-            
+
             call DoGridToSpectral(FS)
 
         end subroutine ComputeJacobianByTransform
@@ -881,12 +839,11 @@ module ModelModule
                     wave_sin = A(index + 1) * temp_calc_k  ! A(index + 1) is the sinknxsinly part of the streamfunction spectral coefficient
             
                     ! Apply d/dx analytical derivative rules:
-                    deriv_cos =  wave_sin
-                    deriv_sin = -wave_cos
-            
+                    deriv_cos =  wave_sin       !  2*k*n*as(k,l)cosknxsinly
+                    deriv_sin = -wave_cos       ! -2*k*n*ac(k,l)sinknxsinly
                     ! Map to positive Y-frequency (+L slot)
                     gTransArr%Gc(K + 1, L + 1) = CMPLX(-deriv_sin, -deriv_cos, kind=C_FLOAT_COMPLEX)
-            
+
                     ! Map to negative Y-frequency (-L slot) with sine sign inversion
                     gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(deriv_sin, deriv_cos, kind=C_FLOAT_COMPLEX)
                 end do
@@ -971,8 +928,8 @@ module ModelModule
             
                     ! d/dy [ sin(Ly) ] = L * cos(Ly)
                     ! The wave basis was sin(Ly), now it behaves as cos(Ly)
-                    deriv_cos = wave_cos
-                    deriv_sin = wave_sin
+                    deriv_cos = wave_cos ! 2*l*ac(k,l)cosknxcosly
+                    deriv_sin = wave_sin ! 2*l*as(k,l)sinknxcosly
             
                     ! Map to positive Y-frequency (+L slot)
                     ! For cos(Kx)*cos(Ly) -> Real part, positive sign
@@ -1004,8 +961,19 @@ module ModelModule
     
             REAL, intent(out)  :: FS(:)
     
-            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I
+            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I, m_idx
             real(C_FLOAT) :: norm_factor_2d, wave_cos, wave_sin, zonal_val
+            
+            ! This does not work as the double periodic grid transform does not know about the model 
+            ! boundary conditions. It will take a sinnxcos2y structure and understand that it is a 
+            ! valid component. In the rigid wall model, cos2y is not allowed and has to be reprojected
+            ! onto sinLy components. This is what the interaction coefficients do at a great cost.
+            !
+            ! A possible workaround now that we have gotten this far.
+            ! 1. Take the zonal average from Y = 1 to IYMAX/2. Keep that array for the cosLy zonal flows.
+            ! 2. Subtract that from the original grid so that there is no zonal mean left (ignore y = IYMAX/2 to IYMAX)
+            ! 3. Replace y = IYMAX/2 to IYMAX with - (y = 1 to IYMAX/2). Odd symmetry. Then transform. This will force
+            !    only sinLy components.
     
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
@@ -1014,7 +982,61 @@ module ModelModule
     
             ! Initialize output vector to zero
             FS = 0.0_C_FLOAT
+            
+            ! Compute the zonal average to ge the cos(Ly) components.
+            I = IYMAX / 2
+            ! =====================================================================
+            ! 1. Handle the First Stationary Point (L = 1, y = 0)
+            ! =====================================================================
+            gTransArr%GZonal(1) = sum(gTransArr%G4(:, 1)) / REAL(IXMAX, C_FLOAT)
+            gTransArr%G4(:, 1)  = gTransArr%G4(:, 1) - gTransArr%GZonal(1)
+            ! No reflection needed for G4(:,1) or GZonal(1) because it maps to itself 
+            ! across the periodic boundary.
+
+            ! =====================================================================
+            ! 2. Loop over the internal paired rows (From L = 2 up to I)
+            ! =====================================================================
+            do L = 2, I
+                ! For IYMAX=8: 
+                ! L=2 -> m_idx=8. Pairs: (2,8)
+                ! L=3 -> m_idx=7. Pairs: (3,7)
+                ! L=4 -> m_idx=6. Pairs: (4,6)
+                m_idx = IYMAX - L + 2 
+
+                ! Compute zonal average from the bottom half row
+                gTransArr%GZonal(L) = sum(gTransArr%G4(:, L)) / REAL(IXMAX, C_FLOAT)
     
+                ! Remove the zonal average from this bottom half row
+                gTransArr%G4(:, L) = gTransArr%G4(:, L) - gTransArr%GZonal(L)
+    
+                ! Enforce anti-symmetry on the top half row
+                gTransArr%G4(:, m_idx) = -gTransArr%G4(:, L)
+    
+                ! Mirror the zonal average to the top half symmetrically
+                gTransArr%GZonal(m_idx) = gTransArr%GZonal(L)
+            end do
+
+            ! =====================================================================
+            ! 3. Handle the Second Stationary Point (L = I + 1, y = pi)
+            ! =====================================================================
+            ! This is your true Nyquist peak row (e.g., Row 5 if IYMAX=8)
+            gTransArr%GZonal(I + 1) = sum(gTransArr%G4(:, I + 1)) / REAL(ixmax, C_FLOAT)
+            gTransArr%G4(:, I + 1)  = gTransArr%G4(:, I + 1) - gTransArr%GZonal(I + 1)
+
+            ! Because this row is anti-symmetric with itself across the midpoint, 
+            ! the 2D grid values at this specific row must mathematically be zeroed out.
+            gTransArr%G4(:, I + 1) = 0.0_C_FLOAT 
+
+            ! 6. Transform the zonal average to get the cos(Ly) components in spectral space.
+            ! Clear 1D spectral scratch array before running the plan
+            gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%GcZ)
+            norm_factor_2d = 2./ REAL(IYMAX, C_FLOAT) ! Normalization factor for 1D FFTW transforms (see FFTW documentation)
+            do L = 1, LMAX2
+                zonal_val = REAL(gTransArr%GcZ(L + 1)) + REAL(gTransArr%GcZ(IYMAX - L + 1))
+                FS(L) = zonal_val * norm_factor_2d
+            end do
+
             ! Clear 2D spectral scratch array before running the plan
             gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
     
@@ -1028,42 +1050,34 @@ module ModelModule
             ! Global inverse scaling factor to normalize the raw FFTW accumulation
             ! norm_inv_wave is 2.0 / (IXMAX * IYMAX)
             norm_factor_2d = 0.5_C_FLOAT * norm_inv_wave
-    
-            ! ====================================================================
-            ! STEP 2: EXTRACT ZONAL PROFILE (cosLy boundaries at K=0)
-            ! ====================================================================
-            do L = 1, LMAX2
-                ! Extract and average between positive and negative Y frequencies 
-                ! to enforce pure cos(Ly) projection symmetry.
-                zonal_val = REAL(gTransArr%Gc(1, L + 1)) + REAL(gTransArr%Gc(1, IYMAX - L + 1))
-                FS(L) = zonal_val * norm_factor_2d
-            end do
-    
+
             ! ====================================================================
             ! STEP 3: EXTRACT WAVE COMPONENTS (sinLy boundaries at K > 0)
             ! ====================================================================
-            norm_factor_2d = norm_inv_wave
+            !norm_factor_2d = norm_inv_wave
             do K = 1, KMAX2
                 do L = 1, LMAX2
                     ! Structural address pointer inside the compacted linear array
                     I = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
-            
+
                     ! Decode the components by tracking the anti-symmetric behavior of sin(Ly)
                     ! Forward model set Gc(L+1) = (-sin, -cos) and Gc(-L) = (sin, cos)
-            
+
                     ! 1. Extract Cos(Kx)*Sin(Ly) -> Mapped to Imaginary parts
                     wave_cos = AIMAG(gTransArr%Gc(K + 1, IYMAX - L + 1)) - AIMAG(gTransArr%Gc(K + 1, L + 1))
-            
+                    !wave_cos = wave_cos - AIMAG(gTransArr%Gc(K + 1, L + 1))
+
                     ! 2. Extract Sin(Kx)*Sin(Ly) -> Mapped to Real parts
                     wave_sin = REAL(gTransArr%Gc(K + 1, IYMAX - L + 1)) - REAL(gTransArr%Gc(K + 1, L + 1))
-            
+                    !wave_sin = wave_sin - REAL(gTransArr%Gc(K + 1, L + 1))
+
                     ! Store values normalized 
                     FS(I)     = wave_cos * norm_factor_2d
                     FS(I + 1) = wave_sin * norm_factor_2d
                 end do
             end do
-
         end subroutine DoGridToSpectral
+
         !*****************************Routines to compute the diabatic tendency terms:
         SUBROUTINE STERMS()
             use ModelParamsModule, only: gUserSettings, gModIntParams

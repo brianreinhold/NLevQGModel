@@ -277,6 +277,14 @@ module PlotModule
             type(WeatherStation), optional, intent(in) :: weatherStn
         END SUBROUTINE DrawHorizontalLines
     END INTERFACE
+    
+    ! Supports the Sleep() subroutine
+    interface
+        subroutine Sleep(ms) bind(C, name='Sleep')
+            use, intrinsic :: iso_c_binding
+            integer(c_int), value :: ms
+        end subroutine Sleep
+    end interface
 
     contains
 
@@ -966,8 +974,8 @@ module PlotModule
                           + 1                               ! Pointer to the Cos entry
         
                     ! Extract the unscaled wave amplitudes
-                    wave_cos = weatherMapType%value(index) * temp_calc
-                    wave_sin = weatherMapType%value(index + 1) * temp_calc
+                    wave_cos = weatherMapType%value(index) * temp_calc      ! The cosknxsinly part
+                    wave_sin = weatherMapType%value(index + 1) * temp_calc  ! The sinknxsinly part
         
                     ! 2. --- Interaction with positive Y-frequency (+L slot) ---
                     ! For cos(Kx)*sin(Ly) -> Sits in Imaginary part, with a negative sign
@@ -999,7 +1007,7 @@ module PlotModule
 
             ! 2. Instantly replicate the periodic boundary column in one line (No DO loop!)
             grid(IXMAX + 1, 1:IYMAX) = grid(1, 1:IYMAX)
-            !call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
+            call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
         end subroutine createGrid
         
         subroutine InverseTransform(weatherMapType)
@@ -1014,7 +1022,7 @@ module PlotModule
     
             type(WeatherMap), intent(in)  :: weatherMapType
     
-            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I
+            integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I, m_idx
             real(C_FLOAT) :: norm_factor_2d, wave_cos, wave_sin, zonal_val, FS(gCurrentDims%ITOT)
     
             IXMAX = gCurrentDims%IXMAX
@@ -1024,14 +1032,68 @@ module PlotModule
     
             ! Initialize output vector to zero
             FS = 0.0_C_FLOAT
+            
+            ! Compute the zonal average to ge the cos(Ly) components.
+            I = IYMAX / 2
+            ! =====================================================================
+            ! 1. Handle the First Stationary Point (L = 1, y = 0)
+            ! =====================================================================
+            gTransArr%GZonal(1) = sum(gTransArr%plot(:, 1)) / REAL(IXMAX, C_FLOAT)
+            gTransArr%plot(:, 1)  = gTransArr%plot(:, 1) - gTransArr%GZonal(1)
+            ! No reflection needed for G4(:,1) or GZonal(1) because it maps to itself 
+            ! across the periodic boundary.
+
+            ! =====================================================================
+            ! 2. Loop over the internal paired rows (From L = 2 up to I)
+            ! =====================================================================
+            do L = 2, I
+                ! For IYMAX=8: 
+                ! L=2 -> m_idx=8. Pairs: (2,8)
+                ! L=3 -> m_idx=7. Pairs: (3,7)
+                ! L=4 -> m_idx=6. Pairs: (4,6)
+                m_idx = iymax - L + 2 
+
+                ! Compute zonal average from the bottom half row
+                gTransArr%GZonal(L) = sum(gTransArr%plot(:, L)) / REAL(IXMAX, C_FLOAT)
     
+                ! Remove the zonal average from this bottom half row
+                gTransArr%plot(:, L) = gTransArr%plot(:, L) - gTransArr%GZonal(L)
+    
+                ! Enforce anti-symmetry on the top half row
+                gTransArr%plot(:, m_idx) = -gTransArr%plot(:, L)
+    
+                ! Mirror the zonal average to the top half symmetrically
+                gTransArr%GZonal(m_idx) = gTransArr%GZonal(L)
+            end do
+
+            ! =====================================================================
+            ! 3. Handle the Second Stationary Point (L = I + 1, y = pi)
+            ! =====================================================================
+            ! This is your true Nyquist peak row (e.g., Row 5 if IYMAX=8)
+            gTransArr%GZonal(I + 1) = sum(gTransArr%plot(:, I + 1)) / REAL(ixmax, C_FLOAT)
+            gTransArr%plot(:, I + 1)  = gTransArr%plot(:, I + 1) - gTransArr%GZonal(I + 1)
+
+            ! Because this row is anti-symmetric with itself across the midpoint, 
+            ! the 2D grid values at this specific row must mathematically be zeroed out.
+            gTransArr%plot(:, I + 1) = 0.0_C_FLOAT 
+
+            ! 6. Transform the zonal average to get the cos(Ly) components in spectral space.
+            ! Clear 1D spectral scratch array before running the plan
+            gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%GcZ)
+            norm_factor_2d = 2./ REAL(IYMAX, C_FLOAT) ! Normalization factor for 1D FFTW transforms (see FFTW documentation)
+            do L = 1, LMAX2
+                zonal_val = REAL(gTransArr%GcZ(L + 1)) + REAL(gTransArr%GcZ(IYMAX - L + 1))
+                FS(L) = zonal_val * norm_factor_2d
+            end do
+
             ! Clear 2D spectral scratch array before running the plan
             gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
     
             ! ====================================================================
             ! STEP 1: EXECUTE COMPREHENSIVE 2D REAL-TO-COMPLEX FFT
             ! ====================================================================
-            ! Input:  gTransArr%G4 (Real array of size IXMAX, IYMAX)
+            ! Input:  gTransArr%plot (Real array of size IXMAX, IYMAX)
             ! Output: gTransArr%Gc (Complex array of size IXMAX/2 + 1, IYMAX)
             call fftwf_execute_dft_r2c(plan_r2c_2d, gTransArr%plot, gTransArr%Gc)
     
@@ -1042,12 +1104,12 @@ module PlotModule
             ! ====================================================================
             ! STEP 2: EXTRACT ZONAL PROFILE (cosLy boundaries at K=0)
             ! ====================================================================
-            do L = 1, LMAX2
-                ! Extract and average between positive and negative Y frequencies 
-                ! to enforce pure cos(Ly) projection symmetry.
-                zonal_val = REAL(gTransArr%Gc(1, L + 1)) + REAL(gTransArr%Gc(1, IYMAX - L + 1))
-                FS(L) = zonal_val * norm_factor_2d
-            end do
+            !do L = 1, LMAX2
+            !    ! Extract and average between positive and negative Y frequencies 
+            !    ! to enforce pure cos(Ly) projection symmetry.
+            !    zonal_val = REAL(gTransArr%Gc(1, L + 1)) + REAL(gTransArr%Gc(1, IYMAX - L + 1))
+            !    FS(L) = zonal_val * norm_factor_2d
+            !end do
     
             ! ====================================================================
             ! STEP 3: EXTRACT WAVE COMPONENTS (sinLy boundaries at K > 0)
@@ -1057,16 +1119,18 @@ module PlotModule
                 do L = 1, LMAX2
                     ! Structural address pointer inside the compacted linear array
                     I = LMAX2 + 2 * LMAX2 * (K - 1) + 2 * (L - 1) + 1
-            
+
                     ! Decode the components by tracking the anti-symmetric behavior of sin(Ly)
                     ! Forward model set Gc(L+1) = (-sin, -cos) and Gc(-L) = (sin, cos)
-            
+
                     ! 1. Extract Cos(Kx)*Sin(Ly) -> Mapped to Imaginary parts
                     wave_cos = AIMAG(gTransArr%Gc(K + 1, IYMAX - L + 1)) - AIMAG(gTransArr%Gc(K + 1, L + 1))
-            
+                    !wave_cos = wave_cos - AIMAG(gTransArr%Gc(K + 1, L + 1))
+
                     ! 2. Extract Sin(Kx)*Sin(Ly) -> Mapped to Real parts
                     wave_sin = REAL(gTransArr%Gc(K + 1, IYMAX - L + 1)) - REAL(gTransArr%Gc(K + 1, L + 1))
-            
+                    !wave_sin = wave_sin - REAL(gTransArr%Gc(K + 1, L + 1))
+
                     ! Store values normalized 
                     FS(I)     = wave_cos * norm_factor_2d
                     FS(I + 1) = wave_sin * norm_factor_2d
@@ -1083,9 +1147,10 @@ module PlotModule
             use Kernel32, only: RtlMoveMemory
             
             use ArrayDimensionsModule, only: gCurrentDims
-            use ConstantsModule, only: PLOTTING_OFF, wp
+            use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC, wp
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ModelFieldsModule, only: gTransArr
+            use ModelParamsModule, only: gModIntParams
 
             IMPLICIT NONE
 
@@ -1103,7 +1168,7 @@ module PlotModule
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
         
             integer(RGB32), target :: Pixels(gBitMapInfo%width)
-            integer ::  iVal, iValRight, iValDown, i, j, J1, colorIdx
+            integer ::  iVal, iValRight, iValDown, i, j, J1, colorIdx, saveField, saveField2
             
             integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
             integer(c_intptr_t) :: bytesPerRow
@@ -1111,8 +1176,13 @@ module PlotModule
             
             logical :: useSolidColor = true
             
-            call PumpMessages()
-            
+            return
+
+            saveField = gModIntParams%field1
+            gModIntParams%field1 = DIAGNOSTIC
+            saveField2 = gModIntParams%field2
+            gModIntParams%field2 = PLOTTING_OFF
+
             gTransArr%plotFull(1:gCurrentDims%IXMAX, 1:gCurrentDims%IYMAX) = grid(1:gCurrentDims%IXMAX, 1:gCurrentDims%IYMAX)
 
             ! 2. Instantly replicate the periodic boundary column in one line (No DO loop!)
@@ -1153,8 +1223,9 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
+            gTransArr%plotFull = gTransArr%plotFull * scale
             call Interpolate2D(gTransArr%plotFull, b, Xptr)
-            Xptr = Xptr * scale
+
             ! However, we need to map these interpolated values in X to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
@@ -1231,10 +1302,25 @@ module PlotModule
                     end do
                 end do
             endif
+            gModIntParams%field1 = saveField
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.true.)
+            gModIntParams%field1 = DIAGNOSTIC
+            call pauseRun()
+            gModIntParams%field1 = saveField
+            gModIntParams%field2 = saveField2
 
         end subroutine plotDiagnostic
+        
+        subroutine pauseRun()
+            use ConstantsModule, only: PAUSED
+            use ModelParamsModule, only: gModelState
+            gModelState%runState = PAUSED
+            do while (gModelState%runState == PAUSED)
+                CALL PumpMessages()
+                call sleep(100) ! Suspends the thread for 100ms. 0% CPU usage.
+            end do
+        end subroutine pauseRun
 
         !> This function gets the values of the current location in a paused time series plot based on the y-coordinate
         !> position of the mouse.
@@ -2238,7 +2324,7 @@ module PlotModule
         ! This routine is called from the main window callback when the user presses F1 while the
         ! model is integrating. This array is populated only once for every pause.
         subroutine populateInterpolatedGrid(X, field)
-            use ConstantsModule, only: PLOTTING_OFF
+            use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC
             use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr
@@ -2251,7 +2337,7 @@ module PlotModule
             
             if (field == PLOTTING_OFF) return
 
-            call createGrid(gTransArr%plotFull, getWeatherMapType(field))
+            if (field .NE. DIAGNOSTIC) call createGrid(gTransArr%plotFull, getWeatherMapType(field))
             ! Generate the interpolated 2D array X
             b%il = 1
             b%iu = gCurrentDims%IXMAX + 1
