@@ -962,7 +962,7 @@ module ModelModule
             REAL, intent(out)  :: FS(:)
     
             integer :: K, L, IXMAX, IYMAX, KMAX2, LMAX2, I, m_idx
-            real(C_FLOAT) :: norm_factor_2d, wave_cos, wave_sin, zonal_val
+            real(C_FLOAT) :: norm_factor_2d, wave_cos, wave_sin, zonal_val, invNorm
             
             ! This does not work as the double periodic grid transform does not know about the model 
             ! boundary conditions. It will take a sinnxcos2y structure and understand that it is a 
@@ -985,26 +985,22 @@ module ModelModule
             
             ! Compute the zonal average to ge the cos(Ly) components.
             I = IYMAX / 2
+            invNorm = 1.0_C_FLOAT / REAL(IXMAX, C_FLOAT)
+            gTransArr%GZonal = 0.0
             ! =====================================================================
             ! 1. Handle the First Stationary Point (L = 1, y = 0)
             ! =====================================================================
-            gTransArr%GZonal(1) = sum(gTransArr%G4(:, 1)) / REAL(IXMAX, C_FLOAT)
-            gTransArr%G4(:, 1)  = gTransArr%G4(:, 1) - gTransArr%GZonal(1)
-            ! No reflection needed for G4(:,1) or GZonal(1) because it maps to itself 
-            ! across the periodic boundary.
+            gTransArr%GZonal(1) = sum(gTransArr%G4(:, 1)) * invNorm ! Compute the zonal average of the y=0 row
+            gTransArr%G4(:, 1)  = gTransArr%G4(:, 1) - gTransArr%GZonal(1)       ! Subtract that zonal average from the y=0 row
 
             ! =====================================================================
             ! 2. Loop over the internal paired rows (From L = 2 up to I)
             ! =====================================================================
             do L = 2, I
-                ! For IYMAX=8: 
-                ! L=2 -> m_idx=8. Pairs: (2,8)
-                ! L=3 -> m_idx=7. Pairs: (3,7)
-                ! L=4 -> m_idx=6. Pairs: (4,6)
                 m_idx = IYMAX - L + 2 
 
                 ! Compute zonal average from the bottom half row
-                gTransArr%GZonal(L) = sum(gTransArr%G4(:, L)) / REAL(IXMAX, C_FLOAT)
+                gTransArr%GZonal(L) = sum(gTransArr%G4(:, L)) * invNorm
     
                 ! Remove the zonal average from this bottom half row
                 gTransArr%G4(:, L) = gTransArr%G4(:, L) - gTransArr%GZonal(L)
@@ -1013,14 +1009,14 @@ module ModelModule
                 gTransArr%G4(:, m_idx) = -gTransArr%G4(:, L)
     
                 ! Mirror the zonal average to the top half symmetrically
-                gTransArr%GZonal(m_idx) = gTransArr%GZonal(L)
+                !gTransArr%GZonal(m_idx) = gTransArr%GZonal(L)
             end do
 
             ! =====================================================================
             ! 3. Handle the Second Stationary Point (L = I + 1, y = pi)
             ! =====================================================================
-            ! This is your true Nyquist peak row (e.g., Row 5 if IYMAX=8)
-            gTransArr%GZonal(I + 1) = sum(gTransArr%G4(:, I + 1)) / REAL(ixmax, C_FLOAT)
+            ! This is the true Nyquist peak row (e.g., Row 5 if IYMAX=8)
+            gTransArr%GZonal(I + 1) = sum(gTransArr%G4(:, I + 1)) * invNorm
             gTransArr%G4(:, I + 1)  = gTransArr%G4(:, I + 1) - gTransArr%GZonal(I + 1)
 
             ! Because this row is anti-symmetric with itself across the midpoint, 
@@ -1028,18 +1024,12 @@ module ModelModule
             gTransArr%G4(:, I + 1) = 0.0_C_FLOAT 
 
             ! 6. Transform the zonal average to get the cos(Ly) components in spectral space.
-            ! Clear 1D spectral scratch array before running the plan
-            gTransArr%GcZ = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-            call fftwf_execute_dft_r2c(plan_y_r2c_1d, gTransArr%GZonal, gTransArr%GcZ)
-            norm_factor_2d = 2./ REAL(IYMAX, C_FLOAT) ! Normalization factor for 1D FFTW transforms (see FFTW documentation)
-            do L = 1, LMAX2
-                zonal_val = REAL(gTransArr%GcZ(L + 1)) + REAL(gTransArr%GcZ(IYMAX - L + 1))
-                FS(L) = zonal_val * norm_factor_2d
-            end do
+            invNorm = 2./ REAL(IYMAX, C_FLOAT) ! Normalization factor for 1D FFTW transforms (see FFTW documentation)
+            call fftwf_execute_r2r(plan_y_FFTW_REDFT00, gTransArr%GZonal, gTransArr%GZonal)
 
-            ! Clear 2D spectral scratch array before running the plan
-            gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-    
+            ! The REDFT00 output is purely real and has the cos(Ly) components in the first LMAX2 + 1 slots. We do not use the cos(0) value
+            FS(1:LMAX2) = gTransArr%GZonal(2 : LMAX2 + 1) * invNorm
+
             ! ====================================================================
             ! STEP 1: EXECUTE COMPREHENSIVE 2D REAL-TO-COMPLEX FFT
             ! ====================================================================

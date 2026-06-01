@@ -50,6 +50,9 @@ module Fftw3HelpersModule
 
     type(c_ptr) :: plan_y_FFTW_REDFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_REDFT01 spectral to grid
     type(c_ptr) :: plan_y_FFTW_REDFT01 = c_null_ptr     ! The only cosly plan that will line up the sinly grid points correctly in y
+    
+    type(c_ptr) :: plan_y_FFTW_REDFT00 = c_null_ptr     ! The cosly plan that is good for the jacobian grid to spectral for cosLy
+
 
     type(c_ptr) :: plan_y_FFTW_RODFT10 = c_null_ptr     ! Needed for Grid to Spectral for FFTW_RODFT01 spectral to grid
     type(c_ptr) :: plan_y_FFTW_RODFT01 = c_null_ptr     ! The only sinly plan that will line up the cosly grid points correctly in y
@@ -99,6 +102,8 @@ module Fftw3HelpersModule
             if (c_associated(plan_y_FFTW_RODFT10)) call fftw_destroy_plan(plan_y_FFTW_RODFT10)
             if (c_associated(plan_y_FFTW_REDFT10)) call fftw_destroy_plan(plan_y_FFTW_REDFT10)
 
+            if (c_associated(plan_y_FFTW_REDFT00)) call fftw_destroy_plan(plan_y_FFTW_REDFT00)
+
             ! Set normalization factors: 1/(Nx*Ny) total normalization
             norm_inv_wave = 2.0 / (REAL(Nx) * REAL(Ny))
             norm_inv_cosly = 1.0 / real(Ny)
@@ -139,8 +144,10 @@ module Fftw3HelpersModule
 
             plan_y_FFTW_REDFT10 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT10, FFTW_MEASURE) ! Grid to spectral for FFTW_REDFT01 spectral to grid
             plan_y_FFTW_REDFT01 = fftwf_plan_r2r_1d(Ny, dummy_r_1d, dummy_r_1d, FFTW_REDFT01, FFTW_MEASURE)
-            !
-            !
+            
+            ! Grid to spectral r2r for Jacobian cosLy projections
+            plan_y_FFTW_REDFT00 = fftwf_plan_r2r_1d(Ny/2 + 1, dummy_r_1d, dummy_r_1d, FFTW_REDFT00, FFTW_MEASURE)
+
             plan_y_fftw_rodft10 = fftwf_plan_r2r_1d(ny, dummy_r_1d, dummy_r_1d, fftw_rodft10, fftw_measure)
             plan_y_fftw_rodft01 = fftwf_plan_r2r_1d(ny, dummy_r_1d, dummy_r_1d, fftw_rodft01, fftw_measure)
 
