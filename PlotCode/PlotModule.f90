@@ -900,8 +900,7 @@ module PlotModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gTransArr
-            use Fftw3HelpersModule, only: norm_fwd, norm_cosly, norm_inv_wave, plan_x_c2r_1d, plan_y_c2r_1d, plan_c2r_2d
-                    !plan_y_FFTW_RODFT01, plan_y_FFTW_REDFT01
+            use Fftw3HelpersModule, only: norm_fwd, norm_cosly, norm_inv_wave, plan_x_c2r_1d, plan_c2r_2d
             use, intrinsic :: ieee_arithmetic
         
             implicit none
@@ -1015,7 +1014,7 @@ module PlotModule
             use ConstantsModule, only: SQRT2
             use ModelFieldsModule,     only: gTransArr
             use ModelParamsModule,     only: gModRealParams, gModIntParams
-            use Fftw3HelpersModule
+            use Fftw3HelpersModule,    only: plan_y_r2c_1d, plan_r2c_2d, norm_inv_wave
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX, C_FLOAT
             implicit none
             include 'fftw3.f03'

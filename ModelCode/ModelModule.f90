@@ -772,9 +772,6 @@ module ModelModule
 
             ! ========================== G4 now has the tendencies due to J(A,B) in grid point space.
             ! Next step is to transform the tendencies back to spectral space.
-            ! Get the cosly components. We do this by first computing the zonal average of G4 and
-            ! placing it in gTransArr%GZonal and taking the inverse transform with plan_y_FFTW_REDFT10
-            ! We also need to remove the zonal average from the grid point data before we do the wave transforms.
 
             call DoGridToSpectral(FS)
 
