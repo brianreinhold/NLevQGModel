@@ -34,7 +34,7 @@ module ModelModule
             use ConstantsModule, only: ZONAL_MEAN_FLOW, ERR_SCALING_PARAMETER_ZERO
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ModelParamsModule, only: gModPlotParams, gContourIntervals, gModIntParams, gModRealParams
+            use ModelParamsModule, only: gContourIntervals, gModIntParams, gModRealParams
             use InteractionCoefficientsModule, only: computeInteractionCoefficients
             implicit none
             
@@ -49,7 +49,7 @@ module ModelModule
             CALL ComputeAKLTerms()
 
             !===========================================================Zonal model type setup:
-            IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW .AND. gModPlotParams%isBarotropic .EQ. 0) THEN
+            IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) THEN
                 !----------------------------Create QcosG and QsinG and place in WW for waves:
                 call GQSET()        ! In this file
                 !----------------------------Initialize barotropic mean flow:       DO I=LMAX2+1,ITOT
@@ -59,8 +59,6 @@ module ModelModule
                         gHorzArr%PSB(I) = gHorzArr%PSB(I) + gHorzArr%PS(I, N) / gVertArr%DPI(N)
                     END DO
                 END DO
-                !------------------------------------------------ Indicator for Zonal run:
-                gModPlotParams%isBarotropic = .TRUE.
             ENDIF
             ! Check that none of the scaling parameters are zero
             ! These parameters are used only in plotting
@@ -472,7 +470,7 @@ module ModelModule
             !! B = gHorzArr%TOP
             gHorzArr%ADO = 0.0
 
-            !CALL NONLIN(gHorzArr%ADO, gHorzArr%PS(:, 1), gHorzArr%TOP)
+            CALL NONLIN(gHorzArr%ADO, gHorzArr%PS(:, 1), gHorzArr%TOP)
 
             !---------------------------------------------Normalize by AKL:
             ! This is needed since the d(del**2(PS))/dt = -J(PS, TOP) + other terms including further jacobians. The del-squared operation gives the AKL factor
@@ -480,7 +478,7 @@ module ModelModule
             ! ADO is the tendency due to orography 
             !----------------------------------------Normalize by AKL:
             ITOT = gCurrentDims%ITOT
-            !gHorzArr%ADO(1:ITOT) = gHorzArr%ADO(1:ITOT) * gHorzArr%AKLI(1:ITOT) ! No minus sign here
+            gHorzArr%ADO(1:ITOT) = gHorzArr%ADO(1:ITOT) * gHorzArr%AKLI(1:ITOT) ! No minus sign here
 
             !-----------------------------------------Compute vorticity advection:
             DO N = 1, gModIntParams%NLEV

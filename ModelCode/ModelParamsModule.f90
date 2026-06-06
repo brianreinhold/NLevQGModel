@@ -23,12 +23,12 @@ module ModelParamsModule
     ! Eventually the names of the individual fields will be changed to be more descriptive.
 
     ! Type defintions
-    public :: Settings, ModelRealParams, ModelIntParams, ModelPlotParams, ModelSensParams, ContourIntervals, PlotControls
+    public :: Settings, ModelRealParams, ModelIntParams, ModelSensParams, ContourIntervals, PlotControls
     public :: FileStruct
     ! Methods
     public :: initConstants
     ! Instances of the types
-    public :: gUserSettings, gModRealParams, gModIntParams, gModPlotParams, gModSensParams, gContourIntervals, gPlotControls
+    public :: gUserSettings, gModRealParams, gModIntParams, gModSensParams, gContourIntervals, gPlotControls
     public :: gNLevFile, gSensFile
     ! Constants that are not expressed as parameters
     public :: gPlotScales
@@ -120,33 +120,6 @@ module ModelParamsModule
                             !   JHOV = 1 means toggle to a sideways hovmoller plot. Not sure what other values mean beside no sideways hovmoller.
     end type ModelIntParams
 
-    ! These are primarily colors
-    type :: ModelPlotParams ! Originally from JCN(1-14) equivalence in NPARAM.f90. Not sure how many we will need to retain
-        LOGICAL :: isBarotropic     ! True for barotopic model, false otherwise (not selected directly by user)
-        integer :: ISTRM    !  ISTRM is an indicator for streamline or solid color plots with the following  (This looks very video card oriented):
-                            !   options, that give the colors of the streamlines, etc.:
-                            !   ISTRM =-1 plots solid color
-                            !   ISTRM = NCOLOR plots streamlines with the color of the value one higher
-                            !   ISTRM = 0 to NCOLOR-1 plots streamline with
-                            !         0 contour = color ISTRM
-                            !         - contours = color ISTRM-NCOLOR/4
-                            !         + contours = color ISTRM+NCOLOR/4
-        integer(kind=4) :: JSTRM    ! JSTRM is the streamline RGB color of the second overlay map
-        integer(kind=4) :: KSTRM    ! KSTRM is the streamline color of the third overlay map
-        integer(kind=4) :: LP1      ! LP1 is the color of the first phase space/time series point
-        integer(kind=4) :: LP2      ! LP2 (?) is the color of the second phase space/time series point
-        integer(kind=4) :: LPL      ! LPL is the lead color of the phase space/time series cross
-        integer(kind=4) :: ICS      !
-        integer(kind=4) :: ICA      ! ICA is the color of the phase space axes
-        integer(kind=4) :: ICTXT    ! ICTXT is the color of any text
-        integer(kind=4) :: ICFH     ! Plot frame hilight color
-        integer(kind=4) :: ICF      ! Plot frame color
-        integer(kind=4) :: ICFS     ! Plot frame shadow color
-        integer(kind=4) :: IZERO    ! Option to set negative values to 0
-        integer :: ISCRN    ! ISCRN = 0  means plot directly to screen 
-                            !       = 1  means plot to a screen buffer array
-    end type ModelPlotParams
-
     type ModelSensParams    ! Previously MSEN(1-14) [part of the IPARAM buffer] (Still need some work to figure out what these all do)
         integer :: field1   ! field1 is the first parameter to vary in sensitivity runs (MSEN(1))
         integer :: field2   ! field2 is the first parameter to vary in sensitivity runs (MSEN(2))
@@ -212,7 +185,6 @@ module ModelParamsModule
 
     type(ModelRealParams) :: gModRealParams
     type(ModelIntParams) :: gModIntParams
-    type(ModelPlotParams) :: gModPlotParams
     type(ModelSensParams) :: gModSensParams
     type(ContourIntervals) :: gContourIntervals
     type(PlotControls) :: gPlotControls

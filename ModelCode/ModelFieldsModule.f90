@@ -85,7 +85,8 @@ MODULE ModelFieldsModule
         REAL, POINTER :: X(:) => null()     !  X(maxLevels), Y(maxLevels) is used in the iterative procedure for omega
         REAL, POINTER :: Y(:) => null()     !  X(maxLevels), Y(maxLevels) is used in the iterative procedure for omega
         REAL, POINTER :: PP(:) => null()    !  PP(maxLevels+1)=The pressures at each interface. 1=sfc and maxLevels+1=Top
-        REAL, POINTER :: PRF(:) => null()   !  PRF(maxLevels,4) are profile arrays for functional behavior of model
+        REAL, POINTER :: PRF(:) => null()   !  PRF(maxLevels * 4) are profile arrays for functional behavior of model
+        REAL, POINTER :: LVS(:) => null()   !  LVS(2 * maxLevels + 1) is an array of all the levels, just for plotting
     END TYPE VertArrays
 
     TYPE(VertArrays) :: gVertArr
@@ -120,17 +121,13 @@ MODULE ModelFieldsModule
                                                     !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
     REAL, ALLOCATABLE, TARGET :: ADO_pool(:)      !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
     REAL, ALLOCATABLE, TARGET :: TOP_pool(:)      !  TOP(ITOT) is the surface orographic field
-    REAL, ALLOCATABLE, TARGET :: TMP_pool(:)      !  TMP(gArrayDims%LYD)
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
     REAL, ALLOCATABLE, TARGET :: AKL_pool(:)      !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: AKLI_pool(:)     !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: RK_pool(:)       !  RK(maxZonalWaves) K wavenumber as a real value
     REAL, ALLOCATABLE, TARGET :: RL_pool(:)       !  RL(maxMeridWaves) L wavenumber as a real value
-    REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels)
+    REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels), for the N-cycle scheme
     REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:,:) !  PSSAVE(ITOTD,maxLevels)
-    
-    INTEGER, ALLOCATABLE, TARGET :: IXL_pool(:)   !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
-    INTEGER, ALLOCATABLE, TARGET :: IYL_pool(:)   !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
 
     COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc((IXMAX/2 + 1) * IYMAX) complex grid point array for the periodic transform routine
     REAL, ALLOCATABLE, TARGET :: G1_pool(:)       !  G1(IXMAX*IYMAX) grid point arrays for transform routine
@@ -165,17 +162,13 @@ MODULE ModelFieldsModule
         REAL, POINTER :: SF(:,:) => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
         REAL, POINTER :: ADO(:) => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
         REAL, POINTER :: TOP(:) => null()       !  TOP(ITOT) is the surface orographic field
-        REAL, POINTER :: TMP(:) => null()       !  TMP(gArrayDims%LYD)
         REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
         REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
         real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
         real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
-        REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOTD,maxLevels)
+        REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOT,maxLevels)
         REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
-
-        INTEGER, POINTER :: IXL(:) => null()    !  IXL() array for plotting graphs at all levels or wavenumbers (probably hovmoller horizontal) and cross sections
-        INTEGER, POINTER :: IYL(:) => null()    !  IYL() array for plotting graphs at all levels or wavenumbers (probably hovmoller meridional) and cross sections
     END TYPE HorzArrays
     
     type :: TransArrays
@@ -229,7 +222,7 @@ MODULE ModelFieldsModule
 
             INTEGER :: status
 
-            ALLOCATE(BV(18 * gUserSettings%maxLevels + 4), STAT = status) ! Single contiguous memory block
+            ALLOCATE(BV(20 * gUserSettings%maxLevels + 5), STAT = status) ! Single contiguous memory block
             if (status /= 0) RETURN
 
             call ZeroVerticalArrays()  ! Zero entire set of array
@@ -271,6 +264,7 @@ MODULE ModelFieldsModule
             gVertArr%Y(1 : levels)   => BV(12 * levels + 1 : 13 * levels)
             gVertArr%PP(1 : levels + 1)  => BV(13 * levels + 1 : 14 * levels + 1)  ! This array has one extra element; 1=sfc and maxLevels+1=Top. The size is levels + 1
             gVertArr%PRF(1 : 4 * levels) => BV(14 * levels + 2 : 18 * levels + 1)  ! This array has size 4 * levels
+            gVertArr%LVS(1: 2 * levels + 1) => BV(18 * levels + 3 : 20 * levels + 1) ! This array has size 2 * levels + 1
             
             gVertArr%defined = .TRUE. ! Set defined flag to true
         end function createVertArr
@@ -294,6 +288,7 @@ MODULE ModelFieldsModule
             NULLIFY(gVertArr%X)
             NULLIFY(gVertArr%Y)
             NULLIFY(gVertArr%PRF)
+            NULLIFY(gVertArr%LVS)
             gVertArr%allocated = .FALSE. ! Set allocated flag to false
             gVertArr%defined = .FALSE.   ! Set defined flag to false
 
@@ -321,11 +316,6 @@ MODULE ModelFieldsModule
             INTEGER :: status
 
             status = 0
-            
-            !gArrayDims%ITOTND = gArrayDims%ITOT * gUserSettings%maxLevels ! Forgot to add this
-            !gArrayDims%ITRXD = 3 * gArrayDims%IXMAX / 2 + 1
-            !gArrayDims%ITRYD = 3 * gArrayDims%IYMAX / 2 + 1
-
 
             ALLOCATE(GQ_pool(gArrayDims%itot , gUserSettings%maxLevels),&
                     BTA_pool(gArrayDims%itot),                         &
@@ -334,16 +324,14 @@ MODULE ModelFieldsModule
 
                     ADO_pool(gArrayDims%itot),                         &
                     TOP_pool(gArrayDims%itot),                         &
-                    TMP_pool(gArrayDims%lyd),                          &
                     DAT_pool(gArrayDims%itot),                         &
                     AKL_pool(gArrayDims%itot),                         &
                     AKLI_pool(gArrayDims%itot),                        &
-                    RK_pool(gUserSettings%maxZonalWaves),   &
-                    RL_pool(gUserSettings%maxMeridWaves),   &
+                    RK_pool(gUserSettings%maxZonalWaves),              &
+                    RL_pool(gUserSettings%maxMeridWaves),              &
                     ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels), &
-                    PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels), &
-                    IXL_pool(gArrayDims%lyd),                &
-                    IYL_pool(gArrayDims%lyd), STAT = status)
+                    PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels),&
+                    STAT = status)
             IF (status /= 0) RETURN
 
             ! Zero everything
@@ -409,7 +397,6 @@ MODULE ModelFieldsModule
                 PS_pool = 0.0
             end if
             ADO_pool = 0.0
-            TMP_pool = 0.0
             DAT_pool = 0.0
             AKL_pool = 0.0
             AKLI_pool = 0.0
@@ -422,8 +409,6 @@ MODULE ModelFieldsModule
             RK_pool = 0.0
             RL_pool = 0.0
             TOP_pool = 0.0
-            IXL_pool = 0.0
-            IYL_pool = 0.0
         end subroutine ZeroHorzArrays
         
         subroutine ZeroTransArrays()
@@ -511,11 +496,6 @@ MODULE ModelFieldsModule
             gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
             gHorzArr%RK(1 : zonal_waves) => RK_pool(1 : zonal_waves)
             gHorzArr%RL(1 : merid_waves) => RL_pool(1 : merid_waves)
-
-            gHorzArr%IXL(1 : arraySizes%lyd) => IXL_pool(1 : arraySizes%lyd)
-            gHorzArr%IYL(1 : arraySizes%lyd) => IYL_pool(1 : arraySizes%lyd)
-
-            gHorzArr%TMP(1 : arraySizes%lyd) => TMP_pool(1 : arraySizes%lyd)
             gHorzArr%defined = .TRUE. ! Set defined flag to true
 
         end function createHorzArr
@@ -571,7 +551,6 @@ MODULE ModelFieldsModule
 
             IF (ALLOCATED(ADO_pool))     DEALLOCATE(ADO_pool)
             IF (ALLOCATED(TOP_pool))     DEALLOCATE(TOP_pool)
-            IF (ALLOCATED(TMP_pool))     DEALLOCATE(TMP_pool)
             IF (ALLOCATED(DAT_pool))     DEALLOCATE(DAT_pool)
             IF (ALLOCATED(AKL_pool))     DEALLOCATE(AKL_pool)
             IF (ALLOCATED(AKLI_pool))    DEALLOCATE(AKLI_pool)
@@ -579,8 +558,6 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(RL_pool))      DEALLOCATE(RL_pool)
             IF (ALLOCATED(ZS_pool))      DEALLOCATE(ZS_pool)
             IF (ALLOCATED(PSSAVE_pool))  DEALLOCATE(PSSAVE_pool)
-            IF (ALLOCATED(IXL_pool))     DEALLOCATE(IXL_pool)
-            IF (ALLOCATED(IYL_pool))     DEALLOCATE(IYL_pool)
             ! The following below is equivalent to nullifying all pointers in gHorzArr type
             gHorzArr%GQ  => null()      !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
             gHorzArr%BTA => null()       !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
@@ -600,7 +577,6 @@ MODULE ModelFieldsModule
             gHorzArr%SF  => null()      !  SF(ITOT,maxLevels) is the Barotropic momentum forcing field
             gHorzArr%ADO => null()       !  ADO(ITOT) is the spectral form of the forcing by srf flow over orography
             gHorzArr%TOP => null()       !  TOP(ITOT) is the surface orographic field
-            gHorzArr%TMP  => null()       !  TMP(gArrayDims%LYD)
             gHorzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
             gHorzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
             gHorzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
@@ -608,9 +584,6 @@ MODULE ModelFieldsModule
             gHorzArr%RL => null()        !  RL(maxMeridWaves) L wavenumber as a real value
             gHorzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)
             gHorzArr%PSSAVE  => NULL()  !  PSSAVE(ITOTD,maxLevels)
-
-            gHorzArr%IXL  => null()
-            gHorzArr%IYL  => null()
 
             gHorzArr%allocated = .FALSE.
             gHorzArr%defined = .FALSE.

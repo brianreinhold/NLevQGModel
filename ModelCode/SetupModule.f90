@@ -66,7 +66,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ifwin
 
             use ConstantsModule, only: MAP_OVERLAY_1, POTENTIAL_TEMP, OMEGA, INVALID
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, &
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, &
                 gNLevFile, gPlotControls, gSensFile, initConstants
             use NLevQGModelGlobals, only: LogMessage, ghwndMain    ! For logging
             use ArrayDimensionsModule, only: gArrayDims, gCurrentDims
@@ -244,7 +244,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !>
         !! @Param fileData: FileStruct type containing the information about the saved file
         function ReadSaveFile(fileData) result(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gUserSettingsPrev, FileStruct
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, gUserSettingsPrev, FileStruct
             use ModelFieldsModule, only: gVertArr
             use NLevQGModelGlobals, only: LogMessage
             use kernel32            ! For windows system calls like GetLastError
@@ -320,7 +320,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to read from.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function ReadFileHeader(fileHandle) result(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals, gUserSettingsPrev
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, gContourIntervals, gUserSettingsPrev
             use NLevQGModelGlobals, only: LogMessage    ! For logging
             !use ifport              ! For the 'GetLastError' windows system function
             !use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
@@ -335,7 +335,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             REWIND(fileHandle)
 
             ! Read header
-            READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
+            READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, &
                 gModSensParams, gContourIntervals
             if (errorCode .NE. 0) then
                 call LogMessage('File Header could not be read. Error message: '// errorMsg // ' Will need to invoke defaults ')
@@ -383,9 +383,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%TMP, gHorzArr%DAT, &
-                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
-                  gHorzArr%IXL, gHorzArr%IYL
+                  gHorzArr%DAT, &
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gStatsArr%allocated, &
@@ -407,7 +406,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         function WriteSensFileHeader(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, gContourIntervals
             use ModelFieldsModule, only: gVertArr
             
             implicit none
@@ -420,7 +419,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             CHARACTER(LEN = 256) :: errorMsg
 
             ! Write data
-            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, gModPlotParams, &
+            WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, &
                 gModSensParams, gContourIntervals
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
@@ -436,7 +435,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param fileHandle The file handle to write to.
         !! @return errorCode Returns 0 on success, or a Windows error code on failure.
         FUNCTION WriteFileData(fileHandle) RESULT(errorCode)
-            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModPlotParams, gModSensParams, gContourIntervals
+            use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, gContourIntervals
             use ModelFieldsModule, only: gVertArr, gHorzArr, gStatsArr
             use InteractionCoefficientsModule, only: gCintArr
             !use NLevQGModelGlobals, only: LogMessage    ! For logging
@@ -459,7 +458,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Write header data
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) MIRI, gUserSettings, gModRealParams, gModIntParams, &
-                gModPlotParams, gModSensParams, gContourIntervals
+                gModSensParams, gContourIntervals
             ! Write model arrays (since they are allocatable, we need to write each array indivually and not just the type gVertArr, etc.)
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
@@ -472,9 +471,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gHorzArr%GQ, gHorzArr%BTA, gHorzArr%PSB, gHorzArr%PS, gHorzArr%TH, gHorzArr%WW, gHorzArr%TF, &
                   gHorzArr%FS, gHorzArr%ADS, gHorzArr%WS, gHorzArr%S, gHorzArr%FT, gHorzArr%ADT, gHorzArr%WT, &
                   gHorzArr%T, gHorzArr%SF, gHorzArr%ADO, gHorzArr%TOP, &
-                  gHorzArr%TMP, gHorzArr%DAT, &
-                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE, &
-                  gHorzArr%IXL, gHorzArr%IYL
+                  gHorzArr%DAT, &
+                  gHorzArr%AKL, gHorzArr%AKLI, gHorzArr%ZS, gHorzArr%PSSAVE
 
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gStatsArr%allocated, &
@@ -506,7 +504,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use InteractionCoefficientsModule, only: DeallocateCintArrays, AllocateCintArrays, computeInteractionCoefficients, gCintArr
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
-            integer :: errorCode
+            integer :: errorCode, index
+            real, allocatable :: tF(:)
 
             errorCode = 0   ! No error
             boolHorzResult = .false.
@@ -535,14 +534,30 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (boolHorzResult .OR. boolVertResult) then
                 gArrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
                 gCurrentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+                
+                ! Save the thermal forcing cosy profile at each level
+                allocate(tF(gModIntParams%NLEV), STAT = errorCode)
+                do index = 1, gModIntParams%NLEV
+                    tF(index) = gHorzArr%TF(1, index)
+                end do
                 ! Handle horizontal array changes (which includes vertical dimensions):
                 if (gHorzArr%allocated) errorCode = DeallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
 
                 errorCode = allocateHorizontalArrays()    ! Reallocate horizontal arrays
-                if(errorCode .NE. 0) return
+                if(errorCode .NE. 0) then
+                    deallocate(tF)
+                    return
+                endif
                 ! But use the model settings for KMAX2, LMAX2, NLEV for actual array dimensions.
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
-                if(errorCode .NE. 0) return
+                if(errorCode .NE. 0) then
+                    deallocate(tF)
+                    return
+                endif
+                do index = 1, gModIntParams%NLEV
+                    gHorzArr%TF(1, index) = tF(index)
+                end do
+                deallocate(tF)
                 
                 ! Handle transform array changes
                 if (gTransArr%allocated) errorCode = DeallocateTransformArrays()  ! Deallocate transform arrays if allocated
@@ -659,7 +674,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         function CheckModParams() result(errorCode)
             use ConstantsModule, only: PHASE_SPACE, VORTICITY, HEIGHT, TEMPERATURE, PLOTTING_OFF, OROGRAPHY
-            use ModelParamsModule, only: gModRealParams, gModIntParams, gModPlotParams
+            use ModelParamsModule, only: gModRealParams, gModIntParams
 
             integer :: errorCode
             integer :: I2
@@ -753,7 +768,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%KMODE .LT. 0) gModIntParams%KMODE = 0
             IF(gModIntParams%LMODE .LT. 1) gModIntParams%LMODE = 1
         
-            IF(gModPlotParams%ISCRN .GT. 1 .OR. gModPlotParams%ISCRN .LT. 0) gModPlotParams%ISCRN = 0
             !---------------------------------------------Some idiot tests:
             IF(gModRealParams%RN .LE. 0. .OR. gModRealParams%DELT .LT. 0.) errorCode = IOR(errorCode, RN_BAD)
             IF(gModRealParams%TPP .LT. 0) gModRealParams%TPP = 0.
@@ -769,7 +783,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gScaleFactors
             use InteractionCoefficientsModule, only: gCintArr, createCintArr, computeInteractionCoefficients
-            use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr
+            use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr, createTransArr
             use ArrayDimensionsModule, only: gCurrentDims
             use Fftw3HelpersModule, only: setup_fftw_plans
 
@@ -819,6 +833,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS .AND. boolHorzChange) boolUpdateCint = .true.
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
+                errorCode = createTransArr(gCurrentDims)
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
                 call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
                 
@@ -984,47 +999,22 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IXMAX = gridPoints(I)
-                    !if (arraySizes%IXMAX < 32) arraySizes%IXMAX = 32
                     EXIT
                 ENDIF
             END DO
-            J = 6 * meridWaves + 1      ! We don't need to double the meridional length as the FFTW3 r2r handles our boundaries
+            J = 6 * meridWaves + 1
             DO I = 1, SIZE(gridPoints)
                 IF(J .LE. gridPoints(I)) THEN
                     arraySizes%IYMAX = gridPoints(I)
-                   ! if (arraySizes%IYMAX < 16) arraySizes%IYMAX = 16
                     EXIT
                 ENDIF
             END DO
-            arraySizes%IXIYL = levels
             !------------------------------------For Graphics output of maps:
             arraySizes%KX = arraySizes%IXMAX + 2
             arraySizes%LY = arraySizes%IYMAX + 2
-            !-------------------------------------Vertical dimension:
-            arraySizes%IZMAX = 2 * levels
-            arraySizes%IZMAX  = MAX(arraySizes%IZMAX, 16) ! Ensure IZMAX is at least 16
 
-            !--------------------Put the larger of KX, LY into I and the other into J
-            I = MAX(arraySizes%KX, arraySizes%LY)
-            J = MIN(arraySizes%KX, arraySizes%LY)
-
-            J = MAX(J, arraySizes%IZMAX) ! Ensure J is at least IZMAX (40)
-            !---------------------------------Set KXLYD to largest of KX*LY, (KX,LY)*IZMAX
-            arraySizes%KXLYD = I * J ! will be either (KX * LY) or (KX * IZMAX) or (LY * IZMAX)
-
-            !---------------------------------Set TMP array to largest of KX or LY
-            arraySizes%LYD = I
-
-            arraySizes%IBIG = I * J
-            !-------------------------------------Make room for ASXY to plot
-            arraySizes%IBIG = MAX(arraySizes%IBIG, MIN_ASXY_SIZE) ! Ensure IBIG is at least MIN_ASXY_SIZE (3721)
-
-            arraySizes%IBOX = 4 * arraySizes%IBIG
             arraySizes%ITOT = meridWaves + 2 * zonalWaves * meridWaves
             arraySizes%IYH = arraySizes%IYMAX / 2 + 1
-            arraySizes%IXMAX1 = arraySizes%IXMAX + 1
-            
-            arraySizes%ITOTND = arraySizes%ITOT * levels
 
             !---------------------------------Statistical array sizes:
             arraySizes%ITOTA = 1
@@ -1048,7 +1038,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 arraySizes%NALA = levels
                 arraySizes%KXV = arraySizes%KX
                 arraySizes%LYV = arraySizes%IYH
-                !I = arraySizes%NALA
             end if
 
         END function SetDimensions
@@ -1134,7 +1123,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! to increase the damping. Not sure why it is divided by 8. Probably because
             ! the scale factor gives 0.1157 / day or about 2.7 hr damping.
             
-            gVertArr%FK(1) = gScaleFactors%dissipation / 2.5   ! Gives a 2.5 day dissipation 
+            gVertArr%FK(1) = gScaleFactors%dissipation / 1.0   ! Gives a 1 day dissipation 
         END subroutine DFDIAB
 
         !*****************************************Place perturbation in flow:
@@ -1151,8 +1140,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gHorzArr%PS(1, N) = .1 * REAL(N - 1) / REAL(gModIntParams%NLEV)
             END DO
         !---------------------------------Perturb ALL surface components:
-            gHorzArr%PS(gModIntParams%LMAX2 + 1, 1) = .001
-            !gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
+            gHorzArr%PS(1 : gCurrentDims%ITOT, 1) = .001
         END SUBROUTINE CreatePerturbation
 
         !***************************************************** SetDefaults:
@@ -1165,7 +1153,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAP, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
                 AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3, USE_INTERACTION_COEFFICIENTS
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
-                gContourIntervals, gModPlotParams, gModSensParams, gPlotScales
+                gContourIntervals, gModSensParams, gPlotScales
             use NLevQGModelGlobals, only: LogMessage
 
             implicit none
@@ -1355,21 +1343,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%KMODE = 0
             gModIntParams%LMODE = 1
             gModIntParams%IADD = 0
-
-        !----------------------------------------------JCN variables
-            gModPlotParams%ISTRM = -1
-            gModPlotParams%JSTRM = 0
-            gModPlotParams%KSTRM = 4
-            gModPlotParams%LP1 = 9
-            gModPlotParams%LP2 = 5
-            gModPlotParams%LPL = 8
-            gModPlotParams%ICS = 0
-            gModPlotParams%ICA = 12
-            gModPlotParams%ICTXT = 8
-            gModPlotParams%ICFS = 13
-            gModPlotParams%ICF = 11
-            gModPlotParams%ICFH = 10
-            gModPlotParams%ISCRN = 1
 
         !-------------------------------Defaults for SENSIV routine:
         !  MSEN(1-3)=Fields 1-3; PS,th,ww
@@ -1597,9 +1570,14 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 return
             endif
             !-----------------------------Compute PP by setting to the middle of PV's:
+            gVertArr%LVS(1) = gVertArr%PP(1)
             DO N = 2, gModIntParams%NLEV
                 gVertArr%PP(N) = (gVertArr%PV(N - 1) + gVertArr%PV(N)) / 2.
+                gVertArr%LVS((N - 1) * 2) = gVertArr%PV(N - 1)
+                gVertArr%LVS(N * 2 - 1) = gVertArr%PP(N)
             END DO
+            gVertArr%LVS(gModIntParams%NLEV * 2) = gVertArr%PV(gModIntParams%NLEV)
+            gVertArr%LVS(gModIntParams%NLEV * 2 + 1) = gVertArr%PP(gModIntParams%NLEV + 1)
             !-----------------------------Compute the ratio PP(1)/DP(n)
             DO N = 1, gModIntParams%NLEV
                 gVertArr%DPI(N) = gVertArr%PP(1) / (gVertArr%PP(N) - gVertArr%PP(N + 1))
