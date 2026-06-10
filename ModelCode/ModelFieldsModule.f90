@@ -124,6 +124,8 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: DAT_pool(:)      !  DAT(ITOT) is an all purpose array for computing some variable at a level.
     REAL, ALLOCATABLE, TARGET :: AKL_pool(:)      !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
     REAL, ALLOCATABLE, TARGET :: AKLI_pool(:)     !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+    REAL, ALLOCATABLE, TARGET :: Interp_Strm_pool(:)     !  An ITOT array to compute the strm variables at an interpolated level for plotting
+    REAL, ALLOCATABLE, TARGET :: Interp_Temp_pool(:)     !  An ITOT array to compute the temp variables at an interpolated level for plotting
     REAL, ALLOCATABLE, TARGET :: RK_pool(:)       !  RK(maxZonalWaves) K wavenumber as a real value
     REAL, ALLOCATABLE, TARGET :: RL_pool(:)       !  RL(maxMeridWaves) L wavenumber as a real value
     REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels), for the N-cycle scheme
@@ -165,6 +167,8 @@ MODULE ModelFieldsModule
         REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
         REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+        real, pointer :: Interp_Strm(:) => null() !  An ITOT array to compute the strm variables at an interpolated level for plotting
+        real, pointer :: Interp_Temp(:) => null() !  An ITOT array to compute the temp variables at an interpolated level for plotting
         real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
         real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
         REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOT,maxLevels)
@@ -327,6 +331,8 @@ MODULE ModelFieldsModule
                     DAT_pool(gArrayDims%itot),                         &
                     AKL_pool(gArrayDims%itot),                         &
                     AKLI_pool(gArrayDims%itot),                        &
+                    Interp_Strm_pool(gArrayDims%itot),                 &
+                    Interp_Temp_pool(gArrayDims%itot),                 &
                     RK_pool(gUserSettings%maxZonalWaves),              &
                     RL_pool(gUserSettings%maxMeridWaves),              &
                     ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels), &
@@ -400,9 +406,12 @@ MODULE ModelFieldsModule
             DAT_pool = 0.0
             AKL_pool = 0.0
             AKLI_pool = 0.0
+
             ZS_pool = 0.0
             PSSAVE_pool = 0.0
-            
+            Interp_Strm_pool = 0.0
+            Interp_Temp_pool = 0.0
+
             if (skipSettings) return
             AKL_pool = 0.0
             AKLI_pool = 0.0
@@ -494,6 +503,8 @@ MODULE ModelFieldsModule
             gHorzArr%DAT(1 : itot) => DAT_pool(1 : itot)
             gHorzArr%AKL(1 : itot) => AKL_pool(1 : itot)
             gHorzArr%AKLI(1 : itot) => AKLI_pool(1 : itot)
+            gHorzArr%Interp_Strm(1 : itot) => Interp_Strm_pool(1 : itot)
+            gHorzArr%Interp_Temp(1 : itot) => Interp_Temp_pool(1 : itot)
             gHorzArr%RK(1 : zonal_waves) => RK_pool(1 : zonal_waves)
             gHorzArr%RL(1 : merid_waves) => RL_pool(1 : merid_waves)
             gHorzArr%defined = .TRUE. ! Set defined flag to true
@@ -554,6 +565,8 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(DAT_pool))     DEALLOCATE(DAT_pool)
             IF (ALLOCATED(AKL_pool))     DEALLOCATE(AKL_pool)
             IF (ALLOCATED(AKLI_pool))    DEALLOCATE(AKLI_pool)
+            IF (ALLOCATED(Interp_Strm_pool)) DEALLOCATE(Interp_Strm_pool)
+            IF (ALLOCATED(Interp_Temp_pool)) DEALLOCATE(Interp_Temp_pool)
             IF (ALLOCATED(RK_pool))      DEALLOCATE(RK_pool)
             IF (ALLOCATED(RL_pool))      DEALLOCATE(RL_pool)
             IF (ALLOCATED(ZS_pool))      DEALLOCATE(ZS_pool)
@@ -580,6 +593,8 @@ MODULE ModelFieldsModule
             gHorzArr%DAT  => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
             gHorzArr%AKL  => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
             gHorzArr%AKLI => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
+            gHorzArr%Interp_Strm => null() !  An ITOT array to compute the strm variables at an interpolated level for plotting
+            gHorzArr%Interp_Temp => null() !  An ITOT array to compute the temp variables at an interpolated level for plotting
             gHorzArr%RK  => null()       !  RK(maxZonalWaves) K wavenumber as a real value
             gHorzArr%RL => null()        !  RL(maxMeridWaves) L wavenumber as a real value
             gHorzArr%ZS  => null()      !  ZS(ITOTD,maxLevels)

@@ -434,7 +434,7 @@ module PlotModule
                 !phaseSpaceType%xScale = 2.0 * gContourIntervals%Contours(field)
                 ! The spectral eigenfunction is 2 * (cosx, sinx)siny
                 if (gIsTemperature(field)) then
-                    phaseSpaceType%xScale = 2.0 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                    phaseSpaceType%xScale = 2.0 * gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
                 else
                     phaseSpaceType%xScale = 2.0 * gPlotScales(field)
                 endif
@@ -442,7 +442,7 @@ module PlotModule
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
                 phaseSpaceType%xIndex = gModIntParams%meridWavenumber
                 if (gIsTemperature(field)) then
-                    phaseSpaceType%xScale = SQRT2 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                    phaseSpaceType%xScale = SQRT2 * gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
                 else
                     phaseSpaceType%xScale = SQRT2 * gPlotScales(field)
                 endif
@@ -454,7 +454,7 @@ module PlotModule
                                         2 * gModIntParams%LMAX2 * (gModIntParams%sinZonal - 1) + & ! Puts us at the start of the Kth zonal wave
                                         2 * (gModIntParams%sinMerid - 1) + 1
                 if (gIsTemperature(field)) then
-                    phaseSpaceType%yScale = 2.0 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                    phaseSpaceType%yScale = 2.0 * gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
                 else
                     phaseSpaceType%yScale = 2.0 * gPlotScales(field)
                 endif
@@ -462,7 +462,7 @@ module PlotModule
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
                 phaseSpaceType%yIndex = gModIntParams%meridWavenumber
                 if (gIsTemperature(field)) then
-                    phaseSpaceType%yScale = SQRT2 * gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                    phaseSpaceType%yScale = SQRT2 * gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
                 else
                     phaseSpaceType%yScale = SQRT2 * gPlotScales(field)
                 endif
@@ -481,11 +481,12 @@ module PlotModule
                 phaseSpaceType%ycenter = 3 * gBitMapInfo%height / factor
             endif
 
+            ! No need to call these anymore - They have to be called every time step because of interpolation
             ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
-            call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
+            !call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
                 
             ! Now get the variable to be plotted along the y-axis. That will be gModIntParams%field1. 
-            call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
+            !call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
 
             phaseSpaceType%colorLead = IOR(ISHFT(IAND(colorLead, Z'000000FF'), 16), & ! R: bit 0 -> 16
                         IOR(IAND(colorLead, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
@@ -519,14 +520,15 @@ module PlotModule
 
             ! Scale factor
             if (gIsTemperature(field)) then
-                weatherMapType%scale = gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                weatherMapType%scale = gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
             else
                 weatherMapType%scale = gPlotScales(field)
             endif
             ! We divide by the contour interval here to save a division
             weatherMapType%contourIntervalInv = 1.0 / REAL(gContourIntervals%Contours(field))
             ! Get field to be plotted
-            call loadFields( weatherMapType%value, field, gModIntParams%LEVP)
+            ! No need to call these anymore - They have to be called every time step because of interpolation
+            !call loadFields( weatherMapType%value, field, gModIntParams%LEVP)
         end subroutine initializeWeatherMapType
         
         !! Initializes all the parameters for a hovmoller plot that do not depend upon the newly generated values
@@ -557,14 +559,15 @@ module PlotModule
 
             ! Scale factor
             if (gIsTemperature(field)) then
-                hovmollerType%scale = gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                hovmollerType%scale = gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
             else
                 hovmollerType%scale = gPlotScales(field)
             endif
             ! We divide by the contour interval here to save a division
             hovmollerType%contourIntervalInv = 1.0 / REAL(gContourIntervals%Contours(field))
             ! Get field to be plotted
-            call loadFields( hovmollerType%value, field, gModIntParams%LEVP)
+            ! No need to call these anymore - They have to be called every time step because of interpolation
+            !call loadFields( hovmollerType%value, field, gModIntParams%LEVP)
             
             if (latOrLon) then       ! Precompute the sinLy and cosLy for constant y
                 ! The latitude is given by gModRealParams%hovLat. The number of L waves is given by gModIntParams%LMAX2
@@ -635,7 +638,7 @@ module PlotModule
 
             ! Scale factor
             if (gIsTemperature(field)) then
-                weatherStnType%scale = gPlotScales(field) / gVertArr%A(gModIntParams%LEVP)
+                weatherStnType%scale = gPlotScales(field) / gVertArr%A(min(1 + (gModIntParams%LEVP - 2) / 2, SIZE(gVertArr%A)))
             else
                 weatherStnType%scale = gPlotScales(field)
             endif
@@ -662,6 +665,7 @@ module PlotModule
                 weatherStnType%sinx(K) = SIN(real(K) * gModRealParams%lonPoint)
                 weatherStnType%cosx(K) = COS(real(K) * gModRealParams%lonPoint)
             end do
+            ! No need to call these anymore - They have to be called every time step because of interpolation
             call loadFields(weatherStnType%value, field, gModIntParams%LEVP)
             weatherStnType%units = getUnits(field)
             weatherStnType%isInitialized = .true.
@@ -788,101 +792,6 @@ module PlotModule
             if (gWeatherMap1%field == field) wxMapType = gWeatherMap1
             if (gWeatherMap2%field == field) wxMapType = gWeatherMap2
         end function getWeatherMapType
-        
-        !> This routine creates the one dimensional array representing the actual
-        !> values of the height or temperature field at the latitude selected by
-        !> gPlotConfig%hov_latitude. Those array points are calculated at only 33
-        !> points along the east-west latitude line. Normally this would be done with an FFT
-        !> but since only 10 spectral amplitudes are involved, doing the computations
-        !> via brute force probably saves time. This is sped up as the cos and sin
-        !> functions are precalculated for 32 points in the period. These pre-calculated
-        !> functions are in gPlotConfig%rcos and gPlotConfig%rsin
-        !> Of course this is FAR to few points to generate a plot on the screen which
-        !> has more than a thousand points. Thus the array (hov(33) which is part of this
-        !> module) created by this routine is interpolated using bipolar cubic splines to 
-        !> create each pixel value.
-        !subroutine createHovmollerAtLat(hov)
-        !    use ModelTypesModule, only: PI, scaleHeights
-        !
-        !    implicit none
-        !
-        !    real, intent(inout) :: hov(33)
-        !
-        !    integer :: k, I1, I2
-        !    real :: waveLat, zonalLat, waveLat2, zonalLat2
-        !    
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !
-        !    if (usesHeight) then
-        !        call setVariables(Y, HEIGHT) ! Sets module variables S1-S10 with correct scalings
-        !    else
-        !        call setVariables(Y, TEMPERATURE)
-        !    endif
-        !    waveLat = sin(REAL(gPlotConfig%hov_latitude) * PI / 90.0)
-        !    zonalLat = S1 * cos(REAL(gPlotConfig%hov_latitude) * PI / 90.0)
-        !    waveLat2 = sin(REAL(2 * gPlotConfig%hov_latitude) * PI / 90.0)
-        !    zonalLat2 = S4 * cos(REAL(2 * gPlotConfig%hov_latitude) * PI / 90.0)
-        !    do K = 1, 33
-        !        I1 = IAND(K - 1, 31) + 1
-        !        I2 = IAND(2 * (k - 1), 31) + 1
-        !        hov(k) = &
-        !            (S2 * gPlotConfig%rcos(i1) + S3 * gPlotConfig%rsin(I1) + S7 * gPlotConfig%rcos(i2) + S8 * gPlotConfig%rsin(i2) ) * waveLat &
-        !          + (S5 * gPlotConfig%rcos(i1) + S6 * gPlotConfig%rsin(I1) + S9 * gPlotConfig%rcos(i2) + S10 * gPlotConfig%rsin(i2)) * waveLat2 &
-        !          + zonalLat + zonalLat2 
-        !    end do
-        !end subroutine createHovmollerAtLat
-
-        !> This routine creates the one dimensional array representing the actual
-        !> values of the height or temperature field at the longitude selected by
-        !> gPlotConfig%hov_longitude. Those array points are calculated at only 17
-        !> points along the north-south longitude line. Normally this would be done with an FFT
-        !> but since only 10 spectral amplitudes are involved, doing the computations
-        !> via brute force probably saves time. This is sped up as the cos and sin
-        !> functions are precalculated for 32 points in the period. These pre-calculated
-        !> functions are in gPlotConfig%rcos and gPlotConfig%rsin. Though we only have
-        !> a half period in the meridional direction, we can use our precalculated sin and cos.
-        !> Of course this is FAR to few points to generate a plot on the screen which
-        !> has more than a thousand points. Thus the array hov(33), of which only 17 are
-        !> used in this case, created by this routine is interpolated using bipolar cubic 
-        !> splines to create each pixel value.
-        !subroutine createHovmollerAtLon(hov, Y)
-        !    use ConstantsModule, only: HEIGHT, TEMPERATURE, wp
-        !    use ModelTypesModule, only: PI, scaleHeights
-        !
-        !    implicit none
-        !
-        !    real, intent(inout) :: hov(17)
-        !    real(wp), intent(in) :: Y(:)
-        !
-        !    integer :: L, L2
-        !    real :: waveCosLon, waveSinLon, waveCosLon2, waveSinLon2
-        !    logical :: usesHeight
-        !    logical :: usesTemperature
-        !    
-        !    usesHeight = (gModIntParams%field1 == HEIGHT .OR. gModIntParams%field2 == HEIGHT)
-        !    usesTemperature = (gModIntParams%field1 == TEMPERATURE .OR. gModIntParams%field2 == TEMPERATURE)
-        !
-        !    if (usesHeight) then
-        !        call setVariables(Y, HEIGHT) ! Sets S1-S10 with correct scalings
-        !    else
-        !        call setVariables(Y, TEMPERATURE)
-        !    endif
-        !    waveCosLon = cos(REAL(gPlotConfig%hov_longitude) * PI / 180.0)
-        !    waveSinLon = sin(REAL(gPlotConfig%hov_longitude) * PI / 180.0)
-        !    waveCosLon2 = cos(REAL(2 * gPlotConfig%hov_longitude) * PI / 180.0)
-        !    waveSinLon2 = sin(REAL(2 * gPlotConfig%hov_longitude) * PI / 180.0)
-        !    hov = 0.0
-        !    do L = 1, 17
-        !        L2 = IAND(2 * (L - 1), 31) + 1
-        !        hov(L) = &
-        !            (S2 * waveCosLon + S3 * waveSinLon + S7 * waveCosLon2 + S8 * waveSinLon2 ) * gPlotConfig%rsin(L) +  S1 * gPlotConfig%rcos(L) &
-        !          + (S5 * waveCosLon + S6 * waveSinLon + S9 * waveCosLon2 + S10 * waveSinLon2) * gPlotConfig%rsin(L2) + S4 * gPlotConfig%rcos(L2)
-        !    end do
-        !end subroutine createHovmollerAtLon
 
         !> This routine creates the two dimensional grid representing the actual
         !> values of the height or temperature field in the channel. Those array points
@@ -1006,7 +915,7 @@ module PlotModule
 
             ! 2. Instantly replicate the periodic boundary column in one line (No DO loop!)
             grid(IXMAX + 1, 1:IYMAX) = grid(1, 1:IYMAX)
-            call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
+            !call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
         end subroutine createGrid
         
         subroutine InverseTransform(weatherMapType)
@@ -1174,7 +1083,8 @@ module PlotModule
             integer(4) :: colorToDraw
             
             logical :: useSolidColor = true
-            
+
+    !! ===========  NOT USING THIS NOW
             return
 
             saveField = gModIntParams%field1
@@ -1415,15 +1325,15 @@ module PlotModule
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%row = 0
                 gLatHovmoller2%row = 0
-                !call DrawVerticalLines(.false.)
+                call DrawVerticalLines(.false.)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
                 gLonHovmoller1%row = 0
                 gLonHovmoller2%row = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
             else if (gModIntParams%plotType == WEATHER_MAP) then
-                !call DrawGridLines(.false.)
+                call DrawGridLines(.false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
-                !call DrawGridLines(.false.)
+                call DrawGridLines(.false.)
                 call DrawCartesianAxes(.false.)
             endif
 
@@ -1447,68 +1357,213 @@ module PlotModule
 
 
         ! Helper to point to the arrays containing the user-selected field to  plot
-        subroutine loadFields(ptr, field, level)
+        ! The level is now trickier. Now we have all levels in LEVP which includes the interfaces just for plotting
+        ! So to get the actual levels where the fields are define we need to set levels = 1 + (plotLevels - 1) / 2 
+
+        subroutine loadFields(ptr, field, plotLevel)
             use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                 OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
                 OROG_HGT_TEND, OROGRAPHY
 
             use ArrayDimensionsModule, only: gCurrentDims
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelParamsModule, only: gModIntParams
             
             implicit none
             
             real, pointer, intent(out) :: ptr(:)
             integer, intent(in)        :: field
-            integer, intent(in)        :: level
+            integer, intent(in)        :: plotLevel
+            
+            integer :: level, levelt
+            logical :: isTempField, isOdd, isInterp
+            REAL, pointer :: var(:, :)
+            REAL :: weight
+            
+            level = min(1 + (plotLevel - 1) / 2, gModIntParams%NLEV)
+            levelt = min(1 + (plotLevel - 2) / 2, gModIntParams%NLEV - 1)
+
+            ! Example when NLEV = 10
+            ! plotLevel level   levelt pressure   temperature          height
+            !    1        1       1     1000         t(1)               h(1)
+            !    2        1       1      950         t(1)               h(1)
+            !    3        2       1      900         t(1)           [h(1) + h(2)]/2     [h(level-1) + h(level)]/2
+            !    4        2       2      850    [t(1) + t(2)]/2         h(2)            [t(levelt-1) + t(levelt)]/2 
+            !    5        3       2      800         t(2)           [h(2) + h(3)]/2
+            !    6        3       3      750    [t(2) + t(3)]/2         h(3)
+            !    7        4       3      700         t(3)           [h(3) + h(4)]/2
+            !    8        4       4      650
+            !    9        5       4      600
+            !    10       5       5      550
+            !    11       6       5      500
+            !    12       6       6      450
+            !    13       7       6      400
+            !    14       7       7      350
+            !    15       8       7      300
+            !    16       8       8      250
+            !    17       9       8      200
+            !    18       9       9      150    [t(8) + t(9)]/2         h(9)
+            !    19       10      9      100         t(9)           [h(9) + h(10)]/2
+            !    20       10      9       50         t(9)               h(10)
+            !    21       10      9        0         t(9)               h(10)
+            
+            ! This makes level equal to actual index level of the streamfunction and the temperature such that
+            ! PS(:, level) is the streamfunction at that level and TH(:, level) is the temperature at that level.
+            ! The levelt is for the interface. 
 
             select case (field)
                 case(VORTICITY)             ! Vorticity in 10**-5/s
-                    ptr => gHorzArr%PS(:, level)      ! PS is the streamfunction spectral components
+                    var => gHorzArr%PS(:, :)      ! PS is the streamfunction spectral components
+                    isTempField = .FALSE.
 
                 case(HEIGHT)                ! Height in meters
-                    ptr => gHorzArr%PS(:, level)      ! PS is the streamfunction spectral components
+                    var => gHorzArr%PS(:, :)      ! PS is the streamfunction spectral components
+                    isTempField = .FALSE.
 
                 case(TEMPERATURE)           ! Temperature in Centigrade
-                    ptr => gHorzArr%TH(:, level)      ! TH(ITOT,maxLevels) is the temperature spectral components
+                    var => gHorzArr%TH(:, :)      ! TH(ITOT,maxLevels) is the temperature spectral components
+                    isTempField = .TRUE.
 
                 case(VERTICAL_WIND)         ! Vertical wind in mb/hr or mm/sec
-                    ptr => gHorzArr%WW(:, level)      ! WW(ITOT,maxLevels) is the omega spectral components
-                    
+                    var => gHorzArr%WW(:, :)      ! WW(ITOT,maxLevels) is the omega spectral components
+                    isTempField = .FALSE.
+
                 case(TEMP_FORCING)          ! Temperature driving (forcing) - Radiative relaxation temperature in Centigrade
-                    ptr => gHorzArr%TF(:, level)      ! TF(ITOT,maxLevels) is the thermal forcing field
+                    var => gHorzArr%TF(:, :)      ! TF(ITOT,maxLevels) is the thermal forcing field
+                    isTempField = .TRUE.
 
                 case(TOT_HGT_TEND)          ! Total Height tendency in meters/day
-                    ptr => gHorzArr%FS(:, level)      ! FS(ITOT,maxLevels) is the total streamfunction tendency
+                    var => gHorzArr%FS(:, :)      ! FS(ITOT,maxLevels) is the total streamfunction tendency
+                    isTempField = .FALSE.
 
                 case(ADV_BETA_HGT_TEND)     ! Height tendencies in m/day from Advection plus beta
-                    ptr => gHorzArr%ADS(:, level)     ! ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+                    var => gHorzArr%ADS(:, :)     ! ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+                    isTempField = .FALSE.
 
                 case(OMEGA_HGT_TEND)        ! Height tendencies in m/day from omega (dp/dt)
-                    ptr => gHorzArr%WS(:, level)      ! WS(ITOT,maxLevels) is the omega forcing on the streamfunction
+                    var => gHorzArr%WS(:, :)      ! WS(ITOT,maxLevels) is the omega forcing on the streamfunction
+                    isTempField = .FALSE.
 
                 case(DIABATIC_HGT_TEND)     ! Height tendencies in m/day from Diabatic effects (like dissipation)
-                    ptr => gHorzArr%S(:, level)       ! S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
+                    var => gHorzArr%S(:, :)       ! S(ITOT,maxLevels) is the diabatic forcing on the streamfunction
+                    isTempField = .FALSE.
 
                 case(TOT_TEMP_TEND)         ! Total temperture tendencies in C/day
-                    ptr => gHorzArr%FT(:, level)      ! FT(ITOT,maxLevels) is the temperature tendency
+                    var => gHorzArr%FT(:, :)      ! FT(ITOT,maxLevels) is the temperature tendency
+                    isTempField = .TRUE.
 
                 case(ADV_TEMP_TEND)         ! Temperature tendencies in C/day from advection
-                    ptr => gHorzArr%ADT(:, level)     ! ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+                    var => gHorzArr%ADT(:, :)     ! ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+                    isTempField = .TRUE.
 
                 case(OMEGA_TEMP_TEND)       ! Temperature tendencies in C/day from omega
-                    ptr => gHorzArr%WT(:, level)      ! WT(ITOT,maxLevels) is the omega forcing on the temperature
+                    var => gHorzArr%WT(:, :)      ! WT(ITOT,maxLevels) is the omega forcing on the temperature
+                    isTempField = .TRUE.
 
                 case(DIABATIC_TEMP_TEND)    ! Temperature tendencies in C/day from Diabatic effects
-                    ptr => gHorzArr%T(:, level)       ! T(ITOT,maxLevels) is the diabatic forcing on the temperature
+                    var => gHorzArr%T(:, :)       ! T(ITOT,maxLevels) is the diabatic forcing on the temperature
+                    isTempField = .TRUE.
 
                 case(HGT_FORCING)           ! Mean streamfunction (height) forcing in m
-                    ptr => gHorzArr%SF(:, level)      ! SF(ITOT,maxLevels) is the Barotropic momentum forcing field
-                    
+                    var => gHorzArr%SF(:, :)      ! SF(ITOT,maxLevels) is the Barotropic momentum forcing field
+                    isTempField = .FALSE.
+
                 case(OROG_HGT_TEND)         ! Height tendencies from ororgraphy in m/day
-                    
+                    isTempField = .FALSE.
+
                 case(OROGRAPHY)             ! Height of ororgraphy in m
                     ptr => gHorzArr%TOP(:) 
+                    return
             end select
+
+            isOdd = BTEST(plotLevel, 0) ! if Bit 0 is 1, the function returns true and the number is odd. This means we are in the middle of a layer 
+
+            if (isTempField) then
+                if (isOdd .OR. (plotLevel .LE. 3) .OR. (plotLevel .GE. SIZE(gVertArr%LVS) - 2)) then
+                    ptr => var(:, levelt) ! At the interface level. Use the actual temperature and do not interpolate
+                    isInterp = .FALSE.
+                else
+                    weight = (gVertArr%PP(level) - gVertArr%PV(level)) / (gVertArr%PP(level)- gVertArr%PP(level + 1))
+                    gHorzArr%Interp_Temp(:) =  (1.0 - weight) * var(:, levelt - 1) + weight * var(:, levelt)
+                    ptr => gHorzArr%Interp_Temp
+                    isInterp = .TRUE.
+                end if
+            else
+                if (isOdd .AND. (plotLevel .GE. 3) .AND. (plotLevel .LT. SIZE(gVertArr%LVS) - 1)) then
+                    weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
+                    gHorzArr%Interp_Strm(:) =  (1.0 - weight) * var(:, level - 1) + weight * var(:, level)
+                    ptr => gHorzArr%Interp_Strm
+                    isInterp = .TRUE.
+                else
+                    ptr => var(:, level)    ! At the middle of the layer. Use the actual streamfunction and do not interpolate
+                    isInterp = .FALSE.
+                endif
+            end if
+            ! Example when NLEV = 10
+            !write(*,*) 'Debug: plotLevel=', plotLevel, ' -> level=', level, ' levelt=', levelt, ' isOdd=', isOdd, ' is Temp: ', isTempField, ' is Interpolated: ', isInterp
+            ! Debug: plotLevel= 1  -> level= 1  levelt= 1  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 1  -> level= 1  levelt= 1  isOdd= T  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 2  -> level= 1  levelt= 1  isOdd= F  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 2  -> level= 1  levelt= 1  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 3  -> level= 2  levelt= 1  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 3  -> level= 2  levelt= 1  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 4  -> level= 2  levelt= 2  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 4  -> level= 2  levelt= 2  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 5  -> level= 3  levelt= 2  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 5  -> level= 3  levelt= 2  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 6  -> level= 3  levelt= 3  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 6  -> level= 3  levelt= 3  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 7  -> level= 4  levelt= 3  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 7  -> level= 4  levelt= 3  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 8  -> level= 4  levelt= 4  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 8  -> level= 4  levelt= 4  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 9  -> level= 5  levelt= 4  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 9  -> level= 5  levelt= 4  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 10  -> level= 5  levelt= 5  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 10  -> level= 5  levelt= 5  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 11  -> level= 6  levelt= 5  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 11  -> level= 6  levelt= 5  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 12  -> level= 6  levelt= 6  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 12  -> level= 6  levelt= 6  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 13  -> level= 7  levelt= 6  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 13  -> level= 7  levelt= 6  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 14  -> level= 7  levelt= 7  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 14  -> level= 7  levelt= 7  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 15  -> level= 8  levelt= 7  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 15  -> level= 8  levelt= 7  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 16  -> level= 8  levelt= 8  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 16  -> level= 8  levelt= 8  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 17  -> level= 9  levelt= 8  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 17  -> level= 9  levelt= 8  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 18  -> level= 9  levelt= 9  isOdd= F  is Temp:  T  is Interpolated:  T
+            ! Debug: plotLevel= 18  -> level= 9  levelt= 9  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 19  -> level= 10  levelt= 9  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 19  -> level= 10  levelt= 9  isOdd= T  is Temp:  F  is Interpolated:  T
+            !
+            ! Debug: plotLevel= 20  -> level= 10  levelt= 9  isOdd= F  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 20  -> level= 10  levelt= 9  isOdd= F  is Temp:  F  is Interpolated:  F
+            !
+            ! Debug: plotLevel= 21  -> level= 10  levelt= 9  isOdd= T  is Temp:  T  is Interpolated:  F
+            ! Debug: plotLevel= 21  -> level= 10  levelt= 9  isOdd= T  is Temp:  F  is Interpolated:  F
+
         end subroutine loadFields
         
         function getUnits(field) result(text)
@@ -1582,6 +1637,7 @@ module PlotModule
             USE, INTRINSIC :: ISO_C_BINDING
 
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModIntParams
 
             ! Windows (0,0) is the top-left corner and the range is 
 
@@ -1594,6 +1650,10 @@ module PlotModule
             REAL ::         xc, yc
             TYPE(T_RECT) :: rect
             INTEGER(4), POINTER :: pixelArray(:, :)
+
+            ! Need to do this to recompute interplated fields every plot time
+            call loadFields( phaseSpaceType%x, phaseSpaceType%field, gModIntParams%LEVP)
+            call loadFields( phaseSpaceType%y, phaseSpaceType%field, gModIntParams%LEVP)
 
             xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
             yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
@@ -1635,6 +1695,7 @@ module PlotModule
             integer :: I, K, L
 
             if (gWeatherStation1%field /= PLOTTING_OFF) then
+                call loadFields(gWeatherStation1%value, gWeatherStation1%field, gModIntParams%LEVP)
                 ! Compute the value
                 value = computeValue(gWeatherStation1)
                 call loadTimeSeriesArray(gWeatherStation1%timeSeriesBuf, value * gWeatherStation1%scale, &
@@ -1643,6 +1704,7 @@ module PlotModule
 
             endif
             if (gWeatherStation2%field /= PLOTTING_OFF) then
+                call loadFields(gWeatherStation2%value, gWeatherStation2%field, gModIntParams%LEVP)
                 value = computeValue(gWeatherStation2)
                 call loadTimeSeriesArray(gWeatherStation2%timeSeriesBuf, value * gWeatherStation2%scale, &
                                          gWeatherStation2%yCenter, gWeatherStation2%gDCcolor, gWeatherStation1%field == PLOTTING_OFF, .true.)
@@ -1720,8 +1782,8 @@ module PlotModule
             DO i = 1, timeSeriesBuf%count
                 ! Offset the starting point so the "newest" data is always on the right
                 read_idx = MOD(timeSeriesBuf%head_idx - timeSeriesBuf%count + i, gBitMapInfo%width)
-                if (read_idx < 0) read_idx = read_idx + gBitMapInfo%width
-                read_idx = read_idx + 1 ! Back to 1-based
+                if (read_idx < 1) read_idx = read_idx + gBitMapInfo%width
+                !read_idx = read_idx + 1 ! Back to 1-based
         
                 timeSeriesBuf%plot_pts(i)%x = (gBitMapInfo%width - timeSeriesBuf%count) + (i - 1)
                 ! NOTE: Flip and Scale Y. Windows Y=0 is top. 
@@ -1779,7 +1841,7 @@ module PlotModule
             bret = lineto(gbitmapinfo%hmemdc, gbitmapinfo%width, gbitmapinfo%height / 2)
         
             if (drawMovingTimeLines) then 
-                hOldFont = SelectObject(gBitMapInfo%hMemDC, hFontAxis) ! Use a small font
+                !hOldFont = SelectObject(gBitMapInfo%hMemDC, hFontAxis) ! Use a small font
                 bret = SetTextColor(gBitMapInfo%hMemDC, RGB(100, 100, 100))
                 ! Now draw the vertical lines which represent time. These axes will need to move to the left
                 ! as new values come in.
@@ -1814,8 +1876,8 @@ module PlotModule
                         bret = TextOut(gBitMapInfo%hMemDC, ix, 2, trim(timeStr), len_trim(timeStr))
                     end if
                 end do
-                hOldFont = SelectObject(gBitMapInfo%hMemDC, hOldFont)
-                bret = DeleteObject(hFontAxis)
+                !hOldFont = SelectObject(gBitMapInfo%hMemDC, hOldFont)
+                !bret = DeleteObject(hFontAxis)
             endif
 
             ! Cleanup GDI Objects
@@ -1863,6 +1925,8 @@ module PlotModule
             type(InterpolationBounds) b
 
             real :: zonalMean, temp_calc, sin_ly
+            
+            call loadFields(latHovmoller%value, latHovmoller%field, gModIntParams%LEVP)
 
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
@@ -2026,6 +2090,7 @@ module PlotModule
             real :: temp_calc, cos_kx, sin_kx
             real :: wave_real, wave_imag
 
+            call loadFields(lonHovmoller%value, lonHovmoller%field, gModIntParams%LEVP)
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
             
@@ -2170,6 +2235,7 @@ module PlotModule
             use ConstantsModule, only: PLOTTING_OFF, wp
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ModelFieldsModule, only: gTransArr, gTransArr
+            use ModelParamsModule, only: gModIntParams
 
             IMPLICIT NONE
 
@@ -2194,6 +2260,8 @@ module PlotModule
             integer(4) :: colorToDraw
             
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
+            
+            call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP)
         
             ! This routine also dimensionalizes the values
             call createGrid(gTransArr%plotFull, weatherMapType)
@@ -2203,7 +2271,7 @@ module PlotModule
             if (weatherMapType%useSolidColor) then
                 if (.not. allocated(X)) then
                     allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
-                else if (size(X, 1) /= gBitMapInfo%width .or. size(X, 2) /= gBitMapInfo%height / 2) then
+                else if (size(X, 1) /= gBitMapInfo%width .or. size(X, 2) /= gBitMapInfo%height / 2) then ! size(X, 1) is size of first dimension
                     deallocate(X)
                     allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
                 end if

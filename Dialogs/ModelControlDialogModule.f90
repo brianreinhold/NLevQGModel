@@ -23,7 +23,7 @@ module ModelControlDialogModule
             use iso_c_binding
 
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile, gModelState
-            use ModelFieldsModule, only: gHorzArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr
             use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
                                    ReadSaveFile, SaveModelState
             use ConstantsModule, only: WEATHER_MAP, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
@@ -242,6 +242,8 @@ module ModelControlDialogModule
                                     gModIntParams%field2 = GetComboIndex(hDlg, IDC_COMBO_FIELD2) + addOffset
                                 case (IDC_COMBO_FIELD3)
                                     gModIntParams%field3 = GetComboIndex(hDlg, IDC_COMBO_FIELD3) + addOffset
+                                case (IDC_COMBO_PLOT_LEVEL)
+                                    gModIntParams%LEVP = GetComboIndex(hDlg, IDC_COMBO_PLOT_LEVEL) + 1
                                 case (IDC_COMBO_MODEL_TYPE)
                                     gModIntParams%ModelType = GetComboIndex(hDlg, IDC_COMBO_MODEL_TYPE)
                             end select
@@ -530,7 +532,7 @@ module ModelControlDialogModule
                     !! to be exposed on click only. Do it in the rc file. You have to increase the height
                     !! by 25 * (number of rows - 1) for times new roman 14 font, in any case.
 
-                    !! Map type
+                    !! ===================== Map type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps and phase space combo'//char(0)))
@@ -545,7 +547,7 @@ module ModelControlDialogModule
                     ! Initialize the plotType combo box
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%plotType, UINT_PTR), 0)
 
-                    !! Fields 1, 2, 3
+                    !! ===================== Fields 1, 2, 3
                     ! These are made difficult as the quantities that can be displayed depend upon
                     ! the type of plot plotType. For map-type plots, there can be three fields. For time
                     ! series plots, field2 and field3 are ignored.
@@ -574,8 +576,17 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field3 - FIELD_START, UINT_PTR), 0)
                     ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
                     bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! No three fields in phase space
+                    
+                    !! ============================ Levels
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_PLOT_LEVEL)
+                    do I = 1, SIZE(gVertArr%LVS)
+                        WRITE(buffer, '(F6.1, " mb", A)') gVertArr%LVS(I), CHAR(0)
+                        bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(buffer))
+                    end do
 
-                    !! Model type
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT((gModIntParams%LEVP - 1), UINT_PTR), 0)
+
+                    !! ============================ Model type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MODEL_TYPE)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Fully nonlinear N-level QG model'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('G-Q linearized initial-value model '//char(0)))
@@ -679,9 +690,9 @@ module ModelControlDialogModule
             call addlistviewrowreal(hlist, "channel length in kilometers", [gModRealParams%RN], '(f10.4)')
             call addlistviewrowreal(hlist, "beta parameter relative to 45 deg. latitude", [gModRealParams%BETA], '(f10.4)')
             call addlistviewrowreal(hlist, "time step length in minutes", [gModRealParams%DELT], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the first quantity in mb", [gModRealParams%field1Level], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the second quantity in mb", [gModRealParams%field2Level], '(f10.4)')
-            call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%field3Level], '(f10.4)')
+            !call addlistviewrowreal(hlist, "pressure level of the first quantity in mb", [gModRealParams%field1Level], '(f10.4)')
+            !call addlistviewrowreal(hlist, "pressure level of the second quantity in mb", [gModRealParams%field2Level], '(f10.4)')
+            !call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%field3Level], '(f10.4)')
             call addlistviewrowreal(hlist, "latitude of x-hovmoller and cross-sections", [gModRealParams%hovLat], '(f10.4)')
             call addlistviewrowreal(hlist, "longitude of y-hovmoller and cross-sections", [gModRealParams%hovLon], '(f10.4)')
             call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%lonPoint], '(f10.4)')
@@ -709,7 +720,6 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
             call AddListViewRow(hList, "Zonal wave for time series x-axis phase space", gModIntParams%zonalWavenumber)
             call AddListViewRow(hList, "Meridional wave for time series x-axis phase space", gModIntParams%meridWavenumber)
-            call AddListViewRow(hList, "Level of time series and phase space plots", gModIntParams%LEVP)
             call AddListViewRow(hList, "Zonal wave for y-axis phase space component", gModIntParams%sinZonal)
             call AddListViewRow(hList, "Meridional wave for y-axis phase space", gModIntParams%sinMerid)
             call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%JX0)
@@ -739,25 +749,25 @@ module ModelControlDialogModule
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BETA, str)
                 case (2)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%DELT, str)
+                !case (3)
+                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field1Level, str)
+                !case (4)
+                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field2Level, str)
+                !case (5)
+                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field3Level, str)
                 case (3)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field1Level, str)
-                case (4)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field2Level, str)
-                case (5)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field3Level, str)
-                case (6)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLat, str)
-                case (7)
+                case (4)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLon, str)
-                case (8)
+                case (5)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%lonPoint, str)
-                case (9)
+                case (6)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%latPoint, str)
-                case (10)
+                case (7)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BOT, str)
-                case (11)
+                case (8)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%TPP, str)
-                case (12)
+                case (9)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%CONV, str)
             end select
         end function getStringFromRealForEditBox
@@ -797,18 +807,16 @@ module ModelControlDialogModule
                 case (7)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%meridWavenumber, .TRUE.)
                 case (8)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%LEVP, .TRUE.)
-                case (9)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinZonal, .TRUE.)
-                case (10)
+                case (9)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinMerid, .TRUE.)
-                case (11)
+                case (10)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX0, .TRUE.)
-                case (12)
+                case (11)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY0, .TRUE.)
-                case (13)
+                case (12)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX1, .TRUE.)
-                case (14)
+                case (13)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY1, .TRUE.)
             end select
         end function loadIntegerParameterIntoEditBox

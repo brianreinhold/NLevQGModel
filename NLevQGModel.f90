@@ -428,6 +428,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams, DimensionalizeModRealParams
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams
+    use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
     use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime
 
@@ -749,14 +750,14 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (VK_UP)
                     call LogMessage("User moving up a level")
                     gModIntParams%LEVP = gModIntParams%LEVP + 1
-                    if (gModIntParams%LEVP > gModIntParams%NLEV) gModIntParams%LEVP = 1
+                    if (gModIntParams%LEVP > SIZE(gVertArr%LVS)) gModIntParams%LEVP = 1
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
                 case (VK_DOWN)
                     call LogMessage("User moving down a level")
                     gModIntParams%LEVP = gModIntParams%LEVP - 1
-                    if (gModIntParams%LEVP < 1) gModIntParams%LEVP = gModIntParams%NLEV
+                    if (gModIntParams%LEVP < 1) gModIntParams%LEVP = SIZE(gVertArr%LVS)
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()

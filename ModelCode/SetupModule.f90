@@ -705,11 +705,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             !------------------------------------------Wavenumber, level bounds
             if(gModIntParams%zonalWavenumber .GT. gModIntParams%KMAX2) gModIntParams%zonalWavenumber = gModIntParams%KMAX2
             if(gModIntParams%meridWavenumber .GT. gModIntParams%LMAX2) gModIntParams%meridWavenumber = gModIntParams%LMAX2
-            if(gModIntParams%LEVP .GT. gModIntParams%NLEV) gModIntParams%LEVP = gModIntParams%NLEV
 
             if(gModIntParams%zonalWavenumber .LT. 0) gModIntParams%zonalWavenumber = 0
             if(gModIntParams%meridWavenumber .LT. 1) gModIntParams%meridWavenumber = 1
-            if(gModIntParams%LEVP .LT. 1) gModIntParams%LEVP = 1
+
 
             !-------------------------------------------Field or variable type ranges
             I2 = PLOTTING_OFF
@@ -1325,7 +1324,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%field3 = PLOTTING_OFF
             gModIntParams%zonalWavenumber = 1
             gModIntParams%meridWavenumber = 1
-            gModIntParams%LEVP = 1
+            gModIntParams%LEVP = 2      ! Lowest streamfunction layer.
             gModIntParams%sinZonal = 1
             gModIntParams%sinMerid = 1
             gModIntParams%modelType = STANDARD_NLEVEL
@@ -1580,7 +1579,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gVertArr%LVS(gModIntParams%NLEV * 2 + 1) = gVertArr%PP(gModIntParams%NLEV + 1)
             !-----------------------------Compute the ratio PP(1)/DP(n)
             DO N = 1, gModIntParams%NLEV
-                gVertArr%DPI(N) = gVertArr%PP(1) / (gVertArr%PP(N) - gVertArr%PP(N + 1))
+                gVertArr%DP(N) = gVertArr%PP(N) - gVertArr%PP(N + 1)
+                gVertArr%DPI(N) = gVertArr%PP(1) / gVertArr%DP(N)
             END DO
             !--------------------------------Set scale height for orography
             gPlotScales(OROGRAPHY) = GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2) )/ (2.0 * GRAVITY)

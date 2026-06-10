@@ -11,6 +11,7 @@
       integer, parameter :: IDC_COMBO_LEVEL = 1073
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
+      integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE2 = 1052
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
       integer, parameter :: IDC_REALVALUES = 1023
       integer, parameter :: IDD_VERTICAL_PARAMS = 108
@@ -48,6 +49,7 @@
       integer, parameter :: IDC_LIST_THERMAL_DRIVING = 1057
       integer, parameter :: IDC_STATIC_COMBO_FIELD1 = 1032
       integer, parameter :: IDC_COMBO_MODEL_TYPE = 1039
+      integer, parameter :: IDC_STATIC_COMBO_PLOT_LEVEL = 1052
       integer, parameter :: IDC_EDIT_REALVALUES = 1025
       integer, parameter :: IDC_LIST_INIT_TEMP_DRIVING = 1064
       integer, parameter :: IDC_STATIC_LEVELS = 1044
@@ -79,6 +81,7 @@
       integer, parameter :: IDC_COMBO_FIELD2 = 1033
       integer, parameter :: IDC_CHECK_VERT_DIMENSIONALIZE = 1059
       integer, parameter :: IDC_BUTTON_VERTICAL_PARAMS = 1042
+      integer, parameter :: IDC_COMBO_PLOT_LEVEL = 1051
       integer, parameter :: IDC_LIST_NEWT_COOLING = 1053
       integer, parameter :: IDC_COMBO_FIELD3 = 1037
       integer, parameter :: IDC_LIST_TEMP_MIXING = 1055
