@@ -870,11 +870,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! to recreate the Cint arrays as well and then compute the interaction coefficients.
 
             if (boolUpdateCint .OR. (prevRN .NE. gModRealParams%RN)) then
-                ! Now that we have checked prevRn for a change, put it back into dimensional form with the new value
-                prevRN = gScaleFactors%longestWave / gModRealParams%RN
+                ! Now that we have checked prevRn for a change, update with the new value
+                prevRN = gModRealParams%RN
                 ! Horizontal resolution has changed, need to recompute cint arrays.
                 if (boolUpdateCint) then
-                    ! Compute number of coefficients only. flag = 0 singals to do that. Need to create the gCintArr array shapes.
+                    ! Compute number of coefficients only. flag = 0 signals to do that. Need to create the gCintArr array shapes.
                     
                     currentNoOfInteractions = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 0)
                     ! The way we have it now is that as long as KMAX2 and LMAX2 are within bounds, we are under the limit of interaction coefficients
@@ -1568,12 +1568,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gPlotScales(OROGRAPHY) = (500) * 11.    ! Set scale height for orography as 11m/mb 500 mb barotropic layer
                 return
             endif
-            !-----------------------------Compute PP by setting to the middle of PV's:
+            !-----------------------------Compute PP by setting to the middle of PV's (and LVS which is just for plotting)
             gVertArr%LVS(1) = gVertArr%PP(1)
             DO N = 2, gModIntParams%NLEV
                 gVertArr%PP(N) = (gVertArr%PV(N - 1) + gVertArr%PV(N)) / 2.
-                gVertArr%LVS((N - 1) * 2) = gVertArr%PV(N - 1)
-                gVertArr%LVS(N * 2 - 1) = gVertArr%PP(N)
+                ! Compute LVS which will be twice a long and have both interfaces and level centers including PP(1) and PP(NLEV+1)
+                gVertArr%LVS((N - 1) * 2) = gVertArr%PV(N - 1)  ! Layer center
+                gVertArr%LVS(N * 2 - 1) = gVertArr%PP(N)        ! Interface
             END DO
             gVertArr%LVS(gModIntParams%NLEV * 2) = gVertArr%PV(gModIntParams%NLEV)
             gVertArr%LVS(gModIntParams%NLEV * 2 + 1) = gVertArr%PP(gModIntParams%NLEV + 1)

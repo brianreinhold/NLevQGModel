@@ -80,6 +80,8 @@ module VerticalParamsDialogModule
                     endif
                     bret = SetFocus(hFocus)
                     RETURN
+                    
+                ! Just for interest, the average height to 950 mb is about 540 meters.
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
                     pvRowClicked = -1
                     thsRowClicked = -1

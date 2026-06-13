@@ -117,7 +117,7 @@ SUBMODULE (PlotModule) InterpolateSubmodule
             ! Only reallocate if dimensions have changed
             if (.not. allocated(TempGrid)) then
                 allocate(TempGrid(b%KL : b%KU, b%JL : b%JU))
-            else if (size(TempGrid, 1) /= (b%KU - b%KL + 1) .or. size(TempGrid, 2) /= (b%JU - b%JL + 1)) then
+            else if (size(TempGrid, 1) .NE. (b%KU - b%KL + 1) .or. size(TempGrid, 2) .NE. (b%JU - b%JL + 1)) then
                 deallocate(TempGrid)
                 allocate(TempGrid(b%KL : b%KU, b%JL : b%JU))
             end if

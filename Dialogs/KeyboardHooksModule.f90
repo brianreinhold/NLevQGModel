@@ -218,6 +218,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F2: Set Vertical parameters
                         call LogMessage('User pressed F2 key in Model Control Dialog')
+            !TODO: We need to move this to the main dialog to handle errors and update fields.
                         iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                         iret = InitModelWithModelControlVals()
                         bret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), ghVerticalParamsDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
@@ -233,6 +234,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F3: Initialize flow variables
                         call LogMessage('User pressed F3 key in Model Control Dialog')
+            !TODO: We need to move this to the main dialog to handle errors and update fields.
                         iret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                         iret = InitModelWithModelControlVals()
                         bret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)

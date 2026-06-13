@@ -424,10 +424,11 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ifwin       ! For GetCurrentThreadId
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
-    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, NO_PLOT
+    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, NO_PLOT, &
+                               DEGREES_TO_RAD
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams, DimensionalizeModRealParams
-    use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams
+    use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
     use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime
@@ -469,7 +470,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     character*32, save :: valueStringField1, valueStringField2
     INTEGER(4) :: textLen
     TYPE(T_SIZE) :: sz
-    integer :: draw_x, i
+    integer :: draw_x, i, screenHeight
     real :: rlat, rlon
     integer :: years
     REAL, ALLOCATABLE, save :: X(:,:), X_Overlay(:, :)  ! These are the arrays containing interpolated values for weather maps. Created on heap.
@@ -557,7 +558,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             ! THis mess prints the moused-over value 'current_val' of the weather map to the screen in a separate 
             ! layer. Some extra variables are needed since the value will be printed to the left when
             ! the cursor is too close to the right side.
-            maps = (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP)
+            maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
+                    gModIntParams%plotType == PHASE_AND_MAP .OR. &
+                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)
             graphs = (gModIntParams%plotType == WEATHER_STN)
 
             ! Early exit 
@@ -573,14 +576,22 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             !        The values of the two field are printed above and below this line
             textBuffer = ""
             if (maps) then
-                if (mouse_y >= gBitMapInfo%height / 2) then
+                screenHeight = gBitMapInfo%height / 2
+                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) screenHeight = gBitMapInfo%height
+                if (mouse_y >= screenHeight) then
                     lret = EndPaint(hWnd, ps)
                     MainWndProc = 0
                     return
                 endif
-                rlat = REAL(gBitMapInfo%height / 2 - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
-                rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
-                write(textBuffer, '(F5.1, A, F5.1, A)') rlon, " lon ", rlat, " lat"
+                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
+                    rlat = REAL(mouse_y) * (gVertArr%LVS(1) - gVertArr%LVS(SIZE(gVertArr%LVS))) / REAL(gBitMapInfo%height)
+                    rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
+                    write(textBuffer, '(F5.1, A, F6.1, A)') rlon, " lon ", rlat, " mb"
+                else
+                    rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
+                    rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
+                    write(textBuffer, '(F5.1, A, F5.1, A)') rlon, " lon ", rlat, " lat"
+                endif
             else if (graphs) then
                 if (current_val1 < 0.0) then
                     lret = EndPaint(hWnd, ps)
@@ -626,23 +637,27 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             return
             
             CASE (WM_MOUSEMOVE)
-                if (GetForegroundWindow() /= hWnd .or. gModelState%runState == RUNNING) return
+                if (GetForegroundWindow() .NE. hWnd .or. gModelState%runState == RUNNING) return
                 mouse_x = IAND(lParam, #FFFF)
                 mouse_y = ISHFT(lParam, -16)
-                maps = (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP)
+                maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
+                        gModIntParams%plotType == PHASE_AND_MAP .OR. &
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)
                 graphs = (gModIntParams%plotType == WEATHER_STN)
                 if (maps) then
+                    screenHeight = gBitMapInfo%height / 2
+                    if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) screenHeight = gBitMapInfo%height
                     ! 1. Ensure data is ready (only happens once per plot change)
                     if (.NOT. ALLOCATED(X) .AND. .NOT. ALLOCATED(X_Overlay)) then
                          call NonDimensionalizeModRealParams()
-                         call PrepareGrid(X, gModIntParams%field1)
-                         call PrepareGrid(X_Overlay, gModIntParams%field2)
+                         call PrepareGrid(X, gModIntParams%field1, screenHeight)
+                         call PrepareGrid(X_Overlay, gModIntParams%field2, screenHeight)
                     end if
             
                     ! 2. Sample data if within bounds
-                    if (mouse_y >= 0 .and. mouse_y < gBitMapInfo%height / 2) then
-                        if (ALLOCATED(X))         current_val1 = X(mouse_x + 1, gBitMapInfo%height/2 - mouse_y)
-                        if (ALLOCATED(X_Overlay)) current_val2 = X_Overlay(mouse_x + 1, gBitMapInfo%height/2 - mouse_y)
+                    if (mouse_y >= 0 .and. mouse_y < screenHeight) then
+                        if (ALLOCATED(X))         current_val1 = X(mouse_x + 1, screenHeight - mouse_y)
+                        if (ALLOCATED(X_Overlay)) current_val2 = X_Overlay(mouse_x + 1, screenHeight - mouse_y)
                         ret = InvalidateRect(hWnd, NULL, .FALSE.)
                     end if
             
@@ -748,16 +763,28 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User cleared screen")
     ! Up/Down: Change Levels
                 case (VK_UP)
-                    call LogMessage("User moving up a level")
-                    gModIntParams%LEVP = gModIntParams%LEVP + 1
-                    if (gModIntParams%LEVP > SIZE(gVertArr%LVS)) gModIntParams%LEVP = 1
+                    if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
+                        call LogMessage("User moving poleward 5 degrees Latitude")
+                        gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%hovLat .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%hovLat = 0.
+                    else                        
+                        call LogMessage("User moving up a level")
+                        gModIntParams%LEVP = gModIntParams%LEVP + 1
+                        if (gModIntParams%LEVP > SIZE(gVertArr%LVS)) gModIntParams%LEVP = 1
+                    endif
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
                 case (VK_DOWN)
-                    call LogMessage("User moving down a level")
-                    gModIntParams%LEVP = gModIntParams%LEVP - 1
-                    if (gModIntParams%LEVP < 1) gModIntParams%LEVP = SIZE(gVertArr%LVS)
+                    if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
+                        call LogMessage("User moving equatorward 5 degrees Latitude")
+                        gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%hovLat .LT. 0.0) gModRealParams%hovLat = 90.0 * DEGREES_TO_RAD
+                    else 
+                        call LogMessage("User moving down a level")
+                        gModIntParams%LEVP = gModIntParams%LEVP - 1
+                        if (gModIntParams%LEVP < 1) gModIntParams%LEVP = SIZE(gVertArr%LVS)
+                    endif
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
@@ -830,18 +857,18 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         end subroutine
 
         ! Helper for MOUSE_MOVE
-        subroutine PrepareGrid(X, field)
+        subroutine PrepareGrid(X, field, screenHeight)
             use ConstantsModule, only: PLOTTING_OFF
             use PlotModule, only: populateInterpolatedGrid
 
             implicit none
 
             REAL, ALLOCATABLE, INTENT(INOUT) :: X(:,:)
-            INTEGER, INTENT(IN) :: field
+            INTEGER, INTENT(IN) :: field, screenHeight
         
             if (field == PLOTTING_OFF) return
 
-            allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
+            allocate(X(gBitMapInfo%width, screenHeight))
 
             call populateInterpolatedGrid(X, field)
         end subroutine

@@ -366,7 +366,8 @@ module ModelControlDialogModule
                             call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             if (ret /= 0) then
-                                call initializeDialog()
+                                call initializeDialog() ! This will dimensionalize paramChange%RN
+                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
                                 return
                             endif
                             ret = InitModelWithModelControlVals()
@@ -384,7 +385,8 @@ module ModelControlDialogModule
                             call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             if (ret /= 0) then
-                                call initializeDialog()
+                                call initializeDialog() ! This will dimensionalize paramChange%RN
+                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
                                 return
                             endif
                             ret = InitModelWithModelControlVals()

@@ -13,6 +13,7 @@ module ConstantsModule
     real, parameter :: PI = 4.*ATAN(1.)
     real, parameter :: PI_INVERSE = 1./PI
     real, parameter :: RAD_TO_DEGREES = 180./PI
+    real, parameter :: DEGREES_TO_RAD = PI / 180.
     real, parameter :: SQRT2 = SQRT(2.)
     real, parameter :: SQRT22 = SQRT2/2.
    !--------------------------------Set scale factors:
@@ -76,13 +77,11 @@ module ConstantsModule
                                                     ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
-    integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
+    integer, parameter :: VERT_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
     integer, parameter :: HOV_DIAG_AT_LAT = 3       ! Hovmoller diagram at specified 'latitude' and level
-    integer, parameter :: HOV_DIAG_CROSS_SEC_AT_LONG = 4   ! Latitude-pressure (meridional) cross section at a slected 'longitude'
+    integer, parameter :: VERT_CROSS_SEC_AT_LONG = 4   ! Longitude-pressure (meridional) cross section at a slected 'longitude'
     integer, parameter :: HOV_DIAG_AT_LONG = 5      ! Hovmoller diagram at specified 'longitude' and level
     integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
-    !integer, parameter :: WAVE_AMP_TIME_SERIES = 7  ! Time series of a spectral wave ampltude at given levels
-    !integer, parameter :: WAVE_PHASE_TIME_SERIES = 8! Time series of a spectral wave phase at given levels
     integer, parameter :: WEATHER_STN = 7           ! Time series of a field at a particular point (lat-lon)
     integer, parameter :: NO_PLOT = 8               ! Skip plotting (good for speed)
     
