@@ -444,9 +444,13 @@ module ModelControlDialogModule
                     ModelControlDlgProc = 1
                     bret = DestroyWindow(hDlg)
                 case (WM_DESTROY)
-                    ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
-                    ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                    call NonDimensionalizeModRealParams() ! Method checks if already non-dimensionalized
+                    ! If this has never been set the dialog did not get initialized because the user entered parameters in the settings dialog that
+                    ! could not be handled.
+                    if (paramChange%zonalWaves > 0) then
+                        ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
+                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        call NonDimensionalizeModRealParams() ! Method checks if already non-dimensionalized
+                    endif
                     bret = EnableWindow(ghSettingsDlg, .TRUE.)
                     bret = SetForegroundWindow(ghSettingsDlg)
                     bret = ShowWindow(ghSettingsDlg, SW_SHOW)

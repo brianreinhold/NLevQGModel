@@ -180,10 +180,12 @@ module PlotModule
     type(PhaseSpace) :: gPhaseSpace2
     type(WeatherMap) :: gWeatherMap1
     type(WeatherMap) :: gWeatherMap2
-    type(Hovmoller) :: gLatHovmoller1
-    type(Hovmoller) :: gLatHovmoller2
     type(VertCrossSection) :: gLatVertCrossSec1
     type(VertCrossSection) :: gLatVertCrossSec2
+    type(Hovmoller) :: gLatHovmoller1
+    type(Hovmoller) :: gLatHovmoller2
+    type(VertCrossSection) :: gLonVertCrossSec1
+    type(VertCrossSection) :: gLonVertCrossSec2
     type(Hovmoller) :: gLonHovmoller1
     type(Hovmoller) :: gLonHovmoller2
     type(WeatherStation) :: gWeatherStation1
@@ -213,6 +215,7 @@ module PlotModule
         integer :: KU       ! Upper range in x of the output interpolated array
         integer :: LL       ! Lower range in y of the output interpolated array (not used in 1-d case)
         integer :: LU       ! Upper range in y of the output interpolated array (not used in 1-d case)
+        logical :: isPeriodicX = .TRUE.
     end type InterpolationBounds
     
 !=====================  SUBMODULE INTERFACES ============================
@@ -363,7 +366,6 @@ module PlotModule
                     call initializeVerticalCrossSectionType(gModIntParams%field2, gLatVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, .true.)
                 endif
 
-
 ! ------ HOVMOLLER LATITUDE -----------------------------
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%field = gModIntParams%field1
@@ -373,6 +375,17 @@ module PlotModule
                 gLatHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .true.)
+                endif
+                
+! ------ VERTICAL CROSS SECTION AT LONGITUDE -----------------------------
+            else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG)  then
+                gLonVertCrossSec1%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    call initializeVerticalCrossSectionType(gModIntParams%field1, gLonVertCrossSec1, .true., .false.)
+                endif
+                gLatVertCrossSec2%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    call initializeVerticalCrossSectionType(gModIntParams%field2, gLonVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, .false.)
                 endif
 
 ! ------ HOVMOLLER LONGITUDE -----------------------------
@@ -465,9 +478,7 @@ module PlotModule
             ! If the user specifies a zonal wavenumber for the sine part greater than zero
             if (gModIntParams%sinZonal .GT. 0) then
                 ! This gets the index for cosknx sinly component
-                phaseSpaceType%yIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
-                                        2 * gModIntParams%LMAX2 * (gModIntParams%sinZonal - 1) + & ! Puts us at the start of the Kth zonal wave
-                                        2 * (gModIntParams%sinMerid - 1) + 1
+                phaseSpaceType%yIndex = phaseSpaceType%xIndex + 1
                 if (gIsTemperature(field)) then
                     phaseSpaceType%yScale = 2.0 * gPlotScales(field) / interpolateTemperatureScale(gModIntParams%LEVP)
                 else
@@ -826,8 +837,8 @@ module PlotModule
 
     ! HOVMOLLER LON CROSS SECTION----------------------
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
-                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
-                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonHovmoller2, .TRUE.)
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec2, .TRUE.)
             endif
 
     ! WEATHER MAP ----------------------
@@ -877,6 +888,17 @@ module PlotModule
             if (gLatVertCrossSec1%field == field) xSecType = gLatVertCrossSec1
             if (gLatVertCrossSec2%field == field) xSecType = gLatVertCrossSec2
         end function getLatCrossSectionType
+        
+        function getLonCrossSectionType(field) result(xSecType)
+            implicit none
+            
+            integer, intent(in) :: field
+            
+            type(VertCrossSection) :: xSecType
+
+            if (gLonVertCrossSec1%field == field) xSecType = gLonVertCrossSec1
+            if (gLonVertCrossSec2%field == field) xSecType = gLonVertCrossSec2
+        end function getLonCrossSectionType
 
         !> This routine creates the two dimensional grid representing the actual
         !> values of the height or temperature field in the channel. Those array points
@@ -990,7 +1012,6 @@ module PlotModule
             ! plot (Output): Real array of size (IXMAX, IYMAX)
 
             call fftwf_execute_dft_c2r(plan_c2r_2d, gTransArr%Gc, gTransArr%plot)
-
 
             ! Copy the first column to the column just after the FFT data
             ! where the FFT data occupies indices 1 to IXMAX
@@ -1131,7 +1152,6 @@ module PlotModule
             end do
         end subroutine InverseTransform
 
-
         subroutine plotDiagnostic(grid, contourInterval, scale)
             USE IFWIN
             USE GDI32
@@ -1217,6 +1237,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
+            b%isPeriodicX = .TRUE.
             gTransArr%plotFull = gTransArr%plotFull * scale
             call Interpolate2D(gTransArr%plotFull, b, Xptr)
 
@@ -1440,11 +1461,9 @@ module PlotModule
             timeSeriesBuf%count = 0
         end subroutine clearBuffer
 
-
         ! Helper to point to the arrays containing the user-selected field to  plot
         ! The level is now trickier. Now we have all levels in LEVP which includes the interfaces just for plotting
         ! So to get the actual levels where the fields are define we need to set levels = 1 + (plotLevels - 1) / 2 
-
         subroutine loadFields(ptr, field, plotLevel)
             use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                 OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
@@ -2124,7 +2143,6 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
             type(VertCrossSection), intent(in) :: latVertCrossSec
 
-
             LOGICAL(BOOL) :: bret
             REAL :: cntInt
             type (InterpolationBounds) b
@@ -2150,7 +2168,7 @@ module PlotModule
                 call loadLatValues(latVertCrossSec, N, latVertCrossSec%tempScales(N))
                 gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
             end DO
-            
+
             ! --- RESIZE LOGIC ---
             ! Check if X needs allocation or resizing based on the DIB size
             if (latVertCrossSec%useSolidColor) then
@@ -2186,6 +2204,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height
+            b%isPeriodicX = .TRUE.
             call Interpolate2D(gTransArr%plotFull, b, Xptr)
             ! However, we need to map these interpolated values in X to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
@@ -2329,7 +2348,6 @@ module PlotModule
             gTransArr%GZonal(1 : IXMAX + 1) = gTransArr%GZonal(1 : IXMAX + 1) + zonalMean
         end subroutine loadLatValues
 
-
 ! PLOT HOVMOLLER AT LONGITUDE -------------------------------------------
         subroutine plotLonHovmoller(lonHovmoller, invalidate)
             USE IFWIN
@@ -2337,15 +2355,11 @@ module PlotModule
             USE USER32
             USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
             use ArrayDimensionsModule, only: gCurrentDims
-            use ConstantsModule, only: SQRT22
+            use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gTransArr, gTransArr
             use ModelParamsModule, only: gModIntParams
-            use Fftw3HelpersModule, only: norm_cosly, plan_y_FFTW_REDFT01, plan_y_FFTW_RODFT01
 
             IMPLICIT NONE
-
-            include 'fftw3.f03'
 
             type(Hovmoller), intent(inout) :: lonHovmoller  ! Need the out as the 'row' is kept track of here.
                                                             ! However, row is really the column
@@ -2357,54 +2371,10 @@ module PlotModule
             integer(RGB32), pointer :: dibArray(:,:)
 
             integer(RGB32), target :: Pixels(gBitMapInfo%height)
-            integer ::  iVal, iValDown, iValLeft, index, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
-
-
+            integer ::  iVal, iValDown, iValLeft, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
             type(InterpolationBounds) b
-            
-            real :: temp_calc, cos_kx, sin_kx
-            real :: wave_real, wave_imag
 
-            call loadFields(lonHovmoller%value, lonHovmoller%field, gModIntParams%LEVP)
-            KMAX = gModIntParams%KMAX2
-            LMAX = gModIntParams%LMAX2
-            
-            ! 1. The cosLy components
-            ! These are k=0, so they have no x-dependence. 
-            ! Put them straight into the cosine buffer.
-            gTransArr%GZonal = 0
-            gTransArr%GZonal(2:LMAX+1) = lonHovmoller%value(1:LMAX) * lonHovmoller%scale * SQRT22
-
-
-            temp_calc = 2. * norm_cosly * lonHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
-
-            ! 2. The Waves (sinLy components)
-            gTransArr%G2Zonal = 0 ! Zero this array
-            
-            ! 1. Precompute combined phase/normalization factor for each K
-            ! This moves the K-loop's trigonometry out of the L-loop bottleneck
-            do K = 1, KMAX
-                wave_real = temp_calc * lonHovmoller%cosx(K)
-                wave_imag = temp_calc * lonHovmoller%sinx(K)
-    
-                index = LMAX + 2 * LMAX * (K - 1) + 1
-    
-                ! 2. Vectorized slice operation
-                ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
-                gTransArr%G2Zonal(1:LMAX) = gTransArr%G2Zonal(1:LMAX) + &
-                    (lonHovmoller%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
-                    (lonHovmoller%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
-            end do
-
-            ! 3. Transform to Grid
-            ! Background flow (using REDFT01 for Cosine)
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%GZonal, gTransArr%GZonal) 
-
-            ! Waves (using RODFT01 for Sine)
-            ! We use a temp buffer so we can add them to the background
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2Zonal, gTransArr%G2Zonal)
-            ! 4. Combine
-            gTransArr%GZonal(1:gCurrentDims%IYMAX) = gTransArr%GZonal(1:gCurrentDims%IYMAX) + gTransArr%G2Zonal(1:gCurrentDims%IYMAX)
+            call loadLonValues(lonHovmoller, gModIntParams%LEVP, 1.0) ! Returns loaded values along a longitude in gTransArr%GZonal including polar value at boundary
             
             if (lonHovmoller%useSolidColor) then
                 if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
@@ -2494,43 +2464,30 @@ module PlotModule
 
         end subroutine plotLonHovmoller
         
-! PLOT VERTICAL CROSS SECTION AT LONGITUDE -------------------------------------------
-        subroutine plotLonVertCrossSec(lonHovmoller, invalidate)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+        subroutine loadLonValues(trigTableType, level, tempScale)
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT22
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gTransArr, gTransArr
-            use ModelParamsModule, only: gModIntParams
+            use ModelFieldsModule, only: gTransArr
+            use ModelParamsModule, only: gModIntParams, gIsTemperature
             use Fftw3HelpersModule, only: norm_cosly, plan_y_FFTW_REDFT01, plan_y_FFTW_RODFT01
-
-            IMPLICIT NONE
-
-            include 'fftw3.f03'
-
-            type(Hovmoller), intent(inout) :: lonHovmoller  ! Need the out as the 'row' is kept track of here.
-                                                            ! However, row is really the column
-            LOGICAL, intent(in) :: invalidate
-
-            LOGICAL(BOOL) :: bret
-            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:, :)
-            integer(RGB32), pointer :: dibArray(:,:)
-
-            integer(RGB32), target :: Pixels(gBitMapInfo%height)
-            integer ::  iVal, iValDown, iValLeft, index, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
-
-
-            type(InterpolationBounds) b
             
-            real :: temp_calc, cos_kx, sin_kx
-            real :: wave_real, wave_imag
-            return
+            implicit none
+            include 'fftw3.f03'
+            
+            class(TrigTable), intent(in) :: trigTableType
+            integer, intent(in) :: level
+            REAL, intent(in) :: tempScale
 
-            call loadFields(lonHovmoller%value, lonHovmoller%field, gModIntParams%LEVP)
+            real :: temp_calc, cos_kx, sin_kx, scale
+            real :: wave_real, wave_imag
+            integer :: KMAX, LMAX, index, K
+
+            call loadFields(trigTableType%value, trigTableType%field, level)
+            if (gIsTemperature(trigTableType%field)) then
+                scale = trigTableType%scale / tempScale
+            else 
+                scale = trigTableType%scale
+            endif
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
             
@@ -2538,10 +2495,10 @@ module PlotModule
             ! These are k=0, so they have no x-dependence. 
             ! Put them straight into the cosine buffer.
             gTransArr%GZonal = 0
-            gTransArr%GZonal(2:LMAX+1) = lonHovmoller%value(1:LMAX) * lonHovmoller%scale * SQRT22
+            gTransArr%GZonal(2:LMAX+1) = trigTableType%value(1:LMAX) * scale * SQRT22
 
 
-            temp_calc = 2. * norm_cosly * lonHovmoller%scale ! Do the normalization first so we dont have to normalize after the transform
+            temp_calc = 2. * norm_cosly * scale ! Do the normalization first so we dont have to normalize after the transform
 
             ! 2. The Waves (sinLy components)
             gTransArr%G2Zonal = 0 ! Zero this array
@@ -2549,16 +2506,16 @@ module PlotModule
             ! 1. Precompute combined phase/normalization factor for each K
             ! This moves the K-loop's trigonometry out of the L-loop bottleneck
             do K = 1, KMAX
-                wave_real = temp_calc * lonHovmoller%cosx(K)
-                wave_imag = temp_calc * lonHovmoller%sinx(K)
+                wave_real = temp_calc * trigTableType%cosx(K)
+                wave_imag = temp_calc * trigTableType%sinx(K)
     
                 index = LMAX + 2 * LMAX * (K - 1) + 1
     
                 ! 2. Vectorized slice operation
                 ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
                 gTransArr%G2Zonal(1:LMAX) = gTransArr%G2Zonal(1:LMAX) + &
-                    (lonHovmoller%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
-                    (lonHovmoller%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
+                    (trigTableType%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
+                    (trigTableType%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
             end do
 
             ! 3. Transform to Grid
@@ -2570,92 +2527,166 @@ module PlotModule
             call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2Zonal, gTransArr%G2Zonal)
             ! 4. Combine
             gTransArr%GZonal(1:gCurrentDims%IYMAX) = gTransArr%GZonal(1:gCurrentDims%IYMAX) + gTransArr%G2Zonal(1:gCurrentDims%IYMAX)
+
+        end subroutine loadLonValues
+        
+! PLOT VERTICAL CROSS SECTION AT LONGITUDE -------------------------------------------
+        subroutine plotLonVertCrossSec(lonVertCrossSec, invalidate)
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use ArrayDimensionsModule, only: gCurrentDims
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelFieldsModule, only: gTransArr, gVertArr
+            use ModelParamsModule, only: gModIntParams
+
+            IMPLICIT NONE
+
+            type(VertCrossSection), intent(inout) :: lonVertCrossSec  ! Need the out as the 'row' is kept track of here.
+                                                            ! However, row is really the column
+            LOGICAL, intent(in) :: invalidate
+
+            LOGICAL(BOOL) :: bret
+            REAL :: cntInt
+            type (InterpolationBounds) b
+        
+            REAL, save, ALLOCATABLE, TARGET :: X(:,:), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:,:)
+            integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
+        
+            integer(RGB32), target :: Pixels(gBitMapInfo%width)
+            integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx
             
-            if (lonHovmoller%useSolidColor) then
-                if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
+            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
+            integer(c_intptr_t) :: bytesPerRow
+            integer(4) :: colorToDraw
+            
+            if (lonVertCrossSec%field == PLOTTING_OFF) return    ! Do nothing
+            
+            LEVS = SIZE(gVertArr%LVS)
+            gTransArr%plotFullY = 0.0
+
+            do N = 1, LEVS
+                ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
+                call loadLonValues(lonVertCrossSec, N, lonVertCrossSec%tempScales(N))
+                gTransArr%plotFullY(1 : gCurrentDims%IYMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IYMAX + 1)
+            end DO
+
+            ! --- RESIZE LOGIC ---
+            ! Check if X needs allocation or resizing based on the DIB size
+            if (lonVertCrossSec%useSolidColor) then
+                if (.not. allocated(X)) then
+                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
+                else if (size(X, 1) .NE. gBitMapInfo%width .or. size(X, 2) .NE. gBitMapInfo%height) then ! size(X, 1) is size of first dimension
+                    deallocate(X)
+                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
+                end if
+            end if
+            ! Check if X_Overlay needs allocation or resizing based on the DIB size
+            if (.NOT. lonVertCrossSec%useSolidColor) then
+                if (.not. allocated(X_Overlay)) then
+                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
+                else if (size(X_Overlay, 1) .NE. gBitMapInfo%width .or. size(X_Overlay, 2) .NE. gBitMapInfo%height) then
+                    deallocate(X_Overlay)
+                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
+                end if
+            end if
+        
+            if (lonVertCrossSec%useSolidColor) then
                 Xptr => X        ! Note the pointer and not the equals! Not like C!
             else
-                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%height, 3))
                 Xptr => X_Overlay
             endif
-
+            ! Interpolate the grid array to a resolution that matches the size of the display of the
+            ! weather map on the screen.
             b%il = 1
             b%iu = gCurrentDims%IYMAX
+            b%jl = 1
+            b%ju = LEVS
             b%KL = 1
-            b%KU = gBitMapInfo%height
-            currentColumn = MOD(lonHovmoller%row, 3) + 1
-            call Interpolate1D(gTransArr%GZonal, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            b%KU = gBitMapInfo%width
+            b%LL = 1
+            b%LU = gBitMapInfo%height
+            b%isPeriodicX = .FALSE.
+            call Interpolate2D(gTransArr%plotFullY, b, Xptr)
+            ! However, we need to map these interpolated values in X to colors for each pixel. We will
+            ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
+            ! a lot more efficient than creating a 2d array of color values and then writing that to
+            ! the DIBSection.
             
-            ! Get access to the DIBSection 
-            call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
-            if (lonHovmoller%useSolidColor) then
+            ! In order to make contours instead of color that continuously transition for each value,
+            ! We create a color ram of 18 values and let the user determine the contour interval. 
+            
+            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
+            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
+            ! 2. Calculate base address
+            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
+
+            if (lonVertCrossSec%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
-                do K = 1, gBitMapInfo%height
-                    ! Calculate value based on the contour interval
-                    iVal = FLOOR(Xptr(K, currentColumn) * lonHovmoller%contourIntervalInv) + NUM_RAM_COLORS / 2
-                    ! Cycle through the colorRam if iVal exceeds its size
-                    ! Use ABS to handle negative iVal if necessary
-                    ! Modulo keeps the recylcing postive versus mod which does not
-                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+                do J = gBitMapInfo%height, 1, -1
+                    J1 = gBitMapInfo%height - J + 1
+                    do I = 1, gBitMapInfo%width
+                        ! Calculate value based on the contour interval
+                        iVal = FLOOR(Xptr(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        ! Cycle through the colorRam if iVal exceeds its size
+                        ! Use ABS to handle negative iVal if necessary
+                        ! Modulo keeps the recycling positive versus mod which does not
+                        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+                        Pixels(I) = RAM_COLORS(colorIdx)
+                    end do
+                    ! 2. Calculate memory address for the desired row 'targetY'
+                    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+                    targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
 
-                    Pixels(K) = RAM_COLORS(colorIdx)
-                end do
-
-
-                ! 2. Loop through 'Pixels' array (height) 
-                ! and place each pixel into the DIBSection row-by-row
-                do K = gBitMapInfo%height, 1, -1
-                    dibArray(lonHovmoller%row + 1, gBitMapInfo%height - K + 1) = Pixels(K)
+                    ! 3. Get the address of your source array
+                    ! Pixels must have the TARGET attribute
+                    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
+        
+                    ! 4. Move the interpolated array of Pixels into the DIBSection memory
+                    ! Call the Intel-defined interface
+                    ! Since the interface defines these as integers, pass them directly.
+                    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
                 end do
             else
+                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
                 ! 2. Calculate borders by comparing current pixel to its neighbors.
-                ! We stop at Height-1 to prevent "out of bounds" on the iVal checks.
-                prevColumn = currentColumn - 1
-                if (prevColumn < 1) prevColumn = 3
-                do K = 1, gBitMapInfo%height - 1
+                ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
+                ! Mapping X_Overlay to the upper half of the screen
+                do J = 1, gBitMapInfo%height - 1
         
-                    ! J_data maps Screen Top (J=1) to Array North (Height)
-                    L = gBitMapInfo%height - K + 1
+                    ! J_data maps Screen Top (J=1) to Array North (Height/2)
+                    J1 = gBitMapInfo%height - J + 1
                     ! J_next is the row physically below J on the screen (one step South in data)
-
-                    ! Calculate interval bins
-                    iVal      = floor(X_Overlay(L, currentColumn) * lonHovmoller%contourIntervalInv)
-                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * lonHovmoller%contourIntervalInv)
-                    iValLeft  = floor(X_Overlay(L, prevColumn) * lonHovmoller%contourIntervalInv)
+                    !J_next = J_data - 1
         
-                    ! Detect boundary
-                    if (iVal /= iValDown) then
-                        colorIdx = max(iVal, iValDown)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
+                    do I = 1, gBitMapInfo%width - 1
+        
+                        ! Calculate interval bins
+                        iVal      = floor(X_Overlay(I, J1) * lonVertCrossSec%contourIntervalInv)
+                        iValRight = floor(X_Overlay(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
+                        iValDown  = floor(X_Overlay(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
+        
+                        ! Detect boundary
+                        if (iVal /= iValRight .or. iVal /= iValDown) then
+                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
+                            if (colorIdx > 0) then
+                                colorToDraw = z'00DD0077' ! Reddish-pink
+                            else if (colorIdx < 0) then
+                                colorToDraw = z'000000FF' ! Blue
+                            else 
+                                colorToDraw = z'00000000' ! White for the 0-contour
+                            end if
                             
-                        ! J=1 is the top row of the pixelArray
-                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
-                    end if
-                    if (iVal /= iValLeft .AND. lonHovmoller%row > 0) then
-                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
+                            ! J=1 is the top row of the pixelArray
+                            pixelArray(I, J) = colorToDraw
                         end if
-                        ! J=1 is the top row of the pixelArray
-
-                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
-                    end if
+                    end do
                 end do
             endif
-
-            lonHovmoller%row = mod(lonHovmoller%row + 1, gBitMapInfo%width)
-            call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
+            call labelPlotsAndDisplayTime(invalidate)
 
         end subroutine plotLonVertCrossSec
 
@@ -2742,6 +2773,7 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
+            b%isPeriodicX = .TRUE.
             call Interpolate2D(gTransArr%plotFull, b, Xptr)
             ! However, we need to map these interpolated values in X to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
@@ -2832,7 +2864,7 @@ module PlotModule
         ! This routine is called from the main window callback when the user presses F1 while the
         ! model is integrating. This array is populated only once for every pause.
         subroutine populateInterpolatedGrid(X, field)
-            use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC, VERT_CROSS_SEC_AT_LAT
+        use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG
             use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr, gVertArr
@@ -2845,6 +2877,7 @@ module PlotModule
             type(InterpolationBounds) b
             integer :: N
             type(VertCrossSection) :: xSecType
+            REAL, POINTER :: plotPtr(:,:)
             
             if (field == PLOTTING_OFF) return
 
@@ -2855,6 +2888,14 @@ module PlotModule
                     ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
                     call loadLatValues(xSecType, N, xSecType%tempScales(N))
                     gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
+                end DO
+            elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+                xSecType = getLonCrossSectionType(field)
+                gTransArr%plotFull = 0.0
+                do N = 1, SIZE(gVertArr%LVS)
+                    ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
+                    call loadLonValues(xSecType, N, xSecType%tempScales(N))
+                    gTransArr%plotFullY(1 : gCurrentDims%IYMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IYMAX + 1)
                 end DO
             else
                 if (field .NE. DIAGNOSTIC) call createGrid(gTransArr%plotFull, getWeatherMapType(field))
@@ -2868,11 +2909,20 @@ module PlotModule
             b%KU = gBitMapInfo%width
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
+            b%isPeriodicX = .TRUE.
+            plotPtr => gTransArr%plotFull
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                 b%ju = SIZE(gVertArr%LVS)
                 b%LU = gBitMapInfo%height
             endif
-            call Interpolate2D(gTransArr%plotFull, b, X)   ! X is populated here
+            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+                b%iu = gCurrentDims%IYMAX
+                b%ju = SIZE(gVertArr%LVS)
+                b%LU = gBitMapInfo%height
+                b%isPeriodicX = .FALSE.
+                plotPtr => gTransArr%plotFullY
+            endif
+            call Interpolate2D(plotPtr, b, X)   ! X is populated here
         
         end subroutine populateInterpolatedGrid
 

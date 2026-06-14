@@ -505,7 +505,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
             integer :: errorCode, index
-            real, allocatable :: tF(:)
 
             errorCode = 0   ! No error
             boolHorzResult = .false.
@@ -534,30 +533,19 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (boolHorzResult .OR. boolVertResult) then
                 gArrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
                 gCurrentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
-                
-                ! Save the thermal forcing cosy profile at each level
-                allocate(tF(gModIntParams%NLEV), STAT = errorCode)
-                do index = 1, gModIntParams%NLEV
-                    tF(index) = gHorzArr%TF(1, index)
-                end do
+
                 ! Handle horizontal array changes (which includes vertical dimensions):
                 if (gHorzArr%allocated) errorCode = DeallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
 
                 errorCode = allocateHorizontalArrays()    ! Reallocate horizontal arrays
                 if(errorCode .NE. 0) then
-                    deallocate(tF)
                     return
                 endif
                 ! But use the model settings for KMAX2, LMAX2, NLEV for actual array dimensions.
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 if(errorCode .NE. 0) then
-                    deallocate(tF)
                     return
                 endif
-                do index = 1, gModIntParams%NLEV
-                    gHorzArr%TF(1, index) = tF(index)
-                end do
-                deallocate(tF)
                 
                 ! Handle transform array changes
                 if (gTransArr%allocated) errorCode = DeallocateTransformArrays()  ! Deallocate transform arrays if allocated
@@ -566,7 +554,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 if(errorCode .NE. 0) return
                 errorCode = createTransArr(gCurrentDims)
                 if(errorCode .NE. 0) return
-
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
@@ -593,7 +580,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 CALL DFDIAB(.true.) ! recreate the vertical profiles. This uses gModIntParams%NLEV as the number of levels
             endif
             !-------------------------------------------Introduce perturbation if there have been reallocations:
-            if (boolHorzResult .OR. boolVertResult) CALL CreatePerturbation()         ! Subroutine 1ocated in this file
+            if (boolHorzResult .OR. boolVertResult) then
+                CALL CreatePerturbation()         ! Subroutine 1ocated in this file
+                CALL DFDIAB(boolVertResult)
+            endif
 
             ! TODO Stats arrays
             !IF(boolStatsResult) isAlloced(STATS_ARRAYS) = NEED_REALLOC
@@ -827,19 +817,26 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 itot_old = prevMeridWaves + 2 * prevZonalWaves * prevMeridWaves
                 itot_new = gModIntParams%LMAX2 + 2 * gModIntParams%KMAX2 * gModIntParams%LMAX2
                 ALLOCATE(DAT(itot_new, gModIntParams%NLEV)) ! Temporary array for reshuffling
+                !do N = 1, gModIntParams%NLEV
+                !    DAT(1, N) = gHorzArr%TF(1, N)
+                !end do
 
                 ! Signal that we need to update the interaction coefficents if using interaction coefficients and the horizontal resolution has changed
                 if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS .AND. boolHorzChange) boolUpdateCint = .true.
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 errorCode = createTransArr(gCurrentDims)
+                !gHorzArr%TF = 0.0
+                !do N = 1, gModIntParams%NLEV
+                !    gHorzArr%TF(1, N) = DAT(1, N)
+                !end do
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
-                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
+                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
                 
-                CALL ReshuffleArrays(gHorzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(13 * total + 1 : 14 * total), itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, itot_old, prevLevels, itot_new, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, itot_old, 1, itot_new, 1, gArrayDims%itot)
+                CALL ReshuffleArrays(gHorzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(13 * total + 1 : 14 * total), prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
+                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, prevZonalWaves, prevMeridWaves, 1, gModIntParams%KMAX2, gModIntParams%LMAX2, 1, total)
                 
                 ! Zero out the dissipative terms in case we are going inviscid. All other field tendencies are calculated every time step
                 ! and their initial values are inconsequential. These will not get reset since the dissipative routines are skipped.
@@ -899,62 +896,91 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param PS            The primary array to reshuffle (2D view)
         !! @param DAT           Temporary buffer array (2D)
         !! @param PS_pool       The pool array containing the data (1D)
-        !! @param itot_old      Total number of spectral coefficients in old resolution
+        !! @param kmax_old      Old maximum number of zonal waves
+        !! @param lmax_old      Old maximum number of meridional waves
         !! @param levels_old    Number of vertical levels in old resolution
-        !! @param itot_new      Total number of spectral coefficients in new resolution
+        !! @param kmax_new      New maximum number of zonal waves
+        !! @param lmax_new      New maximum number of meridional waves
         !! @param levels_new    Number of vertical levels in new resolution
-        !! @param total         Total size of the PS_pool array 
-        SUBROUTINE ReshuffleArrays(ps, dat, PS_pool, itot_old, levels_old, itot_new, levels_new, total)
-
-            ! Dimensions are passed as arguments
-            INTEGER, INTENT(IN) :: itot_old, levels_old, itot_new, levels_new, total
-            REAL, intent(inout) :: ps(itot_new, levels_new)
-            real, intent(inout) :: dat(itot_new, levels_new)
-            REAL, intent(in) :: PS_pool(*)
-
+        !! @param total         Total size of the PS_pool array
+        SUBROUTINE ReshuffleArrays(ps, dat, PS_pool, kmax_old, lmax_old, levels_old, &
+                                   kmax_new, lmax_new, levels_new, total)
+            IMPLICIT NONE
+    
+            ! Dimensions passed as arguments
+            INTEGER, INTENT(IN) :: kmax_old, lmax_old, levels_old
+            INTEGER, INTENT(IN) :: kmax_new, lmax_new, levels_new, total
+    
+            ! Flat 2D array declarations to match modern Fortran shape rules
+            REAL, INTENT(INOUT) :: ps(lmax_new + 2*kmax_new*lmax_new, levels_new)
+            REAL, INTENT(INOUT) :: dat(lmax_new + 2*kmax_new*lmax_new, levels_new)
+            REAL, INTENT(IN)    :: PS_pool(*)
+    
             ! Local variables
-            INTEGER :: i, j
-            INTEGER :: old_linear_index
-
-            ! --- Precondition Checks --- (This has already been done)
-            !IF (itot_new * levels_new > total) THEN
-            !    PRINT *, "Error: New dimensions exceed the capacity of PS_pool/Temp_pool."
-            !    RETURN
-            !END IF
-
-            !IF (SIZE(PS_pool) < current_IBIG .OR. SIZE(Temp_pool) < current_IBIG) THEN
-            !     PRINT *, "Error: Pools are not allocated correctly before calling reshuffle_ps."
-            !     RETURN
-            !END IF
-
-            dat = 0.0  ! Zero the temporary array
-
-            ! 3. Copy the relevant data from PS_pool into Dat
-            ! Use the *old* dimensions (itot_old) to calculate the memory layout of the source data.
-            DO j = 1, levels_new
-                if (j .GT. levels_old) then
-                    DAT(1 : itot_new, j) = 0.0
-                    cycle
-                endif
-                DO i = 1, itot_new
-                    IF (i > itot_old) THEN
-                        DAT(i, j) = 0.0
-                    ELSE
-                        ! Calculate the linear index in PS_pool based on the OLD column-major shape
-                        old_linear_index = (j - 1) * itot_old + i 
-                        IF (old_linear_index <= total) THEN
-                            DAT(i, j) = PS_pool(old_linear_index)
-                        ENDIF
-                        ! old_linear_index should never exceed total (that has already been checked). If it
-                        ! does, we simply skip the assignment in order to avoid out-of-bounds write.
-                    END IF
+            INTEGER :: j, K, L
+            INTEGER :: itot_old, itot_new
+            INTEGER :: old_level_offset
+            INTEGER :: index_old, index_new
+            INTEGER :: max_j, max_k, max_l
+    
+            ! Calculate the exact horizontal dimension sizes
+            itot_old = lmax_old + 2 * kmax_old * lmax_old
+            itot_new = lmax_new + 2 * kmax_new * lmax_new
+    
+            ! 1. Initialize the entire target array to zero.
+            ! This automatically handles zero-filling if the new resolution is larger.
+            DAT = 0.0
+    
+            ! 2. Determine safe overlapping boundaries to avoid out-of-bounds reads
+            max_j = MIN(levels_old, levels_new)
+            max_k = MIN(kmax_old, kmax_new)
+            max_l = MIN(lmax_old, lmax_new)
+    
+            ! 3. Loop through overlapping vertical levels
+            DO j = 1, max_j
+        
+                ! Pointer to the start of the current level in the flat 1D pool
+                old_level_offset = (j - 1) * itot_old
+        
+                ! ------------------------------------------------------------------
+                ! BLOCK 1: Zonal Components (K=0)
+                ! ------------------------------------------------------------------
+                DO L = 1, max_l
+                    DAT(L, j) = PS_pool(old_level_offset + L)
                 END DO
+        
+                ! ------------------------------------------------------------------
+                ! BLOCK 2: Zonal Waves (K > 0)
+                ! ------------------------------------------------------------------
+                DO K = 1, max_k
+                    DO L = 1, max_l
+                
+                        ! Relative 0-based offset past the zonal block for the old layout
+                        index_old = lmax_old &
+                                    + (K - 1) * (lmax_old * 2) &
+                                    + (L - 1) * 2
+                
+                        ! Relative 0-based offset past the zonal block for the new layout
+                        index_new = lmax_new &
+                                    + (K - 1) * (lmax_new * 2) &
+                                    + (L - 1) * 2
+                
+                        ! Copy Cosine entry (+1 shifts to 1-based Fortran array indexing)
+                        DAT(index_new + 1, j) = PS_pool(old_level_offset + index_old + 1)
+                
+                        ! Copy Sine entry
+                        DAT(index_new + 2, j) = PS_pool(old_level_offset + index_old + 2)
+                
+                    END DO
+                END DO
+        
             END DO
-
-            ! 5. Copy the data from the temporary 2D view back to the main PS 2D view using a single assignment
+    
+            ! 4. Safe 2D-to-2D array assignment
             PS = DAT
-        END SUBROUTINE ReshuffleArrays
 
+        END SUBROUTINE ReshuffleArrays
+                           
         !>***************************************************** Get sizes of arrays:
         !> Method populates the Dims type defined in ArrayDimensionsModule
         !> given the input sizes. These are used for allocating the plotting-related arrays
@@ -1635,6 +1661,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             END DO
 
         END subroutine ComputeVerticalProfiles
+        
+        !subroutine computePlotTempScale()
+        !    use ModelFieldsModule, only: gVertArr
+        !    use ConstantsModule, only: OROGRAPHY, CP, CORIOLIS, KAPPA, GAS_CONSTANT_R, GRAVITY
+        !    use ModelParamsModule, only: gModIntParams, gScaleFactors, gPlotScales
+        !    
+        !    implicit none
+        !    ! scale factor at level gVertArr%LVS(n) =  CP*[LVS(n-1)**KAPPA - LVS(n+1)**KAPPA]/(CHANNEL_WIDTH * CHANNEL_WIDTH * CORIOLIS * LVS(1)**KAPPA)
+        !    
+        !    gVertArr%APlot(1) = 
+        !
+        !end subroutine computePlotTempScale
 
         !********************************************"Radiation" Routine:
         SUBROUTINE RaisanenRadiationProfile()

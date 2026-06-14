@@ -560,7 +560,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             ! the cursor is too close to the right side.
             maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
                     gModIntParams%plotType == PHASE_AND_MAP .OR. &
-                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)
+                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG)
             graphs = (gModIntParams%plotType == WEATHER_STN)
 
             ! Early exit 
@@ -577,7 +578,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             textBuffer = ""
             if (maps) then
                 screenHeight = gBitMapInfo%height / 2
-                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) screenHeight = gBitMapInfo%height
+                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) screenHeight = gBitMapInfo%height
                 if (mouse_y >= screenHeight) then
                     lret = EndPaint(hWnd, ps)
                     MainWndProc = 0
@@ -587,6 +589,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     rlat = REAL(mouse_y) * (gVertArr%LVS(1) - gVertArr%LVS(SIZE(gVertArr%LVS))) / REAL(gBitMapInfo%height)
                     rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
                     write(textBuffer, '(F5.1, A, F6.1, A)') rlon, " lon ", rlat, " mb"
+                else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+                    rlon = REAL(mouse_y) * (gVertArr%LVS(1) - gVertArr%LVS(SIZE(gVertArr%LVS))) / REAL(gBitMapInfo%height)
+                    rlat = REAL(mouse_x * 90) / REAL(gBitMapInfo%width)
+                    write(textBuffer, '(F5.1, A, F6.1, A)') rlat, " lat ", rlon, " mb"
                 else
                     rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
                     rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
@@ -642,11 +648,13 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 mouse_y = ISHFT(lParam, -16)
                 maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
                         gModIntParams%plotType == PHASE_AND_MAP .OR. &
-                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG)
                 graphs = (gModIntParams%plotType == WEATHER_STN)
                 if (maps) then
                     screenHeight = gBitMapInfo%height / 2
-                    if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) screenHeight = gBitMapInfo%height
+                    if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. & 
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) screenHeight = gBitMapInfo%height
                     ! 1. Ensure data is ready (only happens once per plot change)
                     if (.NOT. ALLOCATED(X) .AND. .NOT. ALLOCATED(X_Overlay)) then
                          call NonDimensionalizeModRealParams()
@@ -767,6 +775,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
                         if (gModRealParams%hovLat .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%hovLat = 0.
+                    else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+                        call LogMessage("User moving eastward 5 degrees Longitude")
+                        gModRealParams%hovLon = gModRealParams%hovLon + 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%hovLat .GT. 360.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 0.
                     else                        
                         call LogMessage("User moving up a level")
                         gModIntParams%LEVP = gModIntParams%LEVP + 1
@@ -780,6 +792,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
                         if (gModRealParams%hovLat .LT. 0.0) gModRealParams%hovLat = 90.0 * DEGREES_TO_RAD
+                    else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+                        call LogMessage("User moving westward 5 degrees Longitude")
+                        gModRealParams%hovLon = gModRealParams%hovLon - 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%hovLat .LT. 0.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 360.
                     else 
                         call LogMessage("User moving down a level")
                         gModIntParams%LEVP = gModIntParams%LEVP - 1

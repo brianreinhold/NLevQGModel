@@ -125,7 +125,7 @@ SUBMODULE (PlotModule) InterpolateSubmodule
             ! Step 1: Interpolate each ROW (Horizontal)
             ! We take a 1D slice of R (a row) and expand it into a row of TempGrid
             do j = b%JL, b%JU
-                call Interpolate1D(R(b%IL : b%IU, j), b, .true., TempGrid(b%KL : b%KU, j)) ! is periodic
+                call Interpolate1D(R(b%IL : b%IU, j), b, b%isPeriodicX, TempGrid(b%KL : b%KU, j)) ! is periodic
             end do
 
             ! Step 2: Interpolate each COLUMN (Vertical)

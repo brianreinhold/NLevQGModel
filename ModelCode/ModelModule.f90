@@ -76,7 +76,7 @@ module ModelModule
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, gContourIntervals
             use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
-            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation
+            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation, DFDIAB
             use InteractionCoefficientsModule
             use NLevQGModelGlobals, only: ghwndMain, LogMessage
             use iso_c_binding
@@ -285,6 +285,7 @@ module ModelModule
                                         write(msg, '(A, I4, A, I4, A, I4)') 'Level=', N, ' KSTEP=', KSTEP, ' NCYC4=', NCYC4
                                         call LogMessage("Numerical instability. Exiting. " // msg)
                                         call ZeroHorzArrays(.true.) ! Don't zero settings like TF, SF, TOP, AKL, etc.
+                                        call DFDIAB(.false.)
                                         call CreatePerturbation()
                                         gModelState%runState = STOPPED
                                         return

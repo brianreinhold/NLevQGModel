@@ -185,6 +185,7 @@ MODULE ModelFieldsModule
         REAL, POINTER :: G4(:, :) => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
         REAL, POINTER :: plot(:, :) => null()   !  plot(IXMAX, IYMAX) grid point array for plotting in fftw3
         REAL, POINTER :: plotFull(:, :) => null()   !  plotFull(KX, LY) grid point array for plotting on the screen
+        REAL, POINTER :: plotFullY(:, :) => null()  !  plotFull(LY, KX) grid point array for plotting on the screen with x, y switched for longitude cross sections
         COMPLEX, POINTER :: GcZ(:) => null()    !  GcZ(KX or LY) complex grid point array for the periodic transform routine
         REAL, POINTER :: GZonal(:) => null()    !  GZonal(KX or LY) grid point array for zonal (cosly) transforms
         REAL, POINTER :: G2Zonal(:) => null()   !  G2Zonal(KX or LY) grid point array for zonal (cosly) transforms
@@ -536,6 +537,7 @@ MODULE ModelFieldsModule
             ! Plot array
             gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             gTransArr%plotFull(1: arraySizes%KX, 1 : arraySizes%LY) => plotFull_pool(1 : arraySizes%KX * arraySizes%LY)
+            gTransArr%plotFullY(1: arraySizes%LY, 1 : arraySizes%KX) => plotFull_pool(1 : arraySizes%LY * arraySizes%KX)
             gTransArr%GcZ(1 : mx) => GcZ_pool(1 : mx)
             gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
             gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)
@@ -628,6 +630,7 @@ MODULE ModelFieldsModule
             gTransArr%G4  => null()     !  G4(IXMAX, IYMAX) grid point arrays for transform routines in 2 d
             gTransArr%plot  => null()   !  plot(IXMAX, IYMAX) grid point array for plot
             gTransArr%plotFull  => null()   !  plotFull(KX, LY) grid point array for full plot
+            gTransArr%plotFullY  => null()   !  plotFullY(LY, KX) grid point array for full plot reversed
             gTransArr%GZonal  => null() !  GZonal(KX or LY) grid point array for zonal (cosly) transforms
             gTransArr%G2Zonal  => null() !  G2Zonal(KX or LY) grid point array for zonal (cosly) transforms
             gTransArr%GcZ  => null()    !  GcZ(KX or LY) complex grid point array for the periodic transform routine
