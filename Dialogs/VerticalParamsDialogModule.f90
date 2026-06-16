@@ -212,6 +212,8 @@ module VerticalParamsDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         case (IDC_EDIT_VERTICAL)
                             SELECT CASE (ISHFT(wParam, -16))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_VERTICAL))
                                 CASE (EN_CHANGE)
                                     EN: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator

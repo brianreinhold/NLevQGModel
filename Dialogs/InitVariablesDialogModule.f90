@@ -190,7 +190,7 @@ module InitVariablesDialogModule
                         end select
                     end if
 
-                    select case (IAND(wParam, 16#FFFF))
+                    select case (IAND(wParam, Z'FFFF'))
 
                         case (IDOK)
                             bret = EndDialog(hDlg, IDOK)
@@ -240,6 +240,8 @@ module InitVariablesDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         case (IDC_EDIT_HORZ)
                             SELECT CASE (ISHFT(wParam, -16))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_HORZ))
                                 CASE (EN_CHANGE)
                                     EN: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator

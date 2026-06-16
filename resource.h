@@ -61,7 +61,6 @@
 #define IDC_LIST_TURB_MIXING            1051
 #define IDC_COMBO_PLOT_LEVEL            1051
 #define IDC_STATIC_TURB_MIXING          1052
-#define IDC_STATIC_COMBO_MODEL_TYPE2    1052
 #define IDC_STATIC_COMBO_PLOT_LEVEL     1052
 #define IDC_LIST_NEWT_COOLING           1053
 #define IDC_STATIC_NEWT_COOLING         1054
@@ -85,7 +84,10 @@
 #define IDC_BUTTON_INIT_ZERO_ALL        1072
 #define IDC_COMBO1                      1073
 #define IDC_COMBO_LEVEL                 1073
+#define IDC_COMBO_PHASE_SPACE_X         1073
 #define IDC_STATIC_COMBO_LEVEL          1074
+#define IDC_COMBO_PHASE_SPACE_X2        1074
+#define IDC_COMBO_PHASE_SPACE_Y         1074
 #define IDC_LIST_CONTOURS               1075
 #define IDC_STATIC_CONTOURS             1076
 #define IDC_LIST_RANGES                 1077
@@ -94,6 +96,7 @@
 #define IDC_EDIT_CONTOURS               1080
 #define IDC_CHECK1                      1081
 #define IDC_CHECK_RUN_INVISCID          1081
+#define IDC_STATIC_PHASE_SPACE          1082
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -103,7 +106,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        114
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1082
+#define _APS_NEXT_CONTROL_VALUE         1083
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

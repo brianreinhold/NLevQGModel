@@ -325,7 +325,7 @@ MODULE ModelFieldsModule
             ALLOCATE(GQ_pool(gArrayDims%itot , gUserSettings%maxLevels),&
                     BTA_pool(gArrayDims%itot),                         &
                     PSB_pool(gArrayDims%itot),                         &
-                    PS_pool(14 * gArrayDims%itot * gUserSettings%maxLevels),  &
+                    PS_pool(13 * gArrayDims%itot * gUserSettings%maxLevels),  &
 
                     ADO_pool(gArrayDims%itot),                         &
                     TOP_pool(gArrayDims%itot),                         &
@@ -348,18 +348,24 @@ MODULE ModelFieldsModule
         
         FUNCTION AllocateTransformArrays() RESULT(status)
             USE ISO_FORTRAN_ENV
-            use ArrayDimensionsModule
+            use ArrayDimensionsModule, only: gArrayDims
             use ModelParamsModule, only: gUserSettings
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
 
             IMPLICIT NONE
 
-            INTEGER :: status
+            INTEGER :: status, maxSize, mk, ml
             complex(C_FLOAT_COMPLEX), pointer :: dummy_c_2d(:, :)
             type(C_PTR) :: p_dummy_r, p_dummy_c
 
             status = 0
 
+            ! Sometimes the vertical levels LVS is greater than either KX or LY
+            ! so we need to find the largest combination needed. We have
+            ! KX*LY, KX*LVS, LY*LVS
+            maxSize = MAX(gArrayDims%KX * gArrayDims%LY, gArrayDims%KX * gArrayDims%LVS, gArrayDims%LY * gArrayDims%LVS)
+            mk = max(gArrayDims%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+            ml = max(gArrayDims%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
 
             allocate(Gc_pool((gArrayDims%IXMAX/2 + 1) * gArrayDims%IYMAX),     &
                     G1_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
@@ -367,7 +373,7 @@ MODULE ModelFieldsModule
                     G3_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
                     G4_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
                     plot_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),            &
-                    plotFull_pool(gArrayDims%KX * gArrayDims%LY),              &
+                    plotFull_pool(maxSize),                                    &
                     GZonal_pool(max(gArrayDims%KX, gArrayDims%LY)),            &
                     G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY)),           &
                     GcZ_pool(max(gArrayDims%KX, gArrayDims%LY)),               &
@@ -396,9 +402,9 @@ MODULE ModelFieldsModule
             ! TF and SF are included in PS_pool We need to skip those
             if (skipSettings) then
                 size2d = (gModIntParams%LMAX2 + 2 * (gModIntParams%LMAX2 * gModIntParams%KMAX2)) * gModIntParams%NLEV
-                PS_pool(1 : 4 * size2d) = 0.0
+                PS_pool(1 : 3 * size2d) = 0.0
                 ! skip TF
-                PS_pool(5 * size2d + 1 : 13 * size2d) = 0.0
+                PS_pool(4 * size2d + 1 : 12 * size2d) = 0.0
                 ! skip SF
             else
                 PS_pool = 0.0
@@ -476,18 +482,17 @@ MODULE ModelFieldsModule
 
             gHorzArr%PS(1 : itot, 1 : levels) =>  PS_pool(             1 :     size2d) ! PS_pool has all 14 fields
             gHorzArr%TH(1 : itot, 1 : levels) =>  PS_pool(    size2d + 1 : 2 * size2d)
-            gHorzArr%TH(1 : itot, 1 : levels) =>  PS_pool(2 * size2d + 1 : 3 * size2d)
-            gHorzArr%WW(1 : itot, 1 : levels) =>  PS_pool(3 * size2d + 1 : 4 * size2d)
-            gHorzArr%TF(1 : itot, 1 : levels) =>  PS_pool(4 * size2d + 1 : 5 * size2d)
-            gHorzArr%FS(1 : itot, 1 : levels) =>  PS_pool(5 * size2d + 1 : 6 * size2d)
-            gHorzArr%ADS(1 : itot, 1 : levels) => PS_pool(6 * size2d + 1 : 7 * size2d)
-            gHorzArr%WS(1 : itot, 1 : levels) =>  PS_pool(7 * size2d + 1 : 8 * size2d)
-            gHorzArr%S(1 : itot, 1 : levels) =>   PS_pool(8 * size2d + 1 : 9 * size2d)
-            gHorzArr%FT(1 : itot, 1 : levels) =>  PS_pool(9 * size2d + 1 : 10 * size2d)
-            gHorzArr%ADT(1 : itot, 1 : levels) => PS_pool(10 * size2d + 1 : 11 * size2d)
-            gHorzArr%WT(1 : itot, 1 : levels) =>  PS_pool(11 * size2d + 1 : 12 * size2d)
-            gHorzArr%T(1 : itot, 1 : levels) =>   PS_pool(12 * size2d + 1 : 13 * size2d)
-            gHorzArr%SF(1 : itot, 1 : levels) =>  PS_pool(13 * size2d + 1 : 14 * size2d)
+            gHorzArr%WW(1 : itot, 1 : levels) =>  PS_pool(2 * size2d + 1 : 3 * size2d)
+            gHorzArr%TF(1 : itot, 1 : levels) =>  PS_pool(3 * size2d + 1 : 4 * size2d)
+            gHorzArr%FS(1 : itot, 1 : levels) =>  PS_pool(4 * size2d + 1 : 5 * size2d)
+            gHorzArr%ADS(1 : itot, 1 : levels) => PS_pool(5 * size2d + 1 : 6 * size2d)
+            gHorzArr%WS(1 : itot, 1 : levels) =>  PS_pool(6 * size2d + 1 : 7 * size2d)
+            gHorzArr%S(1 : itot, 1 : levels) =>   PS_pool(7 * size2d + 1 : 8 * size2d)
+            gHorzArr%FT(1 : itot, 1 : levels) =>  PS_pool(8 * size2d + 1 : 9 * size2d)
+            gHorzArr%ADT(1 : itot, 1 : levels) => PS_pool(9 * size2d + 1 : 10 * size2d)
+            gHorzArr%WT(1 : itot, 1 : levels) =>  PS_pool(10 * size2d + 1 : 11 * size2d)
+            gHorzArr%T(1 : itot, 1 : levels) =>   PS_pool(11 * size2d + 1 : 12 * size2d)
+            gHorzArr%SF(1 : itot, 1 : levels) =>  PS_pool(12 * size2d + 1 : 13 * size2d)
 
             gHorzArr%ZS(1 : itot, 1 : levels) => ZS_pool(1 : itot, 1 : levels)
             gHorzArr%PSSAVE(1 : itot, 1 : levels) => PSSAVE_pool(1 : itot, 1 : levels)
@@ -520,13 +525,15 @@ MODULE ModelFieldsModule
             implicit none
             type(Dims), intent(in) :: arraySizes
             
-            integer :: status, mx
+            integer :: status, mx, mk, ml
 
             status = 0
             if (.not. gTransArr%allocated) then
                 status = 1
                 return
             end if
+            mk = max(arraySizes%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+            ml = max(arraySizes%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
             ! Transform arrays
             mx = max(arraySizes%KX, arraySizes%LY)
             gTransArr%Gc(1 : arraySizes%IXMAX/2 + 1, 1 : arraySizes%IYMAX) => Gc_pool(1 : (arraySizes%IXMAX/2 + 1) * arraySizes%IYMAX)
@@ -536,8 +543,8 @@ MODULE ModelFieldsModule
             gTransArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             ! Plot array
             gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gTransArr%plotFull(1: arraySizes%KX, 1 : arraySizes%LY) => plotFull_pool(1 : arraySizes%KX * arraySizes%LY)
-            gTransArr%plotFullY(1: arraySizes%LY, 1 : arraySizes%KX) => plotFull_pool(1 : arraySizes%LY * arraySizes%KX)
+            gTransArr%plotFull(1: arraySizes%KX, 1 : ml) => plotFull_pool(1 : arraySizes%KX * ml)
+            gTransArr%plotFullY(1: arraySizes%LY, 1 : mk) => plotFull_pool(1 : arraySizes%LY * mk)
             gTransArr%GcZ(1 : mx) => GcZ_pool(1 : mx)
             gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
             gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)

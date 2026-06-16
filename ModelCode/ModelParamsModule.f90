@@ -91,13 +91,9 @@ module ModelParamsModule
         integer :: field1       ! field1 is the first plot field overlay to display (e.g. vorticity, height, temperature, etc)
         integer :: field2       ! field2 is the second plot field overlay to display (e.g. vorticity, height, temperature, etc)
         integer :: field3       ! field3 is the third plot field overlay to display (e.g. vorticity, height, temperature, etc)
-        integer :: zonalWaveNumber  ! zonalWavenumber is the zonal wavenumber to plot in graphs OR the zonal wavenumber of the 
-                                    ! component to plot along the x-axis of phase space
-        integer :: meridWavenumber  ! meridWavenumber is the meridional wavenumber to plot in graphs OR the meridional wavenumber
-                                    ! of the component to plot along the x-axis of phase space
+        integer :: phaseSpaceX  ! component index to plot along x-axis
+        integer :: phaseSpaceY  ! component index to plot along y-axis
         integer :: LEVP         ! LEVP is the level to plot in graphs and phase space
-        integer :: sinZonal     ! sinZonal is the zonal wavenumber of the component to plot along the y-axis of phase space
-        integer :: sinMerid     ! sinMerid is the meridional wavenumber of the component to plot along the y-axis of phase space
         integer :: modelType    ! Model type (1 = standard  2 = GQ initial value model (zonal fields held constant))
         integer :: JX0          ! JX0 is the lower range of the zonal wavenumbers being displayed in the two-d plots
         integer :: JY0          ! JY0 is the lower range of the meridional wavenumbers being displayed in the two-d plots

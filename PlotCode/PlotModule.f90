@@ -453,14 +453,9 @@ module PlotModule
             ! provided by the user. For the index along the y-axis we have gModIntParams%sinZonal and gModIntParams%sinMerid.
                 
             ! If the user specifies a zonal wavenumber for the cosine part greater than zero
-            if (gModIntParams%zonalWavenumber .GT. 0) then
-                ! This gets the index for cosknx sinly component
-                phaseSpaceType%xIndex = gModIntParams%LMAX2 + 1 + & ! Puts us at the start of the waves
-                                        2 * gModIntParams%LMAX2 * (gModIntParams%zonalWavenumber - 1) + & ! Puts us at the start of the Kth zonal wave
-                                        2 * (gModIntParams%meridWavenumber - 1)
-                !phaseSpaceType%xScale = REAL(min(gBitMapInfo%height, gBitMapInfo%width))
-                !phaseSpaceType%xScale = 2.0 * gContourIntervals%Contours(field)
-                ! The spectral eigenfunction is 2 * (cosx, sinx)siny
+            ! This gets the index for cosknx sinly component
+            phaseSpaceType%xIndex = gModIntParams%phaseSpaceX
+            if (phaseSpaceType%xIndex > gModIntParams%LMAX2) then
                 if (gIsTemperature(field)) then
                     phaseSpaceType%xScale = 2.0 * gPlotScales(field) / interpolateTemperatureScale(gModIntParams%LEVP)
                 else
@@ -468,17 +463,15 @@ module PlotModule
                 endif
             else
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
-                phaseSpaceType%xIndex = gModIntParams%meridWavenumber
                 if (gIsTemperature(field)) then
                     phaseSpaceType%xScale = SQRT2 * gPlotScales(field) / interpolateTemperatureScale(gModIntParams%LEVP)
                 else
                     phaseSpaceType%xScale = SQRT2 * gPlotScales(field)
                 endif
             endif
-            ! If the user specifies a zonal wavenumber for the sine part greater than zero
-            if (gModIntParams%sinZonal .GT. 0) then
-                ! This gets the index for cosknx sinly component
-                phaseSpaceType%yIndex = phaseSpaceType%xIndex + 1
+
+            phaseSpaceType%yIndex = gModIntParams%phaseSpaceY
+            if (phaseSpaceType%yIndex > gModIntParams%LMAX2) then
                 if (gIsTemperature(field)) then
                     phaseSpaceType%yScale = 2.0 * gPlotScales(field) / interpolateTemperatureScale(gModIntParams%LEVP)
                 else
@@ -486,7 +479,6 @@ module PlotModule
                 endif
             else
                 ! Otherwise we just have the zonal mode cosLy if the user sets the zonal wavenumber to 0
-                phaseSpaceType%yIndex = gModIntParams%meridWavenumber
                 if (gIsTemperature(field)) then
                     phaseSpaceType%yScale = SQRT2 * gPlotScales(field) / interpolateTemperatureScale(gModIntParams%LEVP)
                 else
@@ -2884,7 +2876,7 @@ module PlotModule
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                 xSecType = getLatCrossSectionType(field)
                 gTransArr%plotFull = 0.0
-                do N = 1, SIZE(gVertArr%LVS)
+                do N = 1, gCurrentDims%LVS
                     ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
                     call loadLatValues(xSecType, N, xSecType%tempScales(N))
                     gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
@@ -2892,7 +2884,7 @@ module PlotModule
             elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
                 xSecType = getLonCrossSectionType(field)
                 gTransArr%plotFull = 0.0
-                do N = 1, SIZE(gVertArr%LVS)
+                do N = 1, gCurrentDims%LVS
                     ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
                     call loadLonValues(xSecType, N, xSecType%tempScales(N))
                     gTransArr%plotFullY(1 : gCurrentDims%IYMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IYMAX + 1)
@@ -2912,12 +2904,12 @@ module PlotModule
             b%isPeriodicX = .TRUE.
             plotPtr => gTransArr%plotFull
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
-                b%ju = SIZE(gVertArr%LVS)
+                b%ju = gCurrentDims%LVS
                 b%LU = gBitMapInfo%height
             endif
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
                 b%iu = gCurrentDims%IYMAX
-                b%ju = SIZE(gVertArr%LVS)
+                b%ju =gCurrentDims%LVS
                 b%LU = gBitMapInfo%height
                 b%isPeriodicX = .FALSE.
                 plotPtr => gTransArr%plotFullY

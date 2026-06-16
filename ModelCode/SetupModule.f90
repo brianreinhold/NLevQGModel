@@ -13,12 +13,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
     public :: WriteSensFileHeader
     public :: WriteFileData
     public :: CheckUserSettingsChanges  ! Function to check potentially new gUserSettings values and change allocations if needed
-    public :: CheckUserSettingsData     ! Function to santity check the gUserSettings values
+    public :: CheckUserSettingsBounds     ! Function to santity check the gUserSettings values
     public :: CheckModelResolutions     ! Function to sanity check and correct model resolution parameters in gModIntParams
     public :: CheckModelControlChanges
     public :: SetDimensions     ! SetDimensions which gets the dimensions for array sizes for allocation
-    public :: DimensionalizeModRealParams    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
-    public :: NonDimensionalizeModRealParams ! Call this function to undimensionalize those fields that were dimensionalized after the user is done
+    public :: SetModRealParamsDimensionalState    ! Call this function to dimensionalize those fields of gModRealParams that need it for display to the user
     public :: SetDefaults  ! This creates the default values for all the fields in the ModelParamsModule
     public :: DFDIAB    ! Computes default diabatic vertical profiles
     public :: CreatePerturbation     ! Introduces a perturbation into the flow:
@@ -167,11 +166,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             integer :: error, currentNoOfInteractions
 
             error = 0
+
             error = DeallocateHorizontalArrays()
             error = AllocateHorizontalArrays()
             if (error .NE. 0) return
             error = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
             if (error .NE. 0) return
+
             error = DeallocateTransformArrays()
             error = AllocateTransformArrays()
             if (error .NE. 0) return
@@ -270,7 +271,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 return
             end if
         !---------------------------------------Check for bad data:
-            if (.NOT. CheckUserSettingsData()) then    ! Function is 1ocated in this file
+            if (.NOT. CheckUserSettingsBounds()) then    ! Function is 1ocated in this file
                 call LogMessage('The data read from ' // trim(fileData%fileName) // ' had incorrect bounds on certain parameters. Need to invoke defaults.')
                 ! Bad parameters loaded; load defaults
                 errorCode = -1  ! Value -1 to separate from system error which tend to be > 0 (as far as I know)
@@ -513,7 +514,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             boolStatsResult = .false.
 
             !--------------------------------------------Check for bad user parameters:
-            if (CheckUserSettingsData() .EQV. .FALSE.) then  ! To me this is easier to read than 'if (.NOT. CheckUserSettingsData())'
+            if (CheckUserSettingsBounds() .EQV. .FALSE.) then  ! To me this is easier to read than 'if (.NOT. CheckUserSettingsBounds())'
                 errorCode = 1
                 return  ! Bad user data; Let user examine changes made by this function.
             endif
@@ -552,6 +553,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 errorCode = allocateTransformArrays()    ! Reallocate transform arrays
                 if(errorCode .NE. 0) return
+
                 errorCode = createTransArr(gCurrentDims)
                 if(errorCode .NE. 0) return
             end if
@@ -598,7 +600,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> If they are valid and not changed, function returns true.
         !! @return  true if all fields are okay. false if one or more parameters had to
         !!          be reset because they were inconsistent
-        function CheckUserSettingsData() result(mCode)
+        function CheckUserSettingsBounds() result(mCode)
             use ConstantsModule, only: STATS_OPT_NONE, STATS_OPT_VAR
             use ModelParamsModule, only: gUserSettings
             
@@ -619,7 +621,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 mCode = mCode .AND. .false.
             ENDIF
             IF(gUserSettings%maxLevels .LE. 0) THEN
-                gUserSettings%maxLevels = 2
+                gUserSettings%maxLevels = 1
                 mCode = mCode .AND. .false.
             ENDIF
             IF(gUserSettings%statsOption .LT. STATS_OPT_NONE .OR. &
@@ -628,7 +630,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 mCode = mCode .AND. .false.
             ENDIF
 
-        end function CheckUserSettingsData
+        end function CheckUserSettingsBounds
 
         function CheckModelResolutions() result(mCode)
              use ModelParamsModule, only: gModIntParams, gUserSettings
@@ -692,13 +694,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%JX0 .LT. 0) gModIntParams%JX0 = 0
             IF(gModIntParams%JY0 .LT. 1) gModIntParams%JY0 = 1
 
-            !------------------------------------------Wavenumber, level bounds
-            if(gModIntParams%zonalWavenumber .GT. gModIntParams%KMAX2) gModIntParams%zonalWavenumber = gModIntParams%KMAX2
-            if(gModIntParams%meridWavenumber .GT. gModIntParams%LMAX2) gModIntParams%meridWavenumber = gModIntParams%LMAX2
-
-            if(gModIntParams%zonalWavenumber .LT. 0) gModIntParams%zonalWavenumber = 0
-            if(gModIntParams%meridWavenumber .LT. 1) gModIntParams%meridWavenumber = 1
-
 
             !-------------------------------------------Field or variable type ranges
             I2 = PLOTTING_OFF
@@ -713,10 +708,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%field3 .GT. PLOTTING_OFF) gModIntParams%field3 = HEIGHT
             IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = PLOTTING_OFF
             IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = PLOTTING_OFF
-
-            !---------------------------------------------sinZonal, sinMerid:
-            IF(gModIntParams%sinZonal .LT. 0) gModIntParams%sinZonal = 0
-            IF(gModIntParams%sinMerid .LT. 1) gModIntParams%sinMerid = 1
 
             !---------------------------------------------JX0,JX1:
             IF(gModIntParams%JX0 .GT. gModIntParams%KMAX2) gModIntParams%JX0 = gModIntParams%KMAX2
@@ -764,7 +755,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         end function CheckModParams 
 
-        !! prevRN is always non dimensional.
+        !! The parameters passed will be updated if needed. The parmeter prevRN should always be non dimensional
         function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
             use ifwinty
             use ifwin
@@ -776,13 +767,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ArrayDimensionsModule, only: gCurrentDims
             use Fftw3HelpersModule, only: setup_fftw_plans
 
-            integer, intent(in) :: prevZonalWaves, prevMeridWaves, prevLevels
+            integer, intent(inout) :: prevZonalWaves, prevMeridWaves, prevLevels
             real, intent(inout) :: prevRN  ! nondimensional
 
             integer :: errorCode, I, N
-            LOGICAL :: bret, boolUpdateCint, boolHorzChange, boolVertChange
-            REAL, ALLOCATABLE :: DAT(:, :)
-            integer :: itot_old, itot_new, total, currentNoOfInteractions
+            LOGICAL :: bret, boolUpdateCint, boolHorzChange, boolVertChange, saveDimensionalState
+            REAL, ALLOCATABLE :: DAT(:, :), DAT2(:, :)
+            integer :: totOld, itot_old, itot_new, currentNoOfInteractions
 
             errorCode = 0
             boolUpdateCint = .false.
@@ -804,39 +795,43 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             end if
             errorCode = CheckModParams()  ! Check all the other possible values the user may have changed.
             if (errorCode .NE. 0) return  ! Values changed by program because of bad values. Return to user for inspection.
-
-            call NonDimensionalizeModRealParams()    ! call DimensionalizeModRealParams() was done in the WM_INITIDIALOG method in the ModelControl Dialog
+            
+            saveDimensionalState = gModRealParams%isDimensionalized
+            call SetModRealParamsDimensionalState(.false.)
 
             if (prevZonalWaves .NE. gModIntParams%KMAX2 .OR. prevMeridWaves .NE. gModIntParams%LMAX2) boolHorzChange = .true.
+
             if (prevLevels .NE. gModIntParams%NLEV) boolVertChange = .true.
 
             ! Check if the resolutions have changed and we need to reshuffle arrays
             if (boolHorzChange .OR. boolVertChange) then
                 gCurrentDims = SetDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
-                total = gArrayDims%itot * gUserSettings%maxLevels ! This is for reshuffling arrays so we need to know their base size
                 itot_old = prevMeridWaves + 2 * prevZonalWaves * prevMeridWaves
+                totOld = (prevMeridWaves + 2 * prevZonalWaves * prevMeridWaves) * prevLevels
                 itot_new = gModIntParams%LMAX2 + 2 * gModIntParams%KMAX2 * gModIntParams%LMAX2
                 ALLOCATE(DAT(itot_new, gModIntParams%NLEV)) ! Temporary array for reshuffling
-                !do N = 1, gModIntParams%NLEV
-                !    DAT(1, N) = gHorzArr%TF(1, N)
-                !end do
+                do N = 1, min(gModIntParams%NLEV, prevLevels)
+                    DAT(1, N) = gHorzArr%TF(1, N)
+                    DAT(2, N) = gHorzArr%SF(1, N)
+                end do
 
                 ! Signal that we need to update the interaction coefficents if using interaction coefficients and the horizontal resolution has changed
                 if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS .AND. boolHorzChange) boolUpdateCint = .true.
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 errorCode = createTransArr(gCurrentDims)
-                !gHorzArr%TF = 0.0
-                !do N = 1, gModIntParams%NLEV
-                !    gHorzArr%TF(1, N) = DAT(1, N)
-                !end do
+                gHorzArr%TF = 0.0
+                gHorzArr%SF = 0.0
+                do N = 1, min(gModIntParams%NLEV, prevLevels)
+                    gHorzArr%TF(1, N) = DAT(1, N)
+                    gHorzArr%SF(1, N) = DAT(2, N)
+                end do
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
-                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
+                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
                 
-                CALL ReshuffleArrays(gHorzArr%TF, DAT, PS_pool(4 * total + 1 : 5 * total), prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%SF, DAT, PS_pool(13 * total + 1 : 14 * total), prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, total)
-                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, prevZonalWaves, prevMeridWaves, 1, gModIntParams%KMAX2, gModIntParams%LMAX2, 1, total)
+                ! Cant reshuffle TF and SF arrays as they will get overwritten by the first call when the resolution increases that much.
+                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
+                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, prevZonalWaves, prevMeridWaves, 1, gModIntParams%KMAX2, gModIntParams%LMAX2, 1, itot_old)
                 
                 ! Zero out the dissipative terms in case we are going inviscid. All other field tendencies are calculated every time step
                 ! and their initial values are inconsequential. These will not get reset since the dissipative routines are skipped.
@@ -881,6 +876,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ! Now compute the interaction coefficients. flag > 0 indicates to do that versus just count them
                 gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 1)
             endif
+            prevZonalWaves = gModIntParams%KMAX2
+            prevMeridWaves = gModIntParams%LMAX2
+            prevLevels = gModIntParams%NLEV
+
+            call SetModRealParamsDimensionalState(saveDimensionalState) ! Restore the dimensional state to what it was before this function.
 
         end function CheckModelControlChanges
 
@@ -904,17 +904,17 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @param levels_new    Number of vertical levels in new resolution
         !! @param total         Total size of the PS_pool array
         SUBROUTINE ReshuffleArrays(ps, dat, PS_pool, kmax_old, lmax_old, levels_old, &
-                                   kmax_new, lmax_new, levels_new, total)
+                                   kmax_new, lmax_new, levels_new, totOld)
             IMPLICIT NONE
     
             ! Dimensions passed as arguments
             INTEGER, INTENT(IN) :: kmax_old, lmax_old, levels_old
-            INTEGER, INTENT(IN) :: kmax_new, lmax_new, levels_new, total
+            INTEGER, INTENT(IN) :: kmax_new, lmax_new, levels_new, totOld
     
             ! Flat 2D array declarations to match modern Fortran shape rules
             REAL, INTENT(INOUT) :: ps(lmax_new + 2*kmax_new*lmax_new, levels_new)
             REAL, INTENT(INOUT) :: dat(lmax_new + 2*kmax_new*lmax_new, levels_new)
-            REAL, INTENT(IN)    :: PS_pool(*)
+            REAL, INTENT(IN)    :: PS_pool(totOld)
     
             ! Local variables
             INTEGER :: j, K, L
@@ -948,13 +948,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 DO L = 1, max_l
                     DAT(L, j) = PS_pool(old_level_offset + L)
                 END DO
-        
+
                 ! ------------------------------------------------------------------
                 ! BLOCK 2: Zonal Waves (K > 0)
                 ! ------------------------------------------------------------------
                 DO K = 1, max_k
                     DO L = 1, max_l
-                
+
                         ! Relative 0-based offset past the zonal block for the old layout
                         index_old = lmax_old &
                                     + (K - 1) * (lmax_old * 2) &
@@ -964,20 +964,21 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                         index_new = lmax_new &
                                     + (K - 1) * (lmax_new * 2) &
                                     + (L - 1) * 2
-                
+
                         ! Copy Cosine entry (+1 shifts to 1-based Fortran array indexing)
                         DAT(index_new + 1, j) = PS_pool(old_level_offset + index_old + 1)
-                
+
                         ! Copy Sine entry
                         DAT(index_new + 2, j) = PS_pool(old_level_offset + index_old + 2)
-                
+
                     END DO
                 END DO
-        
+
             END DO
-    
             ! 4. Safe 2D-to-2D array assignment
-            PS = DAT
+            DO j = 1, max_j
+                PS(:, j) = DAT(:, j)
+            END DO
 
         END SUBROUTINE ReshuffleArrays
                            
@@ -1034,6 +1035,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     EXIT
                 ENDIF
             END DO
+            
+            ! For vertical arrays
+            arraySizes%LVS = levels * 2 + 1
             !------------------------------------For Graphics output of maps:
             arraySizes%KX = arraySizes%IXMAX + 2
             arraySizes%LY = arraySizes%IYMAX + 2
@@ -1348,11 +1352,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%field1 = TEMPERATURE
             gModIntParams%field2 = HEIGHT
             gModIntParams%field3 = PLOTTING_OFF
-            gModIntParams%zonalWavenumber = 1
-            gModIntParams%meridWavenumber = 1
+            gModIntParams%phaseSpaceX = gModIntParams%LMAX2 + 1
+            gModIntParams%phaseSpaceY = gModIntParams%LMAX2 + 2
             gModIntParams%LEVP = 2      ! Lowest streamfunction layer.
-            gModIntParams%sinZonal = 1
-            gModIntParams%sinMerid = 1
             gModIntParams%modelType = STANDARD_NLEVEL
             gModIntParams%JX0 = 0
             gModIntParams%JY0 = 1
@@ -1406,48 +1408,44 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             END DO
         END SUBROUTINE SetDefaults
 
-        !> Subroutine to dimensionalize the gModRealParams before displaying to the user
+        !> Subroutine to dimensionalize or nondimensionalize the gModRealParams
         !> Only three of the parameters are affected. DELT, BETA, RN
         !> Two others lonPoint, latPoint go to degrees in 'dimensional' form, otherwise they are in radians.
-        subroutine DimensionalizeModRealParams()
-            use ConstantsModule, only: RAD_TO_DEGREES
-            use ModelParamsModule, only: gModRealParams, gScaleFactors
-            
-            ! If already dimensionalized dont do it again!
-            if (gModRealParams%isDimensionalized) return
-
-            IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
-            gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeScale
-            gModRealParams%BETA = 4. * gModRealParams%BETA
-            gModRealParams%lonPoint = gModRealParams%lonPoint * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%latPoint = gModRealParams%latPoint * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%hovLat = gModRealParams%hovLat * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%hovLon = gModRealParams%hovLon * RAD_TO_DEGREES ! Convert to degrees for display
-            gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
-        end subroutine DimensionalizeModRealParams
-
-        !> Subroutine to nondimensionalize the gModRealParams for use in the model after the
-        !> user has examined and or changed them. Only three of the parameters are affected. DELT, BETA, RN.
-        !> Two others lonPoint, latPoint go to radians 'nondimensional' form, otherwise they are in degrees.
-        subroutine NonDimensionalizeModRealParams()
+        !! @Param setDimensional: logical indicating whether to set the parameters to dimensional or non-dimensional
+        !!        form. If true, set to dimensional. If false, set to non-dimensional.
+        subroutine SetModRealParamsDimensionalState(setDimensional)
             use ConstantsModule, only: RAD_TO_DEGREES
             use ModelParamsModule, only: gModRealParams, gScaleFactors
 
-            ! If already non-dimensionalized dont do it again!
-            if (.NOT. gModRealParams%isDimensionalized) return
-            
-            IF(gModRealParams%RN .GT. 0.) gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
-            !--------------------------------Recompute interactions if needed:
-            ! IF(RNP.NE.RN)interactCoefsComputed = .false.
-            gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeScale
-            gModRealParams%BETA = gModRealParams%BETA / 4.
-            gModRealParams%lonPoint = gModRealParams%lonPoint / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%latPoint = gModRealParams%latPoint / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%hovLat = gModRealParams%hovLat / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%hovLon = gModRealParams%hovLon / RAD_TO_DEGREES ! Restore to radians
-            gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
-        end subroutine NonDimensionalizeModRealParams
-        
+            logical, intent(in) :: setDimensional
+
+            if (setDimensional) then
+                ! If already dimensionalized dont do it again!
+                if (gModRealParams%isDimensionalized) return
+                IF(gModRealParams%RN .GT. 0.)gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
+                gModRealParams%DELT = gModRealParams%DELT * gScaleFactors%timeScale
+                gModRealParams%BETA = 4. * gModRealParams%BETA
+                gModRealParams%lonPoint = gModRealParams%lonPoint * RAD_TO_DEGREES ! Convert to degrees for display
+                gModRealParams%latPoint = gModRealParams%latPoint * RAD_TO_DEGREES ! Convert to degrees for display
+                gModRealParams%hovLat = gModRealParams%hovLat * RAD_TO_DEGREES ! Convert to degrees for display
+                gModRealParams%hovLon = gModRealParams%hovLon * RAD_TO_DEGREES ! Convert to degrees for display
+                gModRealParams%isDimensionalized = .TRUE. ! Indicate dimensionalized
+            else
+                ! If already nondimensionalized dont do it again!
+                if (.NOT. gModRealParams%isDimensionalized) return
+                IF(gModRealParams%RN .GT. 0.) gModRealParams%RN = gScaleFactors%longestWave/gModRealParams%RN
+                !--------------------------------Recompute interactions if needed:
+                ! IF(RNP.NE.RN)interactCoefsComputed = .false.
+                gModRealParams%DELT = gModRealParams%DELT / gScaleFactors%timeScale
+                gModRealParams%BETA = gModRealParams%BETA / 4.
+                gModRealParams%lonPoint = gModRealParams%lonPoint / RAD_TO_DEGREES ! Restore to radians
+                gModRealParams%latPoint = gModRealParams%latPoint / RAD_TO_DEGREES ! Restore to radians
+                gModRealParams%hovLat = gModRealParams%hovLat / RAD_TO_DEGREES ! Restore to radians
+                gModRealParams%hovLon = gModRealParams%hovLon / RAD_TO_DEGREES ! Restore to radians
+                gModRealParams%isDimensionalized = .FALSE. ! Indicate non-dimensionalized
+            endif
+        end subroutine SetModRealParamsDimensionalState
+
         subroutine DimensionalizeVerticalParams()
             use ModelFieldsModule, only: gVertArr
             use ModelParamsModule, only: gModIntParams, gScaleFactors

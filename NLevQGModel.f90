@@ -427,7 +427,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, NO_PLOT, &
                                DEGREES_TO_RAD
     use UtilitiesModule, only: openModelFile
-    use SetUpModule, only: SaveModelState, NonDimensionalizeModRealParams, DimensionalizeModRealParams
+    use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
@@ -657,7 +657,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) screenHeight = gBitMapInfo%height
                     ! 1. Ensure data is ready (only happens once per plot change)
                     if (.NOT. ALLOCATED(X) .AND. .NOT. ALLOCATED(X_Overlay)) then
-                         call NonDimensionalizeModRealParams()
+                         call SetModRealParamsDimensionalState(.false.)
                          call PrepareGrid(X, gModIntParams%field1, screenHeight)
                          call PrepareGrid(X_Overlay, gModIntParams%field2, screenHeight)
                     end if
@@ -699,7 +699,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User stopped run using F10")
                 else
                     call LogMessage("User returning to ModelControl Dialog via F10")
-                    call DimensionalizeModRealParams()
                     ret = EnableWindow(ghCurrentDlg, .TRUE.)
                     ret = SetFocus(ghCurrentDlg)
                     ret = SetActiveWindow(ghCurrentDlg)
@@ -731,7 +730,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                             call LogMessage("DeAllocated interpolated x_Overlay grid on F1")
                             deallocate(X_Overlay)
                         endif
-                        call NonDimensionalizeModRealParams()
+                        call SetModRealParamsDimensionalState(.false.)
                         call LogMessage("User resuming run")
                         if (gModelState%runState == PAUSED) then
                             gModelState%runState = RUNNING
@@ -761,7 +760,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call ClearScreen()
                     if (gModelState%runState .NE. RUNNING) then
                         call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
-                        call NonDimensionalizeModRealParams()
+                        call SetModRealParamsDimensionalState(.false.)
                         ret = StartTimeLoop()
                     end if
 

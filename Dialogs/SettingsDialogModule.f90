@@ -29,7 +29,7 @@ module SettingsDialogModule
             use DialogHelpersModule, only: GetComboIndex, &
                         moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, updateListViewValue, &
                         GetNameOfUserSelectedFile, GetUserSelectedSaveName  ! List control helpers
-            use SetupModule, only: SaveModelState, ReadSaveFile
+            use SetupModule, only: SaveModelState, ReadSaveFile, CheckUserSettingsChanges
             use ModelParamsModule, only: gUserSettings, gModIntParams, gNLevFile
             use ModelControlDialogModule, only: ModelControlDlgProc
             use KeyboardHooksModule, only: KeyboardForDlgSettingsProc
@@ -68,6 +68,11 @@ module SettingsDialogModule
 
             select case (dlgMsg)
                 
+                CASE (WM_APP + 104)
+                    ! Model Control dialog - from F4 keypress
+                    call runModelControlDialog()
+                    SettingsDlgProc = 1
+                
                 case (WM_ACTIVATE)
                     ! Check if window is being activated (WA_ACTIVE or WA_CLICKACTIVE)
                     if (IAND(uParam, 16#FFFF) /= WA_INACTIVE) then
@@ -92,7 +97,7 @@ module SettingsDialogModule
                     !bret = SendMessage(hEdit, WM_SETFONT, gFont, .TRUE.)
                     !hStaticEdit = GetDlgItem(hDlg, IDC_STATIC_EDIT_SETTINGS)
                     !bret = SendMessage(hStaticEdit, WM_SETFONT, gFont, .TRUE.)
-                    
+
                     call initializeDialog()
 
                     ! Center the dialog over the application window
@@ -197,16 +202,7 @@ module SettingsDialogModule
 
 !--- F4: Model control dialog
                         case (IDC_BUTTON_MODEL_CONTROL)
-                            ! Going to create another dialog box here. Dialog procedure ModelControlDlgProc is in ModelControlDialogModule.f90
-                            iret = EnableWindow(hDlg, .FALSE.)
-                            bret = ShowWindow(ghSettingsDlg, SW_HIDE)
-                            ghModelControlDlg = CreateDialogParam(ghInstance, INT(IDD_MODEL_CONTROL, LONG_PTR), &
-                                        NULL, & !ghwndMain,  Make the dialog unowned so the main window can come in the foreground
-                                        LOC(ModelControlDlgProc), 0_LONG_PTR)
-                            if (ghModelControlDlg /= 0) then
-                                iret = ShowWindow(ghModelControlDlg, SW_SHOW)
-                                iret = UpdateWindow(ghModelControlDlg) ! Optional: forces an immediate paint
-                            end if
+                            call runModelControlDialog()
                             SettingsDlgProc = 1
                             return
                         case (IDC_BUTTON_EXIT_SETTINGS) ! F10 Close
@@ -300,6 +296,26 @@ module SettingsDialogModule
 
                     call handleIntListControl(hDlg)
                 end subroutine initializeDialog
+                
+                subroutine runModelControlDialog()
+                    if (CheckUserSettingsChanges() == 0) then
+                        ! Going to create another dialog box here. Dialog procedure ModelControlDlgProc is in ModelControlDialogModule.f90
+                        iret = EnableWindow(hDlg, .FALSE.)
+                        bret = ShowWindow(ghSettingsDlg, SW_HIDE)
+                        ghModelControlDlg = CreateDialogParam(ghInstance, INT(IDD_MODEL_CONTROL, LONG_PTR), &
+                                    NULL, & !ghwndMain,  Make the dialog unowned so the main window can come in the foreground
+                                    LOC(ModelControlDlgProc), 0_LONG_PTR)
+                        if (ghModelControlDlg /= 0) then
+                            iret = ShowWindow(ghModelControlDlg, SW_SHOW)
+                            iret = UpdateWindow(ghModelControlDlg) ! Optional: forces an immediate paint
+                        end if
+                    else
+                        bret = MessageBox (hDlg, &
+                            "Unable to handle the new user settings"C, &
+                            "Error encountered"C, &
+                            IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
+                    end if
+                end subroutine
 
         end function SettingsDlgProc
 

@@ -24,7 +24,7 @@ module ModelControlDialogModule
 
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors, gNLevFile, gModelState
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, NonDimensionalizeModRealParams, DimensionalizeModRealParams, &
+            use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, SetModRealParamsDimensionalState, &
                                    ReadSaveFile, SaveModelState
             use ConstantsModule, only: WEATHER_MAP, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
                                        FIELD_START, FIELD_GRAPH_START, SECONDS_PER_DAY, CORIOLIS_INVERSE
@@ -63,13 +63,12 @@ module ModelControlDialogModule
             ! lost. If the size is larger, those new higher wavenumbers will be zero.
             ! We will set these values in the WM_INITDIALOG message. So we have access to them when some user
             ! action takes place (Fx-keys F1-F10) we will need to save them otherwise they will go out of scope.
-            integer :: prevZonalWaves, prevMeridWaves, prevLevels
-            save prevZonalWaves, prevMeridWaves, prevLevels
+            integer, save :: prevZonalWaves, prevMeridWaves, prevLevels
+
             ! This change will effect the interaction coefficients if the interaction coefficients integration
             ! method is being used. As above, we set it in the WM_INITDIALOG message and so it will not go
             ! out of scope we will need to save it
-            real :: prevRN
-            save prevRN
+            real, save :: prevRN
 
             type(T_RECT) :: rc
             type(T_POINT) :: pt
@@ -77,20 +76,29 @@ module ModelControlDialogModule
             ! For the list view report rows
             integer(HANDLE) :: hList, hEdit, hCombo, hCheckBox
             integer :: i
-            INTEGER :: realRowClicked, intRowClicked
-            save realRowClicked, intRowClicked
+            INTEGER, save :: realRowClicked, intRowClicked
+
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
             LOGICAL :: res
+            logical, save :: isDimensional = .true.
 
             ModelControlDlgProc = 0
 
             select case (uMsg)
 
-                CASE (WM_APP + 200)
+                CASE (WM_APP + 201)
                     ! Run model
                     call setupAndRunModel()
+
+                CASE (WM_APP + 204)
+                    ! Run model
+                    call saveCurrentFlow()
+                    
+                CASE (WM_APP + 205)
+                    ! Run model
+                    call loadSavedFlow()
                     
                 case (WM_ACTIVATE)
                     ! Check if window is being activated (WA_ACTIVE or WA_CLICKACTIVE)
@@ -110,20 +118,12 @@ module ModelControlDialogModule
                     ghCurrentDlg = hDlg
                     realRowClicked = -1
                     intRowClicked = -1
-                    ! When we get here we have come from the F4 option of the Main Menu. We need to
-                    ! check if the user has changed the gUserSettings options that might require
-                    ! reallocation of the ModelFieldsModule arrays
-                    ret = CheckUserSettingsChanges()
-                    if (ret .NE. 0) then
-                        ret = MessageBox (hDlg, &
-                            "Unable to handle the new user settings"C, &
-                            "Error encountered"C, &
-                            IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
-                        bret = DestroyWindow(hDlg)
-                        ModelControlDlgProc = 1
-                        return
-                    end if
-                    
+
+                    paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
+                    paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
+                    paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
+                    paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
+                                                                   ! The saved RN value here is non dimensional
                     call initializeDialog()
 
                     ! Center the dialog over the application window  !
@@ -228,10 +228,7 @@ module ModelControlDialogModule
                             addOffset = 1
                             if (gModIntParams%plotType .GT. NO_PLOT) addOffset = FIELD_GRAPH_START
                             select case(IAND(wParam, Z'FFFF'))
-                                ! The tricky thing here is if the user changes the plot type from map
-                                ! to time series or vice versa. Then we have to load different options
-                                ! into the field1 dropdown and disable or enable the other two combo boxes.
-                                ! It gets messy.
+
                                 case (IDC_COMBO_MAP_TYPE)
                                     previousMPLOT = gModIntParams%plotType
                                     gModIntParams%plotType = GetComboIndex(hDlg, IDC_COMBO_MAP_TYPE) ! These are zero based
@@ -246,6 +243,10 @@ module ModelControlDialogModule
                                     gModIntParams%LEVP = GetComboIndex(hDlg, IDC_COMBO_PLOT_LEVEL) + 1
                                 case (IDC_COMBO_MODEL_TYPE)
                                     gModIntParams%ModelType = GetComboIndex(hDlg, IDC_COMBO_MODEL_TYPE)
+                                case (IDC_COMBO_PHASE_SPACE_X)
+                                    gModIntParams%phaseSpaceX = GetComboIndex(hDlg, IDC_COMBO_PHASE_SPACE_X) + 1
+                                case (IDC_COMBO_PHASE_SPACE_Y)
+                                    gModIntParams%phaseSpaceY = GetComboIndex(hDlg, IDC_COMBO_PHASE_SPACE_Y) + 1
                             end select
                         end BLOCK
                     end if
@@ -266,6 +267,8 @@ module ModelControlDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         case (IDC_EDIT_REALVALUES)
                             SELECT CASE (ISHFT(wParam, -16))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_REALVALUES))
                                 CASE (EN_CHANGE)
                                     EN: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
@@ -307,6 +310,8 @@ module ModelControlDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         CASE (IDC_EDIT_INTEGERVALUES) ! The ID of the integer edit box
                             SELECT CASE (ISHFT(wParam, -16))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES))
                                 CASE (EN_CHANGE)
                                     ENB: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
@@ -332,15 +337,10 @@ module ModelControlDialogModule
                             ! In case they are sill open with focus
                             call cleanUpEditBoxes()
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
-        
                                 ! Now we ask Windows: "Is it checked or not?"
-                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE) /= 0) then
-                                    ! User checked it - update your variable/logic here
-                                    call DimensionalizeModRealParams()
-                                else
-                                    ! User unchecked it
-                                    call NonDimensionalizeModRealParams()
-                                end if
+                                isDimensional = (IsDlgButtonChecked(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE) .NE. 0)
+                                call SetModRealParamsDimensionalState(isDimensional)
+
                                 bret = SetFocus(GetDlgItem(hDlg, IDC_REALVALUES))
                                 call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_REALVALUES))
                                 call handleRealListControl(hDlg)
@@ -366,17 +366,11 @@ module ModelControlDialogModule
                             call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             if (ret /= 0) then
-                                call initializeDialog() ! This will dimensionalize paramChange%RN
-                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
+                                call initializeDialog()
                                 return
                             endif
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_VERTICAL_PARAMS, LONG_PTR), hDlg, LOC(VerticalParamsDlgProc), 0_LONG_PTR)
-                            paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                            paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                            paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                            paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                            call DimensionalizeModRealParams() 
                             ghModelControlDlg = hDlg
 
 ! ---- F3:  Initialize flow variables
@@ -385,42 +379,21 @@ module ModelControlDialogModule
                             call cleanUpEditBoxes()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                             if (ret /= 0) then
-                                call initializeDialog() ! This will dimensionalize paramChange%RN
-                                paramChange%RN = gScaleFactors%longestWave/paramChange%RN
+                                call initializeDialog()
                                 return
                             endif
                             ret = InitModelWithModelControlVals()
                             ret = DialogBoxParam(ghInstance, INT(IDD_INIT_VARIABLES, LONG_PTR), hDlg, LOC(InitVariablesDlgProc), 0_LONG_PTR)
-                            paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                            paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                            paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                            paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                            call DimensionalizeModRealParams() 
                             ghModelControlDlg = hDlg
 
 ! ---- F4:  Save Current Flow
                         case (IDC_BUTTON_SAVE_CURRENT_FLOW)
-                            res = GetUserSelectedSaveName(hDlg, gNLevFile)
-                            if (res) then
-                                ret = openModelFile(gNLevFile, .false., hDlg)
-                                if (ret == 0) ret = SaveModelState(gNLevFile, .false.)
-                            endif
+                            call saveCurrentFlow()
                             ghModelControlDlg = hDlg
 
 ! ---- F5:  Load Saved Flow
                         case (IDC_BUTTON_LOAD_SAVED_FLOW)
-                            res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
-                            bret = SetFocus(GetDlgItem(hDlg, IDC_BUTTON_LOAD_SAVED_FLOW))
-                            call cleanUpEditBoxes()
-                            if (res) then
-                                if (len_trim(gNLevFile%fileName) == 0) return
-                                call LogMessage("Save file loaded: "// selected_file)
-                                ret = openModelFile(gNLevFile, .true., hDlg)
-                                if (ret == 0) ret = ReadSaveFile(gNLevFile)
-                                call initializeDialog()
-                                gHorzArr%S = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
-                                gHorzArr%T = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
-                            endif
+                            call loadSavedFlow()
                             ghModelControlDlg = hDlg
 
 ! ---- F7:  EditContours
@@ -449,7 +422,7 @@ module ModelControlDialogModule
                     if (paramChange%zonalWaves > 0) then
                         ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
                         ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
-                        call NonDimensionalizeModRealParams() ! Method checks if already non-dimensionalized
+                        call SetModRealParamsDimensionalState(.false.) ! Method checks if already non-dimensionalized
                     endif
                     bret = EnableWindow(ghSettingsDlg, .TRUE.)
                     bret = SetForegroundWindow(ghSettingsDlg)
@@ -482,18 +455,23 @@ module ModelControlDialogModule
                     endif
                 end subroutine cleanUpEditBoxes
                 
-                
+                !-------- F1: run model
                 subroutine setupAndRunModel()
                     implicit none
 
                     call cleanUpEditBoxes()
                     ! paramChange is defined in KeyboardHooksModule
-                    ! Non dimensionalized in the following function
+                    ! This routine checks for any changes and makes sure that they are in bounds and then will reallocate
+                    ! fields as necessary. The parameters passed are used to check for any user changes and will be updated
+                    ! accrodingly to those changes so there is no need to do so on return.
+                    ! The method will non dimensionalize the ModRealParams that need it if necessary and restore the state
+                    ! to whatever it was on the call. So there is no need to handle that either in the caller.
                     ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
                     if (ret /= 0) then
                         call initializeDialog()
                         return
                     endif
+                    call SetModRealParamsDimensionalState(.false.)
                     ret = InitModelWithModelControlVals()
                     bret = EnableWindow(hDlg, .FALSE.)
                     gElapsedTime%dimensionalTime = 4.0 * CORIOLIS_INVERSE * gModRealParams%DELT / SECONDS_PER_DAY
@@ -502,27 +480,25 @@ module ModelControlDialogModule
                     bret = SetFocus(ghwndMain)
                     call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     ret = StartTimeLoop()
-                    paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                    paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                    paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                    paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                    call DimensionalizeModRealParams() ! Method checks if already dimensionalized
+                    call SetModRealParamsDimensionalState(isDimensional)
                 end subroutine setupAndRunModel
                 
                 subroutine initializeDialog()
+                    use ArrayDimensionsModule, only: gCurrentDims
                     implicit none
                     ! If we get here we need to save some of the fields in modelIntParams and modelRealParams in case
                     ! the user changes them.
-                    paramChange%zonalWaves = gModIntParams%KMAX2   ! Save the current number of zonal waves
-                    paramChange%meridWaves = gModIntParams%LMAX2   ! Save the current number of meridional waves
-                    paramChange%levels     = gModIntParams%NLEV    ! Save the current number of model levels
-                    paramChange%RN         = gModRealParams%RN     ! Save the current channel length. A change will alter the interaction coefficients
-                                                                   ! The saved RN value here is non dimensional
-
-                    call DimensionalizeModRealParams()
-                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
-                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
                     
+                    integer :: waveStart, K, L, I, M
+                    character(len=32) :: description
+
+                    call SetModRealParamsDimensionalState(isDimensional)
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
+                    if (isDimensional) then
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE, BST_CHECKED)
+                    else
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE, BST_UNCHECKED)
+                    end if                    
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_RUN_INVISCID)
                     if (gModelState%runInviscid) then
                         bret = CheckDlgButton(hDlg, IDC_CHECK_RUN_INVISCID, BST_CHECKED)
@@ -599,6 +575,34 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Not implemented yet - dont use'//char(0)))
                     ! initialize
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%modelType, UINT_PTR), 0) ! These are zero based in our code
+                    
+                    !! ============================ Phase Space components
+                    do M = 1, 2
+                        if (M == 1) hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_X)
+                        if (M == 2) hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_Y)
+                        do i = 1, gCurrentDims%ITOT
+                            if (I <= gModIntParams%LMAX2) then
+                                write(description, '(A, I0, A)') "cos", i, "y"
+                                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(description//char(0)))
+                            else
+                                waveStart = (i - gModIntParams%LMAX2)
+                                ! pattern is cosKnxsinLy, sinKnxsinLy, for all L and then for all K
+                                K = (waveStart - 1) / (2 * gModIntParams%LMAX2) + 1
+                                L = mod(waveStart - 1, 2 * gModIntParams%LMAX2) / 2 + 1
+                                if (mod(waveStart, 2) == 1) then
+                                    ! Print out the cosKxSinLy for every odd waveStart
+                                    write(description, '(A, I0, A, I0, A)') "cosn", k, "x sin", L, "y"
+                                else
+                                    ! Print out the sinKxSinLy for every even waveStart
+                                    write(description, '(A, I0, A, I0, A)') "sinn", k, "x sin", L, "y"
+                                endif
+                                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(description//char(0)))
+                            endif
+                        end do
+                        ! initialize
+                        if (M == 1) bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%phaseSpaceX - 1, UINT_PTR), 0) ! These are not zero based in our code
+                        if (M == 2) bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%phaseSpaceY - 1, UINT_PTR), 0) ! These are not zero based in our code
+                    end do
 
                     !---------- LIST CONTROLS
                     ! REAL:
@@ -607,6 +611,33 @@ module ModelControlDialogModule
                     ! INTEGER:
                     call handleIntListControl(hDlg)
                 end subroutine initializeDialog
+
+                !-------- F4: save current flow
+                subroutine saveCurrentFlow()
+                    res = GetUserSelectedSaveName(hDlg, gNLevFile)
+                    if (res) then
+                        call SetModRealParamsDimensionalState(.false.)
+                        ret = openModelFile(gNLevFile, .false., hDlg)
+                        if (ret == 0) ret = SaveModelState(gNLevFile, .false.)
+                        call SetModRealParamsDimensionalState(isDimensional)
+                    endif
+                end subroutine saveCurrentFlow
+
+                !-------- F5: load saved flow
+                subroutine loadSavedFlow
+                    res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
+                    bret = SetFocus(GetDlgItem(hDlg, IDC_BUTTON_LOAD_SAVED_FLOW))
+                    call cleanUpEditBoxes()
+                    if (res) then
+                        if (len_trim(gNLevFile%fileName) == 0) return
+                        call LogMessage("Save file loaded: "// selected_file)
+                        ret = openModelFile(gNLevFile, .true., hDlg)
+                        if (ret == 0) ret = ReadSaveFile(gNLevFile)
+                        call initializeDialog()
+                        gHorzArr%S = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
+                        gHorzArr%T = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
+                    endif
+                end subroutine loadSavedFlow
 
         end function ModelControlDlgProc
 
@@ -696,9 +727,6 @@ module ModelControlDialogModule
             call addlistviewrowreal(hlist, "channel length in kilometers", [gModRealParams%RN], '(f10.4)')
             call addlistviewrowreal(hlist, "beta parameter relative to 45 deg. latitude", [gModRealParams%BETA], '(f10.4)')
             call addlistviewrowreal(hlist, "time step length in minutes", [gModRealParams%DELT], '(f10.4)')
-            !call addlistviewrowreal(hlist, "pressure level of the first quantity in mb", [gModRealParams%field1Level], '(f10.4)')
-            !call addlistviewrowreal(hlist, "pressure level of the second quantity in mb", [gModRealParams%field2Level], '(f10.4)')
-            !call addlistviewrowreal(hlist, "pressure level of the third quantity in mb", [gModRealParams%field3Level], '(f10.4)')
             call addlistviewrowreal(hlist, "latitude of x-hovmoller and cross-sections", [gModRealParams%hovLat], '(f10.4)')
             call addlistviewrowreal(hlist, "longitude of y-hovmoller and cross-sections", [gModRealParams%hovLon], '(f10.4)')
             call addlistviewrowreal(hlist, "longitude of selected point for a weather station", [gModRealParams%lonPoint], '(f10.4)')
@@ -724,10 +752,6 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Number of integration cycles", gModIntParams%ICYC)
             call AddListViewRow(hList, "Number of time steps", gModIntParams%ISTEP)
             call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
-            call AddListViewRow(hList, "Zonal wave for time series x-axis phase space", gModIntParams%zonalWavenumber)
-            call AddListViewRow(hList, "Meridional wave for time series x-axis phase space", gModIntParams%meridWavenumber)
-            call AddListViewRow(hList, "Zonal wave for y-axis phase space component", gModIntParams%sinZonal)
-            call AddListViewRow(hList, "Meridional wave for y-axis phase space", gModIntParams%sinMerid)
             call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%JX0)
             call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%JY0)
             call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%JX1)
@@ -755,12 +779,6 @@ module ModelControlDialogModule
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BETA, str)
                 case (2)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%DELT, str)
-                !case (3)
-                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field1Level, str)
-                !case (4)
-                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field2Level, str)
-                !case (5)
-                !    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%field3Level, str)
                 case (3)
                     ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLat, str)
                 case (4)
@@ -809,20 +827,12 @@ module ModelControlDialogModule
                 case (5)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%outputInterval, .TRUE.)
                 case (6)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%zonalWavenumber, .TRUE.)
-                case (7)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%meridWavenumber, .TRUE.)
-                case (8)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinZonal, .TRUE.)
-                case (9)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%sinMerid, .TRUE.)
-                case (10)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX0, .TRUE.)
-                case (11)
+                case (7)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY0, .TRUE.)
-                case (12)
+                case (8)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX1, .TRUE.)
-                case (13)
+                case (9)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY1, .TRUE.)
             end select
         end function loadIntegerParameterIntoEditBox
@@ -847,24 +857,18 @@ module ModelControlDialogModule
                 case (2)
                     read(str, *, iostat = ios) gModRealParams%DELT
                 case (3)
-                    read(str, *, iostat = ios) gModRealParams%field1Level
-                case (4)
-                    read(str, *, iostat = ios)  gModRealParams%field2Level
-                case (5)
-                    read(str, *, iostat = ios)  gModRealParams%field3Level
-                case (6)
                     read(str, *, iostat = ios)  gModRealParams%hovLat
-                case (7)
+                case (4)
                     read(str, *, iostat = ios)  gModRealParams%hovLon
-                case (8)
+                case (5)
                     read(str, *, iostat = ios)  gModRealParams%lonPoint
-                case (9)
+                case (6)
                     read(str, *, iostat = ios)  gModRealParams%latPoint
-                case (10)
+                case (7)
                     read(str, *, iostat = ios)  gModRealParams%BOT
-                case (11)
+                case (8)
                     read(str, *, iostat = ios)  gModRealParams%TPP
-                case (12)
+                case (9)
                     read(str, *, iostat = ios)  gModRealParams%CONV
             end select
         end function readRealDataFromEditBox
@@ -891,22 +895,12 @@ module ModelControlDialogModule
                 case (5)
                     gModIntParams%outputInterval = newValue
                 case (6)
-                    gModIntParams%zonalWavenumber = newValue
-                case (7)
-                    gModIntParams%meridWavenumber = newValue
-                case (8)
-                    gModIntParams%LEVP = newValue
-                case (9)
-                    gModIntParams%sinZonal = newValue
-                case (10)
-                    gModIntParams%sinMerid = newValue
-                case (11)
                     gModIntParams%JX0 = newValue
-                case (12)
+                case (7)
                     gModIntParams%JY0 = newValue
-                case (13)
+                case (8)
                     gModIntParams%JX1 = newValue
-                case (14)
+                case (9)
                     gModIntParams%JY1 = newValue
             end select
         end subroutine readIntDataFromEditBox

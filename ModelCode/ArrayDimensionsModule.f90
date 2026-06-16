@@ -63,6 +63,7 @@ module ArrayDimensionsModule
         integer :: LY       ! IYMAX+2 for the FFT991 routine
         integer :: IYH      ! IYH: Y dimension of arrays plotted to the screen. It is IYMAX/2 + 1
         integer :: KXLYD    ! KXLYD is the allocated size of the G1, G2, G3 arrays used in FFT991 and ASXY plot routine
+        integer :: LVS      ! Number of total levels including interfaces for cross section plots
 
         integer :: NINTD    ! NINTD is the allocated size of the interaction coefficient arrays
         integer :: ITOTA    ! ITOTA,KXLYA are dimensions of average value statistics arrays which are
@@ -93,6 +94,7 @@ module ArrayDimensionsModule
             arraySizes%KXLYA = 0
             arraySizes%KXV = 0
             arraySizes%LYV = 0
+            arraySizes%LVS = 0
         end subroutine ZeroArrayDims
 
 end module ArrayDimensionsModule
