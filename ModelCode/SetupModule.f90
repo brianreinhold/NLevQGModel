@@ -874,7 +874,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     errorCode = createCintArr(gModIntParams%KMAX2, gModIntParams%LMAX2, currentNoOfInteractions)
                 endif
                 ! Now compute the interaction coefficients. flag > 0 indicates to do that versus just count them
-                gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 1)
+                if (gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) &
+                    gCintArr%numOfInteractionCoeffs = computeInteractionCoefficients(gModRealParams%RN, gModIntParams%KMAX2, gModIntParams%LMAX2, 1)
             endif
             prevZonalWaves = gModIntParams%KMAX2
             prevMeridWaves = gModIntParams%LMAX2

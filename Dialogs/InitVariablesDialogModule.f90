@@ -86,6 +86,24 @@ module InitVariablesDialogModule
                     ! Zero variables
                     call ZeroVariables()
                     RETURN
+                CASE (WM_APP + 302)
+                    gHorzArr%PS = 0.0
+                    gHorzArr%TH = 0.0
+                    call populateListControls(levelIndex)
+                    RETURN
+                CASE (WM_APP + 303)
+                    gHorzArr%TF = 0.0
+                    call populateListControls(levelIndex)
+                    RETURN
+                CASE (WM_APP + 304)
+                    gHorzArr%TOP = 0.0
+                    call populateListControls(levelIndex)
+                    RETURN
+                CASE (WM_APP + 305)
+                    gHorzArr%SF = 0.0
+                    call populateListControls(levelIndex)
+                    RETURN
+
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
                     psRowClicked = -1
                     tfRowClicked = -1
@@ -203,13 +221,30 @@ module InitVariablesDialogModule
 !--F1: Zero all fields ====================================================
                         case (IDC_BUTTON_INIT_ZERO_ALL)
                             call ZeroVariables()
+                            InitVariablesDlgProc = 1
+                            
+!--F2: Zero PS ====================================================
+                        case (IDC_BUTTON_INIT_ZERO_PS)
                             gHorzArr%PS = 0.0
-                            gHorzArr%TF = 0.0
-                            gHorzArr%TOP = 0.0
-                            gHorzArr%SF = 0.0
-                            gHorzArr%FS = 0.0           ! This is probably not necessary
+                            gHorzArr%TH = 0.0
                             call populateListControls(levelIndex)
                             InitVariablesDlgProc = 1
+!--F3: Zero TF ====================================================
+                        case (IDC_BUTTON_INIT_ZERO_TF)
+                            gHorzArr%TF = 0.0
+                            call populateListControls(levelIndex)
+                            InitVariablesDlgProc = 1
+!--F4: Zero OROGRAPHY ====================================================
+                        case (IDC_BUTTON_INIT_ZERO_OROGRAPHY)
+                            gHorzArr%TOP= 0.0
+                            call populateListControls(levelIndex)
+                            InitVariablesDlgProc = 1
+!--F5: Zero SF ====================================================
+                        case (IDC_BUTTON_INIT_ZERO_SF)
+                            gHorzArr%SF = 0.0
+                            call populateListControls(levelIndex)
+                            InitVariablesDlgProc = 1
+
 
 !--F10: EXIT ==============================================================
                         case (IDC_BUTTON_EXIT_INIT_VARIABLES) ! F10 Close
@@ -326,7 +361,6 @@ module InitVariablesDialogModule
                     gHorzArr%TH = 0.0
                     gHorzArr%TOP = 0.0
                     gHorzArr%SF = 0.0
-                    gHorzArr%FS = 0.0           ! This is probably not necessary
                     call populateListControls(levelIndex)
                 end subroutine ZeroVariables
 

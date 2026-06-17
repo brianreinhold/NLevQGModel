@@ -118,7 +118,14 @@ module PlotModule
         integer :: prev_y = 0 
     end type PhaseSpace
     
-    type :: BaseMap
+    type :: TrigTable
+        REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y  Latitudinal Hovmoller
+        REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
+        REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosknxy values for constant x    Longitudinal Hovmoller
+        REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinknxy values for constant x
+    end type TrigTable
+    
+    type, extends(TrigTable) :: BaseMap
         LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
         LOGICAL :: useSolidColor    ! When true, the map is plotted using solid colors and not lines
         real, pointer :: value(:)   ! Points to the variable to be plotted at a certain level
@@ -127,25 +134,19 @@ module PlotModule
         integer :: field = PLOTTING_OFF  ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
     end type BaseMap
 
-    type, extends(BaseMap) :: TrigTable
-        REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y  Latitudinal Hovmoller
-        REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
-        REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosknxy values for constant x    Longitudinal Hovmoller
-        REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinknxy values for constant x
-    end type TrigTable
-
     type, extends(BaseMap) :: WeatherMap    ! Contains all the data not dependent upon input for creating 2d weather maps.
-    end type WeatherMap
+    end type WeatherMap                     ! The trig table will never be used or created in this case.
 
-    type, extends(TrigTable) :: Hovmoller
+    type, extends(BaseMap) :: Hovmoller
         integer :: row = 0          ! row on the screen to draw the hovmoller. I think this can be used for both lat and lon
     end type Hovmoller
 
-    type, extends(TrigTable) :: VertCrossSection
+    type, extends(BaseMap) :: VertCrossSection
         real, allocatable :: tempScales(:)   ! The scaling factors needed to make temperature dimensional which depends upon level.
     end type VertCrossSection
-       
-    type :: WeatherStation
+    
+
+    type, extends(TrigTable) :: WeatherStation
         LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
         integer(4) :: color         ! Color to use in GDC calls. This is the RGB color passed by the caller.
         integer(4) :: gDCcolor      ! Internal reversed byte color for DIB section plotting of points.
@@ -159,10 +160,10 @@ module PlotModule
         real :: range               ! The range of the graph in y. Since the origin is in the middle, the range will be from -range to +range.
                                     ! This is used to scale the plot to fit in the screen.
         character(:), allocatable :: units  ! Units of the variable being plotted to be displayed in the graph legend
-        REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y
-        REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
-        REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosKnxy values for constant x
-        REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinKnxy values for constant x
+        !REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y
+        !REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
+        !REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosKnxy values for constant x
+        !REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinKnxy values for constant x
         integer :: field = PLOTTING_OFF ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
     end type WeatherStation
 
@@ -301,7 +302,8 @@ module PlotModule
         ! running that could require that this routine be called again.
         subroutine initializePlot()
             use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, WEATHER_MAP, &
-                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, SQRT2, PLOTTING_OFF
+                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, VERT_HOV_AT_WEATHER_STN, &
+                                       LATITUDE, LONGITUDE, LAT_LON, SQRT2, PLOTTING_OFF
             use ModelParamsModule, only: gModIntParams, gPlotScales, gIsTemperature
             IMPLICIT NONE
             
@@ -335,7 +337,7 @@ module PlotModule
                 endif
  
 ! ------ WEATHER STN -----------------------------
-            else if (gModIntParams%plotType == WEATHER_STN) then
+            else if (gModIntParams%plotType == WEATHER_STN .OR. gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 gWeatherStation1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     if (gIsTemperature(gModIntParams%field1)) then
@@ -354,49 +356,59 @@ module PlotModule
                     endif
                     call initializeWeatherStationType(gModIntParams%field2, gWeatherStation2, color)
                 endif
+
+! ------------------- NOTE ON HOVMOLLERS AND CROSS SECTIONS
+!   A Hovmoller or Cross Section at a given latitude means that we perform a transform along a latitude circle which on
+!   an x, y plane is at constant y. Thus the siny and cosy (zonal) parts are done ahead of time as they
+!   do not change every time step.
+!   Likewise a Hovmoller or Cross Section at a given longitude means a transfrom along a longitude line which on an
+!   x, y plane is at constant x.
+                
+! ------ VERTICAL HOVMOLLER AT WEATHER STN -----------------------------
+            !else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 
 ! ------ VERTICAL CROSS SECTION AT LATITUDE -----------------------------
             else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)  then
                 gLatVertCrossSec1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
-                    call initializeVerticalCrossSectionType(gModIntParams%field1, gLatVertCrossSec1, .true., .true.)
+                    call initializeVerticalCrossSectionType(gModIntParams%field1, gLatVertCrossSec1, .true., LATITUDE)
                 endif
                 gLatVertCrossSec2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
-                    call initializeVerticalCrossSectionType(gModIntParams%field2, gLatVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, .true.)
+                    call initializeVerticalCrossSectionType(gModIntParams%field2, gLatVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, LATITUDE)
                 endif
 
 ! ------ HOVMOLLER LATITUDE -----------------------------
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
-                    call initializeHovmollerType(gModIntParams%field1, gLatHovmoller1, .true., .true.)
+                    call initializeHovmollerType(gModIntParams%field1, gLatHovmoller1, .true., LATITUDE)
                 endif
                 gLatHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
-                    call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .true.)
+                    call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, LATITUDE)
                 endif
                 
 ! ------ VERTICAL CROSS SECTION AT LONGITUDE -----------------------------
             else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG)  then
                 gLonVertCrossSec1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
-                    call initializeVerticalCrossSectionType(gModIntParams%field1, gLonVertCrossSec1, .true., .false.)
+                    call initializeVerticalCrossSectionType(gModIntParams%field1, gLonVertCrossSec1, .true., LONGITUDE)
                 endif
                 gLatVertCrossSec2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
-                    call initializeVerticalCrossSectionType(gModIntParams%field2, gLonVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, .false.)
+                    call initializeVerticalCrossSectionType(gModIntParams%field2, gLonVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, LONGITUDE)
                 endif
 
 ! ------ HOVMOLLER LONGITUDE -----------------------------
-            else if (gModIntParams%plotType == HOV_DIAG_AT_LONG)then
+            else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
                 gLonHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
-                    call initializeHovmollerType(gModIntParams%field1, gLonHovmoller1, .true., .false.)
+                    call initializeHovmollerType(gModIntParams%field1, gLonHovmoller1, .true., LONGITUDE)
                 endif
                 gLonHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
-                    call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, .false.)
+                    call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, LONGITUDE)
                 endif
             endif 
 
@@ -541,18 +553,18 @@ module PlotModule
         end subroutine initializeBaseMapType
         
         !! Initializes the trig tables needed for either plots along a latitude or longitude.
-        subroutine initializeTrigTablesType(latOrLon, trigTableType)
-            use ConstantsModule, only: SQRT2
+        subroutine initializeTrigTablesType(latLon, trigTableType)
+            use ConstantsModule, only: SQRT2, LATITUDE, LONGITUDE, LAT_LON
             use ModelParamsModule, only: gModIntParams, gModRealParams
 
             IMPLICIT NONE
             
-            logical, intent(in) :: latOrLon
+            integer, intent(in) :: latLon
             class(TrigTable), intent(inout) :: trigTableType
             
             integer :: L, K
 
-            if (latOrLon) then       ! Precompute the sinLy and cosLy for constant y
+            if (latLon == LATITUDE .OR. latLon == LAT_LON) then       ! Precompute the sinLy and cosLy for constant y (at a given latitude)
                 ! The latitude is given by gModRealParams%hovLat. The number of L waves is given by gModIntParams%LMAX2
                 if (ALLOCATED(trigTableType%siny)) deallocate(trigTableType%siny)
                 allocate(trigTableType%siny(gModIntParams%LMAX2))
@@ -566,7 +578,8 @@ module PlotModule
                     trigTableType%siny(L) = 2. * SIN(real(2 * L) * gModRealParams%hovLat)
                     trigTableType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%hovLat)
                 end do
-            else
+            endif
+            if (latLon == LONGITUDE .OR. latLon == LAT_LON) then  ! Precompute the coskx and sinky for constant x (at a given longitude)
                 ! The longitude is given by gModRealParams%hovLon. The number of K waves is given by gModIntParams%KMAX2
                 if (ALLOCATED(trigTableType%cosx)) deallocate(trigTableType%cosx)
                 allocate(trigTableType%cosx(gModIntParams%KMAX2))
@@ -606,7 +619,7 @@ module PlotModule
         !>                    field is being plotted, only the first field can be solid color
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
-        subroutine initializeVerticalCrossSectionType(field, vertCrossSecType, useSolidColor, latOrLon)
+        subroutine initializeVerticalCrossSectionType(field, vertCrossSecType, useSolidColor, latLon)
             use ModelParamsModule, only: gPlotScales,  gIsTemperature, gModIntParams
             use ModelFieldsModule, only: gVertArr
 
@@ -615,13 +628,13 @@ module PlotModule
             integer, intent(in) :: field
             type(VertCrossSection), intent(inout) :: vertCrossSecType
             logical, intent(in) :: useSolidColor
-            logical, intent(in) :: latOrLon
+            integer, intent(in) :: latLon
             
             integer :: totalLevels, plotLevel
 
             
             call initializeBaseMapType(field, vertCrossSecType, useSolidColor)
-            call initializeTrigTablesType(latOrLon, vertCrossSecType)
+            call initializeTrigTablesType(latLon, vertCrossSecType)
             
             ! Create the temperature scale factors for the different levels if a temperature field
             ! The scaling factor gVertArr%A is a function of level.
@@ -676,17 +689,17 @@ module PlotModule
         !>                    field is being plotted, only the first field can be solid color
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
-        subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latOrLon)
+        subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latLon)
 
             IMPLICIT NONE
 
             integer, intent(in) :: field
             type(Hovmoller), intent(inout) :: hovmollerType
             logical, intent(in) :: useSolidColor
-            logical, intent(in) :: latOrLon
+            integer, intent(in) :: latLon
 
             call initializeBaseMapType(field, hovmollerType, useSolidColor)
-            call initializeTrigTablesType(latOrLon, hovmollerType)
+            call initializeTrigTablesType(latLon, hovmollerType)
             hovmollerType%row = 0
             hovmollerType%isInitialized = .true.
         end subroutine initializeHovmollerType
@@ -695,7 +708,7 @@ module PlotModule
             USE IFWINTY
 
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ConstantsModule, only: SQRT2
+            use ConstantsModule, only: SQRT2, LAT_LON
             use ModelParamsModule, only: gModIntParams, gModRealParams, gPlotScales, gContourIntervals, gIsTemperature
             use ModelFieldsModule, only: gVertArr
 
@@ -737,25 +750,26 @@ module PlotModule
             weatherStnType%scale = weatherStnType%scale * REAL(gBitMapInfo%height) / (2.0 * gContourIntervals%Ranges(field))
 
             ! Pre computed arrays
-            if (ALLOCATED(weatherStnType%cosx)) deallocate(weatherStnType%cosx)
-            allocate(weatherStnType%cosx(gModIntParams%KMAX2))
-            if (ALLOCATED(weatherStnType%sinx)) deallocate(weatherStnType%sinx)
-            allocate(weatherStnType%sinx(gModIntParams%KMAX2))
-            if (ALLOCATED(weatherStnType%siny)) deallocate(weatherStnType%siny)
-            allocate(weatherStnType%siny(gModIntParams%LMAX2))
-            if (ALLOCATED(weatherStnType%cosy)) deallocate(weatherStnType%cosy)
-            allocate(weatherStnType%cosy(gModIntParams%LMAX2))
-            ! The location of the weather station is given by gModRealParams%lonPoint and gModRealParams%latPoint.
-            ! This 'weather station' will be at the level gModIntParams%LEVP
-            do L = 1, gModIntParams%LMAX2
-                weatherStnType%siny(L) = 2.0 * SIN(real(2 * L) * gModRealParams%latPoint)     ! Put in the factor of 2 here for 2(cosnknx, sinknx)sinLy
-                                                                                              ! The 2*L is because the user enters 0 to 90 and it really is 0 to 180
-                weatherStnType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%latPoint)   ! Put in the SQRT2 factor here for cosLy
-            end do
-            do K = 1, gModIntParams%KMAX2
-                weatherStnType%sinx(K) = SIN(real(K) * gModRealParams%lonPoint)
-                weatherStnType%cosx(K) = COS(real(K) * gModRealParams%lonPoint)
-            end do
+            call initializeTrigTablesType(LAT_LON, weatherStnType)
+            !if (ALLOCATED(weatherStnType%cosx)) deallocate(weatherStnType%cosx)
+            !allocate(weatherStnType%cosx(gModIntParams%KMAX2))
+            !if (ALLOCATED(weatherStnType%sinx)) deallocate(weatherStnType%sinx)
+            !allocate(weatherStnType%sinx(gModIntParams%KMAX2))
+            !if (ALLOCATED(weatherStnType%siny)) deallocate(weatherStnType%siny)
+            !allocate(weatherStnType%siny(gModIntParams%LMAX2))
+            !if (ALLOCATED(weatherStnType%cosy)) deallocate(weatherStnType%cosy)
+            !allocate(weatherStnType%cosy(gModIntParams%LMAX2))
+            !! The location of the weather station is given by gModRealParams%lonPoint and gModRealParams%latPoint.
+            !! This 'weather station' will be at the level gModIntParams%LEVP
+            !do L = 1, gModIntParams%LMAX2
+            !    weatherStnType%siny(L) = 2.0 * SIN(real(2 * L) * gModRealParams%latPoint)     ! Put in the factor of 2 here for 2(cosnknx, sinknx)sinLy
+            !                                                                                  ! The 2*L is because the user enters 0 to 90 and it really is 0 to 180
+            !    weatherStnType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%latPoint)   ! Put in the SQRT2 factor here for cosLy
+            !end do
+            !do K = 1, gModIntParams%KMAX2
+            !    weatherStnType%sinx(K) = SIN(real(K) * gModRealParams%lonPoint)
+            !    weatherStnType%cosx(K) = COS(real(K) * gModRealParams%lonPoint)
+            !end do
             ! No need to call these anymore - They have to be called every time step because of interpolation
             !call loadFields(weatherStnType%value, field, gModIntParams%LEVP)
             weatherStnType%units = getUnits(field)
@@ -769,7 +783,7 @@ module PlotModule
         !> or a set of ensemble files
         subroutine outputPlot()
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
+                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
@@ -806,6 +820,11 @@ module PlotModule
 
     ! WEATHER STATION ----------------------
             if (gModIntParams%plotType == WEATHER_STN) then
+                call plotTimeSeries()
+            endif
+            
+    ! VERTICAL HOV AT WEATHER STATION ----------------------
+            if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 call plotTimeSeries()
             endif
 
@@ -2281,7 +2300,7 @@ module PlotModule
         
         !! Helper to load transformed grid values along a latitude at a given level
         !! The result is loaded into gTransArr%GZonal including the periodic value at IXMAX + 1
-        subroutine loadLatValues(trigTableType, level, tempScale)
+        subroutine loadLatValues(baseMapType, level, tempScale)
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT2
             use ModelFieldsModule, only: gHorzArr, gTransArr
@@ -2292,7 +2311,7 @@ module PlotModule
 
             include 'fftw3.f03'
 
-            class(TrigTable), intent(in) :: trigTableType
+            class(BaseMap), intent(in) :: baseMapType
             integer, intent(in) :: level
             REAL, intent(in) :: tempScale
             
@@ -2303,18 +2322,18 @@ module PlotModule
             LMAX = gModIntParams%LMAX2
             IXMAX = gCurrentDims%IXMAX
 
-            call loadFields(trigTableType%value, trigTableType%field, level)
+            call loadFields(baseMapType%value, baseMapType%field, level)
             
-            if (gIsTemperature(trigTableType%field)) then
-                scale = trigTableType%scale / tempScale
+            if (gIsTemperature(baseMapType%field)) then
+                scale = baseMapType%scale / tempScale
             else 
-                scale = trigTableType%scale
+                scale = baseMapType%scale
             endif
 
             ! 1. Calculate the zonal mean (the first LMAX elements)
             !    This is the "background" field at latitude y0
             ! There is no transform here so we dont need to worry about normalization
-            zonalMean = sum(trigTableType%value(1:LMAX) * trigTableType%cosy(1:LMAX)) * SQRT2 * scale
+            zonalMean = sum(baseMapType%value(1:LMAX) * baseMapType%cosy(1:LMAX)) * SQRT2 * scale
 
             ! 1. Initialize input with zeros (crucial since k=0 is empty)
             gTransArr%GcZ = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
@@ -2322,14 +2341,14 @@ module PlotModule
 
             ! 2. Sum over L to collapse the Y-dimension
             do L = 1, LMAX
-                sin_ly = trigTableType%siny(L) ! Precomputed sinly's
+                sin_ly = baseMapType%siny(L) ! Precomputed sinly's
                 do K = 1, KMAX
                     ! Indexing for the 1-d storage of the zonal and wave components:
                     index = LMAX + 2 * LMAX * (K - 1) + 2 * (L - 1) + 1
                     ! Accumulate the weighted spectral components
                     gTransArr%GcZ(K + 1) = gTransArr%GcZ(K + 1) + CMPLX( &
-                        temp_calc * trigTableType%value(index) * sin_ly, &
-                        -temp_calc * trigTableType%value(index + 1) * sin_ly, &
+                        temp_calc * baseMapType%value(index) * sin_ly, &
+                        -temp_calc * baseMapType%value(index + 1) * sin_ly, &
                         kind=C_FLOAT_COMPLEX)
                 end do
             end do
@@ -2456,7 +2475,7 @@ module PlotModule
 
         end subroutine plotLonHovmoller
         
-        subroutine loadLonValues(trigTableType, level, tempScale)
+        subroutine loadLonValues(baseMapType, level, tempScale)
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT22
             use ModelFieldsModule, only: gTransArr
@@ -2466,7 +2485,7 @@ module PlotModule
             implicit none
             include 'fftw3.f03'
             
-            class(TrigTable), intent(in) :: trigTableType
+            class(BaseMap), intent(in) :: baseMapType
             integer, intent(in) :: level
             REAL, intent(in) :: tempScale
 
@@ -2474,11 +2493,11 @@ module PlotModule
             real :: wave_real, wave_imag
             integer :: KMAX, LMAX, index, K
 
-            call loadFields(trigTableType%value, trigTableType%field, level)
-            if (gIsTemperature(trigTableType%field)) then
-                scale = trigTableType%scale / tempScale
+            call loadFields(baseMapType%value, baseMapType%field, level)
+            if (gIsTemperature(baseMapType%field)) then
+                scale = baseMapType%scale / tempScale
             else 
-                scale = trigTableType%scale
+                scale = baseMapType%scale
             endif
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
@@ -2487,7 +2506,7 @@ module PlotModule
             ! These are k=0, so they have no x-dependence. 
             ! Put them straight into the cosine buffer.
             gTransArr%GZonal = 0
-            gTransArr%GZonal(2:LMAX+1) = trigTableType%value(1:LMAX) * scale * SQRT22
+            gTransArr%GZonal(2:LMAX+1) = baseMapType%value(1:LMAX) * scale * SQRT22
 
 
             temp_calc = 2. * norm_cosly * scale ! Do the normalization first so we dont have to normalize after the transform
@@ -2498,16 +2517,16 @@ module PlotModule
             ! 1. Precompute combined phase/normalization factor for each K
             ! This moves the K-loop's trigonometry out of the L-loop bottleneck
             do K = 1, KMAX
-                wave_real = temp_calc * trigTableType%cosx(K)
-                wave_imag = temp_calc * trigTableType%sinx(K)
+                wave_real = temp_calc * baseMapType%cosx(K)
+                wave_imag = temp_calc * baseMapType%sinx(K)
     
                 index = LMAX + 2 * LMAX * (K - 1) + 1
     
                 ! 2. Vectorized slice operation
                 ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
                 gTransArr%G2Zonal(1:LMAX) = gTransArr%G2Zonal(1:LMAX) + &
-                    (trigTableType%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
-                    (trigTableType%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
+                    (baseMapType%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
+                    (baseMapType%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
             end do
 
             ! 3. Transform to Grid

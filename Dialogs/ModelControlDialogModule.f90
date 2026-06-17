@@ -518,12 +518,13 @@ module ModelControlDialogModule
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps and phase space combo'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at latitude X '//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at latitude X'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section at longitude Y'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram at longitude Y'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section along latitude'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram along latitude'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section along longitude'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram along longitude'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Phase space plot'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))                    
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Hovmoller at weather station'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Skip plot for speed'//char(0)))
 
                     ! Initialize the plotType combo box

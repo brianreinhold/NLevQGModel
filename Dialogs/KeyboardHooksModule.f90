@@ -440,34 +440,39 @@ module KeyboardHooksModule
                     END IF
 
                     IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F2: Load data from a saved file
+                        ! F2: Zero heights
                         call LogMessage('User pressed F2 key in InitVariables Dialog')
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 302, 0, 0)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
 
                     IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F3: Save data to a file
+                        ! F3: Zero TF
                         call LogMessage('User pressed F3 key in InitVariables Dialog')
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 303, 0, 0)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
 
                     IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F4: Zero orography
                         call LogMessage('User pressed F4 key in InitVariables Dialog')
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 304, 0, 0)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
 
                     IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F5: Go to Sensitivity file menu
+                        ! F5: Zero SF
                         call LogMessage('User pressed F5 key in InitVariables Dialog')
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 305, 0, 0)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
 
                     IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
-                        ! F6: Generic help
+                        ! F6: 
                         call LogMessage('User pressed F6 key in InitVariables Dialog')
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN

@@ -89,9 +89,14 @@
 #define IDC_COMBO_PHASE_SPACE_X2        1074
 #define IDC_COMBO_PHASE_SPACE_Y         1074
 #define IDC_LIST_CONTOURS               1075
+#define IDC_BUTTON_INIT_ZERO_PS         1075
 #define IDC_STATIC_CONTOURS             1076
+#define IDC_BUTTON_INIT_ZERO_TF         1076
 #define IDC_LIST_RANGES                 1077
+#define IDC_BUTTON_INIT_ZERO_OROGRAPHY  1077
 #define IDC_STATIC_RANGES               1078
+#define IDC_BUTTON_INIT_ZERO_OROGRAPHY2 1078
+#define IDC_BUTTON_INIT_ZERO_SF         1078
 #define IDC_BUTTON_EXIT_CONTOURS        1079
 #define IDC_EDIT_CONTOURS               1080
 #define IDC_CHECK1                      1081

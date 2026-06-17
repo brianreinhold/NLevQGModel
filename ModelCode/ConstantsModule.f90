@@ -74,6 +74,10 @@ module ConstantsModule
     integer, parameter :: MAP_OVERLAY_2 = 2
     integer, parameter :: MAP_OVERLAY_3 = 3
     
+    integer, parameter :: LATITUDE = 1
+    integer, parameter :: LONGITUDE = 2
+    integer, parameter :: LAT_LON = 3
+    
                                                     ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
@@ -83,7 +87,8 @@ module ConstantsModule
     integer, parameter :: HOV_DIAG_AT_LONG = 5      ! Hovmoller diagram at specified 'longitude' and level
     integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
     integer, parameter :: WEATHER_STN = 7           ! Time series of a field at a particular point (lat-lon)
-    integer, parameter :: NO_PLOT = 8               ! Skip plotting (good for speed)
+    integer, parameter :: VERT_HOV_AT_WEATHER_STN = 8  ! Hovmoller vertical cross section at the point of the weather station
+    integer, parameter :: NO_PLOT = 9               ! Skip plotting (good for speed)
     
                                                     ! Display options for variables field1, field2, field3
                                                     ! Also used for the scale factor array 'gPlotScales' below

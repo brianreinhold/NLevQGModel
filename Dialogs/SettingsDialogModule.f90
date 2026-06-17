@@ -26,7 +26,7 @@ module SettingsDialogModule
             use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghwndMain, ghSettingsDlg, LogMessage, CenterWindow
             use iso_c_binding
 
-            use DialogHelpersModule, only: GetComboIndex, &
+            use DialogHelpersModule, only: GetComboIndex, HideMyEdit, &
                         moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, updateListViewValue, &
                         GetNameOfUserSelectedFile, GetUserSelectedSaveName  ! List control helpers
             use SetupModule, only: SaveModelState, ReadSaveFile, CheckUserSettingsChanges
@@ -215,6 +215,8 @@ module SettingsDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         CASE (IDC_EDIT_USERSETTINGS) ! The ID of the edit box
                             SELECT CASE (ISHFT(uParam, -16))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS))
                                 CASE (EN_CHANGE)
                                     BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator

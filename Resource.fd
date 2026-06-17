@@ -30,6 +30,7 @@
       integer, parameter :: IDC_LIST_RANGES = 1077
       integer, parameter :: IDD_SETTINGS_DLG = 107
       integer, parameter :: IDC_STATIC_INIT_TEMP_DRIVING = 1068
+      integer, parameter :: IDC_BUTTON_INIT_ZERO_SF = 1078
       integer, parameter :: IDD_INIT_VARIABLES = 110
       integer, parameter :: IDC_EDIT_HORZ = 1046
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
@@ -37,6 +38,7 @@
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY = 1069
       integer, parameter :: IDC_EDIT_CONTOURS = 1080
       integer, parameter :: IDC_BUTTON_CONTOURS = 1041
+      integer, parameter :: IDC_BUTTON_INIT_ZERO_TF = 1076
       integer, parameter :: IDC_EDIT_INTEGERVALUES = 1026
       integer, parameter :: IDC_LIST_INIT_STRM_DRIVING = 1066
       integer, parameter :: IDC_STATIC_EKMAN_FRICTION = 1050
@@ -64,6 +66,7 @@
       integer, parameter :: IDC_LIST_CONTOURS = 1075
       integer, parameter :: IDC_BUTTON_RUN_MODEL = 1046
       integer, parameter :: IDC_LIST_EKMAN_FRICTION = 1049
+      integer, parameter :: IDC_BUTTON_INIT_ZERO_OROGRAPHY2 = 1078
       integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
       integer, parameter :: IDM_ABOUT = 30015
       integer, parameter :: IDC_BUTTON_SAVE_CURRENT_FLOW = 1044
@@ -74,6 +77,7 @@
       integer, parameter :: IDC_COMBO_PHASE_SPACE_X2 = 1074
       integer, parameter :: IDC_BUTTON_SAVE_TO_FILE = 1018
       integer, parameter :: IDC_COMBO_FIELD1 = 1031
+      integer, parameter :: IDC_BUTTON_INIT_ZERO_PS = 1075
       integer, parameter :: IDC_BUTTON_VIEW_STATISTICS2 = 1047
       integer, parameter :: IDC_LIST_TEMPERATURES = 1047
       integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
@@ -85,6 +89,7 @@
       integer, parameter :: IDC_STATIC_PHASE_SPACE = 1082
       integer, parameter :: IDC_BUTTON_VERTICAL_PARAMS = 1042
       integer, parameter :: IDC_COMBO_PLOT_LEVEL = 1051
+      integer, parameter :: IDC_BUTTON_INIT_ZERO_OROGRAPHY = 1077
       integer, parameter :: IDC_LIST_NEWT_COOLING = 1053
       integer, parameter :: IDC_COMBO_FIELD3 = 1037
       integer, parameter :: IDC_LIST_TEMP_MIXING = 1055
