@@ -7,6 +7,7 @@
 #define IDD_VERTICAL_PARAMS             108
 #define IDD_INIT_VARIABLES              110
 #define IDD_CONTOURS                    112
+#define IDD_VIEW_VARIABLES              114
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
 #define IDC_COMBO_USERSETTINGS1         1013
@@ -85,6 +86,7 @@
 #define IDC_COMBO1                      1073
 #define IDC_COMBO_LEVEL                 1073
 #define IDC_COMBO_PHASE_SPACE_X         1073
+#define IDC_COMBO_VIEW_LEVELS           1073
 #define IDC_STATIC_COMBO_LEVEL          1074
 #define IDC_COMBO_PHASE_SPACE_X2        1074
 #define IDC_COMBO_PHASE_SPACE_Y         1074
@@ -101,7 +103,13 @@
 #define IDC_EDIT_CONTOURS               1080
 #define IDC_CHECK1                      1081
 #define IDC_CHECK_RUN_INVISCID          1081
+#define IDC_CHECK_VIEW_DIMENSIONAL      1081
 #define IDC_STATIC_PHASE_SPACE          1082
+#define IDC_LIST_VIEW_VARIABLES         1083
+#define IDC_BUTTON_EXIT_VIEW_VARIABLES  1085
+#define IDC_STATIC_VIEW_LEVELS          1086
+#define IDC_BUTTON1                     1087
+#define IDC_BUTTON_VIEW_VARIABLES       1087
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -109,9 +117,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        114
+#define _APS_NEXT_RESOURCE_VALUE        116
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1083
+#define _APS_NEXT_CONTROL_VALUE         1088
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

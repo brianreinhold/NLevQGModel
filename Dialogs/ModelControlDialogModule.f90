@@ -481,6 +481,7 @@ module ModelControlDialogModule
                     call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     ret = StartTimeLoop()
                     call SetModRealParamsDimensionalState(isDimensional)
+                    call initializeDialog()
                 end subroutine setupAndRunModel
                 
                 subroutine initializeDialog()
@@ -516,6 +517,7 @@ module ModelControlDialogModule
 
                     !! ===================== Map type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MAP_TYPE)
+                    bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather Maps and phase space combo'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section along latitude'//char(0)))
@@ -571,6 +573,7 @@ module ModelControlDialogModule
 
                     !! ============================ Model type
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_MODEL_TYPE)
+                    bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Fully nonlinear N-level QG model'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('G-Q linearized initial-value model '//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Not implemented yet - dont use'//char(0)))
@@ -579,8 +582,14 @@ module ModelControlDialogModule
                     
                     !! ============================ Phase Space components
                     do M = 1, 2
-                        if (M == 1) hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_X)
-                        if (M == 2) hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_Y)
+                        if (M == 1) then
+                            hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_X)
+                            bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
+                        endif
+                        if (M == 2) then
+                            hCombo = GetDlgItem(hDlg, IDC_COMBO_PHASE_SPACE_Y)
+                            bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
+                        endif
                         do i = 1, gCurrentDims%ITOT
                             if (I <= gModIntParams%LMAX2) then
                                 write(description, '(A, I0, A)') "cos", i, "y"

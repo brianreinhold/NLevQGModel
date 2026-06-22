@@ -425,7 +425,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, NO_PLOT, &
-                               DEGREES_TO_RAD
+                               VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, DEGREES_TO_RAD
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -768,17 +768,23 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (VK_F3)
                     call ClearScreen()
                     call LogMessage("User cleared screen")
-    ! Up/Down: Change Levels
+    ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
                         if (gModRealParams%hovLat .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%hovLat = 0.
+
                     else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
                         call LogMessage("User moving eastward 5 degrees Longitude")
                         gModRealParams%hovLon = gModRealParams%hovLon + 5.0 * DEGREES_TO_RAD
-                        if (gModRealParams%hovLat .GT. 360.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 0.
-                    else                        
+                        if (gModRealParams%hovLon .GT. 360.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 0.
+
+                    else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                        call LogMessage("User moving poleward 5 degrees Latitude")
+                        gModRealParams%latPoint= gModRealParams%latPoint + 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%latPoint .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%latPoint = 0.
+                    else
                         call LogMessage("User moving up a level")
                         gModIntParams%LEVP = gModIntParams%LEVP + 1
                         if (gModIntParams%LEVP > SIZE(gVertArr%LVS)) gModIntParams%LEVP = 1
@@ -791,16 +797,83 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
                         if (gModRealParams%hovLat .LT. 0.0) gModRealParams%hovLat = 90.0 * DEGREES_TO_RAD
+
                     else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
                         call LogMessage("User moving westward 5 degrees Longitude")
                         gModRealParams%hovLon = gModRealParams%hovLon - 5.0 * DEGREES_TO_RAD
-                        if (gModRealParams%hovLat .LT. 0.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 360.
+                        if (gModRealParams%hovLon .LT. 0.0) gModRealParams%hovLon = 360. * DEGREES_TO_RAD
+
+                    else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                        call LogMessage("User moving equatorward 5 degrees Latitude")
+                        gModRealParams%latPoint = gModRealParams%latPoint - 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%latPoint .LT. 0.0) gModRealParams%latPoint = 90.* DEGREES_TO_RAD
                     else 
                         call LogMessage("User moving down a level")
                         gModIntParams%LEVP = gModIntParams%LEVP - 1
                         if (gModIntParams%LEVP < 1) gModIntParams%LEVP = SIZE(gVertArr%LVS)
                     endif
                     ! Need to recompute the specific plot types struct values
+                    call initializePlot()
+                    call ClearScreen()
+                ! Left arrow key
+                ! Vertical Hovmoller at point moves longitude point WESTWARD (Poleward is done by up arrow)
+                ! Hovmoller at latitude moves latitude EQUATORWARD
+                ! Hovmoller at longitude moves longitude WESTWARD
+                case (VK_LEFT)
+                    if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
+                        call LogMessage("User moving equatorward 5 degrees Latitude")
+                        gModRealParams%latPoint = gModRealParams%latPoint - 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%latPoint .LT. 0.0) gModRealParams%latPoint = 90.0 * DEGREES_TO_RAD
+                    else
+                        if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. gModIntParams%plotType == WEATHER_STN) then
+                            call LogMessage("User moving westward 5 degrees Longitude")
+                            gModRealParams%lonPoint= gModRealParams%lonPoint - 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%lonPoint .LT. 0.0) gModRealParams%lonPoint = 360. * DEGREES_TO_RAD
+
+                        else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                            call LogMessage("User moving equatorward 5 degrees Latitude")
+                            gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%hovLat .LT. 0.0) gModRealParams%hovLat = 90.0 * DEGREES_TO_RAD
+
+                        else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+                            call LogMessage("User moving westward 5 degrees Longitude")
+                            gModRealParams%hovLon = gModRealParams%hovLon - 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%hovLon .LT. 0.0) gModRealParams%hovLon = 360.0 * DEGREES_TO_RAD
+                        else
+                            return
+                        endif
+                    endif
+                    call initializePlot()
+                    call ClearScreen()
+                    
+                ! Right arrow key shift handles the equatorward/poleward shift of the weather station
+                ! Vertical Hovmoller at point moves latitude point EASTWARD (equatorward is done by down arrow)
+                ! Hovmoller at latitude moves latitude POLEWARD
+                ! Hovmoller at longitude moves longitude EASTWARD
+                case (VK_RIGHT)
+                    if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
+                        call LogMessage("User moving poleward 5 degrees Latitude")
+                        gModRealParams%latPoint = gModRealParams%latPoint + 5.0 * DEGREES_TO_RAD
+                        if (gModRealParams%latPoint .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%latPoint = 0.0
+                    else
+                        if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. gModIntParams%plotType == WEATHER_STN) then
+                            call LogMessage("User moving eastward 5 degrees Longitude")
+                            gModRealParams%lonPoint= gModRealParams%lonPoint + 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%lonPoint .GT. 360.0 * DEGREES_TO_RAD) gModRealParams%lonPoint = 0.0
+
+                        else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                            call LogMessage("User moving poleward 5 degrees Latitude")
+                            gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%hovLat .GT. 90.0 * DEGREES_TO_RAD) gModRealParams%hovLat = 0.0
+
+                        else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+                            call LogMessage("User moving eastward 5 degrees Longitude")
+                            gModRealParams%hovLon = gModRealParams%hovLon + 5.0 * DEGREES_TO_RAD
+                            if (gModRealParams%hovLon .GT. 360.0 * DEGREES_TO_RAD) gModRealParams%hovLon = 0.0
+                        else
+                            return
+                        endif
+                    endif
                     call initializePlot()
                     call ClearScreen()
                 case (VK_ESCAPE)

@@ -65,6 +65,8 @@ module SettingsDialogModule
             character(len=270) :: selected_file
 
             integer :: newValue         ! For editing the displayed value in the list box
+            
+            SettingsDlgProc = 0
 
             select case (dlgMsg)
                 
@@ -215,8 +217,8 @@ module SettingsDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         CASE (IDC_EDIT_USERSETTINGS) ! The ID of the edit box
                             SELECT CASE (ISHFT(uParam, -16))
-                                case( EN_KILLFOCUS)
-                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS))
+                                !case( EN_KILLFOCUS)
+                                !    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS))
                                 CASE (EN_CHANGE)
                                     BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator

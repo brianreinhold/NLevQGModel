@@ -24,7 +24,7 @@ module InitVariablesDialogModule
             use ifwin
             use iso_c_binding
 
-            use NLevQGModelGlobals, only: ghInitVariablesDlg, CenterWindow, LogMessage
+            use NLevQGModelGlobals, only: ghInstance, ghInitVariablesDlg, CenterWindow, LogMessage
 
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: REAL_TO_ASCII, SQRT2
@@ -35,6 +35,7 @@ module InitVariablesDialogModule
             use KeyboardHooksModule, only: KeyboardForDlgInitVariablesProc
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use SetUpModule, only: DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
+            use ViewVariablesDialogModule, only: ViewVariablesDlgProc
 
 
 
@@ -102,6 +103,8 @@ module InitVariablesDialogModule
                 CASE (WM_APP + 305)
                     gHorzArr%SF = 0.0
                     call populateListControls(levelIndex)
+                    RETURN
+                CASE (WM_APP + 306)
                     RETURN
 
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
@@ -244,7 +247,11 @@ module InitVariablesDialogModule
                             gHorzArr%SF = 0.0
                             call populateListControls(levelIndex)
                             InitVariablesDlgProc = 1
-
+                            
+!--F6: View all variables ====================================================
+                        case (IDC_BUTTON_VIEW_VARIABLES)
+                            iret = DialogBoxParam(ghInstance, INT(IDD_VIEW_VARIABLES, LONG_PTR), hDlg, LOC(ViewVariablesDlgProc), 0_LONG_PTR)
+                            InitVariablesDlgProc = 1
 
 !--F10: EXIT ==============================================================
                         case (IDC_BUTTON_EXIT_INIT_VARIABLES) ! F10 Close
@@ -361,8 +368,25 @@ module InitVariablesDialogModule
                     gHorzArr%TH = 0.0
                     gHorzArr%TOP = 0.0
                     gHorzArr%SF = 0.0
+                    call CreateEquivBarotropic()
                     call populateListControls(levelIndex)
                 end subroutine ZeroVariables
+
+                subroutine CreateEquivBarotropic()
+                    use ConstantsModule, only: HEIGHT
+                    use ModelParamsModule, only: gPlotScales, gModIntParams
+                    implicit none
+                    integer :: N, KL
+                    REAL :: scale
+                    
+                    scale = 1.0
+                    if (gHorzArr%isDimensionalized) scale = gPlotScales(HEIGHT)
+                    KL = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * 1 + 1
+                    DO N = 1, gModIntParams%NLEV
+                        !gHorzArr%PS(2, N) = .1 * scale * REAL(N - 1) / REAL(gModIntParams%NLEV)
+                        gHorzArr%PS(KL, N) = .1 * scale * REAL(N - 1) / REAL(gModIntParams%NLEV)
+                    END DO
+                end subroutine CreateEquivBarotropic
 
                 subroutine populateListControls(N)
                     implicit none

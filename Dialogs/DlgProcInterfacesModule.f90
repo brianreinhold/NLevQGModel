@@ -32,6 +32,22 @@ module DlgProcInterfacesModule
         end function 
     end interface
     interface 
+        function  ViewVariablesDlgProc(hwnd, mesg, wParam, lParam)
+            !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_ViewVariablesDlgProc@16' :: ViewVariablesDlgProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'ViewVariablesDlgProc' :: ViewVariablesDlgProc
+            !DEC$ ENDIF
+            use ifwinty
+            integer(LRESULT) :: ViewVariablesDlgProc ! LRESULT
+            integer(HANDLE)   hwnd 
+            integer(UINT)     mesg  
+            integer(UINT_PTR) wParam
+            integer(LONG_PTR) lParam 
+        end function 
+    end interface
+    interface
         function  VerticalParamsDlgProc(hwnd, mesg, wParam, lParam)
             !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
             !DEC$ IF DEFINED(_X86_)

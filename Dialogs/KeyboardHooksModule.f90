@@ -412,7 +412,8 @@ module KeyboardHooksModule
             !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NLevQGModelGlobals, only: ghInitVariablesDlg, LogMessage
+            use NLevQGModelGlobals, only: ghInitVariablesDlg, ghInstance, LogMessage
+            use DlgProcInterfacesModule, only: ViewVariablesDlgProc
             use ModelFieldsModule, only: gHorzArr
             
             implicit none
@@ -474,6 +475,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F6: 
                         call LogMessage('User pressed F6 key in InitVariables Dialog')
+                        iret = DialogBoxParam(ghInstance, INT(IDD_VIEW_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(ViewVariablesDlgProc), 0_LONG_PTR)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -505,6 +507,90 @@ module KeyboardHooksModule
             ! Pass to next hook in chain
             KeyboardForDlgInitVariablesProc = CallNextHookEx(0, nCode, wParam, lParam)
         END FUNCTION KeyboardForDlgInitVariablesProc
+        
+        function KeyboardForDlgViewVariablesProc(nCode, wParam, lParam)
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgViewVariablesProc@16' :: KeyboardForDlgViewVariablesProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgViewVariablesProc' :: KeyboardForDlgViewVariablesProc
+            !DEC$ ENDIF
+            USE IFWIN
+            use user32
+            use NLevQGModelGlobals, only: ghViewVariablesDlg, LogMessage
+            use DlgProcInterfacesModule, only: ViewVariablesDlgProc
+            
+            implicit none
+
+            include '../resource.fd'
+
+            INTEGER(kind=4), INTENT(IN) :: nCode
+            integer(UINT_PTR), intent(in) :: wParam
+            integer(LONG_PTR), intent(in) :: lParam
+
+            integer(LRESULT) ::  KeyboardForDlgViewVariablesProc ! LRESULT
+            integer(BOOL) ::   bret
+
+            IF (GetForegroundWindow() .EQ. ghViewVariablesDlg) then
+
+                IF (nCode >= 0) THEN
+                    IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
+                        ! F1: Zero variables
+                        call LogMessage('User pressed F1 key in ViewVariables Dialog')
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F2: Zero heights
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F3: Zero TF
+                        call LogMessage('User pressed F3 key in ViewVariables Dialog')
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F4: Zero orography
+                        call LogMessage('User pressed F4 key in ViewVariables Dialog')
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F5: Zero SF
+                        call LogMessage('User pressed F5 key in ViewVariables Dialog')
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F6: 
+                        call LogMessage('User pressed F6 key in ViewVariables Dialog')
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F10 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F10: Return to main menu
+                        call LogMessage('User pressed F10 key in ViewVariables Dialog')
+                        bret = PostMessage(ghViewVariablesDlg, WM_CLOSE, 0, 0)
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_RETURN) THEN
+                        KeyboardForDlgViewVariablesProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+                END IF
+            END IF
+            ! Pass to next hook in chain
+            KeyboardForDlgViewVariablesProc = CallNextHookEx(0, nCode, wParam, lParam)
+        END FUNCTION KeyboardForDlgViewVariablesProc
         
         function KeyboardForDlgContoursAndRangesProc(nCode, wParam, lParam)
             !DEC$ IF DEFINED(_X86_)

@@ -145,6 +145,10 @@ module PlotModule
         real, allocatable :: tempScales(:)   ! The scaling factors needed to make temperature dimensional which depends upon level.
     end type VertCrossSection
     
+    type, extends(BaseMap) :: VertHovmoller
+        real, allocatable :: tempScales(:)   ! The scaling factors needed to make temperature dimensional which depends upon level.
+        integer :: column = 0                ! column on the screen to draw the hovmoller.
+    end type VertHovmoller
 
     type, extends(TrigTable) :: WeatherStation
         LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
@@ -189,6 +193,8 @@ module PlotModule
     type(VertCrossSection) :: gLonVertCrossSec2
     type(Hovmoller) :: gLonHovmoller1
     type(Hovmoller) :: gLonHovmoller2
+    type(VertHovmoller) :: gVertHovmoller1
+    type(VertHovmoller) :: gVertHovmoller2
     type(WeatherStation) :: gWeatherStation1
     type(WeatherStation) :: gWeatherStation2
 
@@ -223,14 +229,16 @@ module PlotModule
 ! These are subroutines implemented in submodules. In order to put subroutine
 ! belonging to this module in another file one has to create 'submodules' and
 ! then create interfaces in the main module for every subroutine in the submodules.
+    
+! ----------------------- Interpolate submodule interfaces
     INTERFACE
         ! Use 'MODULE' keyword here to link it to a submodule
-        MODULE SUBROUTINE Interpolate1D(R, b, isPeriodic, X)
-            !------------------------------------------------------Passed variables:
+        MODULE SUBROUTINE Interpolate1D(R, ILin, IUin, KLin, KUin, isPeriodic, X)
+            !------------------------Passed variables:
             Logical, intent(in) :: isPeriodic
             REAL, intent(in) :: R(:)
             REAL, intent(out) :: X(:)
-            type(InterpolationBounds), intent(in) :: b
+            INTEGER, intent(in) :: ILin, IUin, KLin, KUin
         END SUBROUTINE Interpolate1D
     END INTERFACE
 
@@ -244,6 +252,7 @@ module PlotModule
         END SUBROUTINE Interpolate2D
     END INTERFACE
 
+! ----------------------- Axes submodule interfaces
     INTERFACE
         MODULE SUBROUTINE DrawCartesianAxes(invalidate)
             LOGICAL, INTENT(IN)  :: invalidate
@@ -285,6 +294,8 @@ module PlotModule
             type(WeatherStation), optional, intent(in) :: weatherStn
         END SUBROUTINE DrawHorizontalLines
     END INTERFACE
+
+! ----------------------- Plot Routines submodule interfaces
     
     ! Supports the Sleep() subroutine
     interface
@@ -337,7 +348,7 @@ module PlotModule
                 endif
  
 ! ------ WEATHER STN -----------------------------
-            else if (gModIntParams%plotType == WEATHER_STN .OR. gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+            else if (gModIntParams%plotType == WEATHER_STN) then
                 gWeatherStation1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     if (gIsTemperature(gModIntParams%field1)) then
@@ -365,8 +376,16 @@ module PlotModule
 !   x, y plane is at constant x.
                 
 ! ------ VERTICAL HOVMOLLER AT WEATHER STN -----------------------------
-            !else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
-                
+            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                gVertHovmoller1%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    call initializeVertHovmollerType(gVertHovmoller1, .true.)
+                endif
+                gVertHovmoller2%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    call initializeVertHovmollerType(gVertHovmoller2, gModIntParams%field1 == PLOTTING_OFF)
+                endif
+
 ! ------ VERTICAL CROSS SECTION AT LATITUDE -----------------------------
             else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)  then
                 gLatVertCrossSec1%field = gModIntParams%field1
@@ -553,14 +572,18 @@ module PlotModule
         end subroutine initializeBaseMapType
         
         !! Initializes the trig tables needed for either plots along a latitude or longitude.
-        subroutine initializeTrigTablesType(latLon, trigTableType)
-            use ConstantsModule, only: SQRT2, LATITUDE, LONGITUDE, LAT_LON
+        !! Note that if latlon = LATITUDE only the value 'lat' is used
+        !!           if latlon = LONGITUDE only the value 'lon' is used
+        !!           if latlon = LAT_LON then both 'lat' and 'lon' are used.
+        subroutine initializeTrigTablesType(latLon, trigTableType, lat, lon)
+            use ConstantsModule, only: LATITUDE, LONGITUDE, LAT_LON
             use ModelParamsModule, only: gModIntParams, gModRealParams
 
             IMPLICIT NONE
             
             integer, intent(in) :: latLon
             class(TrigTable), intent(inout) :: trigTableType
+            real, intent(in) :: lat, lon
             
             integer :: L, K
 
@@ -575,8 +598,8 @@ module PlotModule
                 ! equatorial boundary and 0 at the polar boundary and max in the middle. Thus we need to multiply gModRealParams%hovLat
                 ! by 2.
                 do L = 1, gModIntParams%LMAX2
-                    trigTableType%siny(L) = 2. * SIN(real(2 * L) * gModRealParams%hovLat)
-                    trigTableType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%hovLat)
+                    trigTableType%siny(L) = SIN(real(2 * L) * lat)
+                    trigTableType%cosy(L) = COS(real(2 * L) * lat)
                 end do
             endif
             if (latLon == LONGITUDE .OR. latLon == LAT_LON) then  ! Precompute the coskx and sinky for constant x (at a given longitude)
@@ -589,8 +612,8 @@ module PlotModule
                 ! In this case the degrees entered is from 0 to 360 which is consistent with the actual eigenfunctions. No factor of
                 ! 2 in this case.
                 do K = 1, gModIntParams%KMAX2
-                    trigTableType%sinx(K) = SIN(real(K) * gModRealParams%hovLon)
-                    trigTableType%cosx(K) = COS(real(K) * gModRealParams%hovLon)
+                    trigTableType%sinx(K) = SIN(real(K) * lon)
+                    trigTableType%cosx(K) = COS(real(K) * lon)
                 end do
             endif
         end subroutine initializeTrigTablesType
@@ -613,14 +636,52 @@ module PlotModule
             weatherMapType%isInitialized = .true.
 
         end subroutine initializeWeatherMapType
-    
+
+        !! Initializes all the parameters for a vertical hovmoller plot at a lat long point that do not depend upon the newly generated values
+        !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
+        !> @param weatherMapType: This is the WeatherMap type that is being populated.
+        !> @param solidColor: When true the map is plotted using solid color and not line contours. If more than one
+        !>                    field is being plotted, only the first field can be solid color
+        subroutine initializeVertHovmollerType(vertHovmollerType, useSolidColor)
+            use ConstantsModule, only: LAT_LON
+            use ModelParamsModule, only: gPlotScales,  gIsTemperature, gModIntParams, gModRealParams
+            use ModelFieldsModule, only: gVertArr
+            IMPLICIT NONE
+
+            type(VertHovmoller), intent(inout) :: vertHovmollerType
+            logical, intent(in) :: useSolidColor
+            
+            integer :: totalLevels, plotLevel
+            
+            call initializeBaseMapType(vertHovmollerType%field, vertHovmollerType, useSolidColor)
+            call initializeTrigTablesType(LAT_LON, vertHovmollerType, gModRealParams%latPoint, gModRealParams%lonPoint)
+            ! Override what is done in the BaseMap type, Here we have a vertical column which has a different scale factor
+            ! for every level if a temperature field. However, we need to keep the non temperature scale factor so we can 
+            ! can generate thr correct temperature scale which is scale/gVertArr%A(level)
+            vertHovmollerType%scale = gPlotScales(vertHovmollerType%field)
+            
+            ! Create the temperature scale factors for the different levels if a temperature field
+            ! The scaling factor gVertArr%A is a function of level.
+            totalLevels = SIZE(gVertArr%LVS)
+            if (gIsTemperature(vertHovmollerType%field)) then
+                if (ALLOCATED(vertHovmollerType%tempScales)) deallocate(vertHovmollerType%tempScales)
+                allocate(vertHovmollerType%tempScales(totalLevels))
+                do plotLevel = 1, totalLevels
+                    vertHovmollerType%tempScales(plotLevel) = vertHovmollerType%scale / interpolateTemperatureScale(plotLevel)
+                end do
+            end if
+            vertHovmollerType%column = 0
+            vertHovmollerType%isInitialized = .true.
+
+        end subroutine initializeVertHovmollerType
+
         !> @param vertCrossSecType: This is the VerticalCrossSection type that is being populated.
         !> @param solidColor: When true the map is plotted using solid color and not line contours. If more than one
         !>                    field is being plotted, only the first field can be solid color
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
         subroutine initializeVerticalCrossSectionType(field, vertCrossSecType, useSolidColor, latLon)
-            use ModelParamsModule, only: gPlotScales,  gIsTemperature, gModIntParams
+            use ModelParamsModule, only: gPlotScales,  gIsTemperature, gModIntParams, gModRealParams
             use ModelFieldsModule, only: gVertArr
 
             IMPLICIT NONE
@@ -632,9 +693,8 @@ module PlotModule
             
             integer :: totalLevels, plotLevel
 
-            
             call initializeBaseMapType(field, vertCrossSecType, useSolidColor)
-            call initializeTrigTablesType(latLon, vertCrossSecType)
+            call initializeTrigTablesType(latLon, vertCrossSecType, gModRealParams%hovLat, gModRealParams%hovLon)
             
             ! Create the temperature scale factors for the different levels if a temperature field
             ! The scaling factor gVertArr%A is a function of level.
@@ -690,7 +750,7 @@ module PlotModule
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
         subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latLon)
-
+            use ModelParamsModule, only: gModRealParams
             IMPLICIT NONE
 
             integer, intent(in) :: field
@@ -699,7 +759,7 @@ module PlotModule
             integer, intent(in) :: latLon
 
             call initializeBaseMapType(field, hovmollerType, useSolidColor)
-            call initializeTrigTablesType(latLon, hovmollerType)
+            call initializeTrigTablesType(latLon, hovmollerType, gModRealParams%hovLat, gModRealParams%hovLon)
             hovmollerType%row = 0
             hovmollerType%isInitialized = .true.
         end subroutine initializeHovmollerType
@@ -708,7 +768,7 @@ module PlotModule
             USE IFWINTY
 
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ConstantsModule, only: SQRT2, LAT_LON
+            use ConstantsModule, only: LAT_LON
             use ModelParamsModule, only: gModIntParams, gModRealParams, gPlotScales, gContourIntervals, gIsTemperature
             use ModelFieldsModule, only: gVertArr
 
@@ -749,29 +809,9 @@ module PlotModule
             weatherStnType%range = gContourIntervals%Ranges(field)
             weatherStnType%scale = weatherStnType%scale * REAL(gBitMapInfo%height) / (2.0 * gContourIntervals%Ranges(field))
 
-            ! Pre computed arrays
-            call initializeTrigTablesType(LAT_LON, weatherStnType)
-            !if (ALLOCATED(weatherStnType%cosx)) deallocate(weatherStnType%cosx)
-            !allocate(weatherStnType%cosx(gModIntParams%KMAX2))
-            !if (ALLOCATED(weatherStnType%sinx)) deallocate(weatherStnType%sinx)
-            !allocate(weatherStnType%sinx(gModIntParams%KMAX2))
-            !if (ALLOCATED(weatherStnType%siny)) deallocate(weatherStnType%siny)
-            !allocate(weatherStnType%siny(gModIntParams%LMAX2))
-            !if (ALLOCATED(weatherStnType%cosy)) deallocate(weatherStnType%cosy)
-            !allocate(weatherStnType%cosy(gModIntParams%LMAX2))
-            !! The location of the weather station is given by gModRealParams%lonPoint and gModRealParams%latPoint.
-            !! This 'weather station' will be at the level gModIntParams%LEVP
-            !do L = 1, gModIntParams%LMAX2
-            !    weatherStnType%siny(L) = 2.0 * SIN(real(2 * L) * gModRealParams%latPoint)     ! Put in the factor of 2 here for 2(cosnknx, sinknx)sinLy
-            !                                                                                  ! The 2*L is because the user enters 0 to 90 and it really is 0 to 180
-            !    weatherStnType%cosy(L) = SQRT2 * COS(real(2 * L) * gModRealParams%latPoint)   ! Put in the SQRT2 factor here for cosLy
-            !end do
-            !do K = 1, gModIntParams%KMAX2
-            !    weatherStnType%sinx(K) = SIN(real(K) * gModRealParams%lonPoint)
-            !    weatherStnType%cosx(K) = COS(real(K) * gModRealParams%lonPoint)
-            !end do
-            ! No need to call these anymore - They have to be called every time step because of interpolation
-            !call loadFields(weatherStnType%value, field, gModIntParams%LEVP)
+            ! Pre computed cosine and sine arrays for a fixed point
+            call initializeTrigTablesType(LAT_LON, weatherStnType, gModRealParams%latPoint, gModRealParams%lonPoint)
+            
             weatherStnType%units = getUnits(field)
             weatherStnType%isInitialized = .true.
 
@@ -825,7 +865,8 @@ module PlotModule
             
     ! VERTICAL HOV AT WEATHER STATION ----------------------
             if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
-                call plotTimeSeries()
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotVertHovmoller(gVertHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotVertHovmoller(gVertHovmoller2, .TRUE.)
             endif
 
     ! HOVMOLLER LAT ----------------------
@@ -840,13 +881,13 @@ module PlotModule
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller2, .TRUE.)
             endif
             
-    ! HOVMOLLER LAT CROSS SECTION----------------------
+    ! LAT CROSS SECTION----------------------
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLatVertCrossSec(gLatVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLatVertCrossSec(gLatVertCrossSec2, .TRUE.)
             endif
 
-    ! HOVMOLLER LON CROSS SECTION----------------------
+    ! LON CROSS SECTION----------------------
             if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec2, .TRUE.)
@@ -1034,7 +1075,7 @@ module PlotModule
             grid(IXMAX + 1, 1:IYMAX) = grid(1, 1:IYMAX)
             !call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
         end subroutine createGrid
-        
+
         subroutine InverseTransform(weatherMapType)
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT2
@@ -1349,7 +1390,7 @@ module PlotModule
         end subroutine pauseRun
 
         !> This function gets the values of the current location in a paused time series plot based on the y-coordinate
-        !> position of the mouse.
+        !> position of the mouse. This is for graph plots.
         !! @param  mouse_y: the y-ccordinate value of the mouse cursor
         !! @Param  field: variable being displayed
         function getYValues(mouse_y, field) result(labelText)
@@ -1381,6 +1422,7 @@ module PlotModule
 
         end function getYValues
 
+        !! Clear the screen and in some cases plot the background graphs.
         subroutine ClearScreen()
             USE IFWINTY
             USE GDI32
@@ -1388,7 +1430,7 @@ module PlotModule
             use IFWBASE ! Contains RGB macro
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, PLOTTING_OFF, &
+                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, PLOTTING_OFF, &
                 HEIGHT, TEMPERATURE, wp
             use ModelParamsModule, only: gModIntParams
             
@@ -1447,6 +1489,9 @@ module PlotModule
                 gLonHovmoller1%row = 0
                 gLonHovmoller2%row = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
+            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                gVertHovmoller1%column = 0
+                gVertHovmoller2%column = 0
             else if (gModIntParams%plotType == WEATHER_MAP) then
                 call DrawGridLines(.false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
@@ -1460,7 +1505,7 @@ module PlotModule
 
         end subroutine ClearScreen
 
-        ! Clears the time series buffers
+        ! Clears the time series buffers used in the time series. Only weather station time series so far
         subroutine clearBuffer(timeSeriesBuf)
             implicit none
 
@@ -1681,6 +1726,7 @@ module PlotModule
 
         end subroutine loadFields
         
+        ! Gets the unit text strings for display legends
         function getUnits(field) result(text)
             use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                 OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
@@ -1812,7 +1858,7 @@ module PlotModule
             if (gWeatherStation1%field /= PLOTTING_OFF) then
                 call loadFields(gWeatherStation1%value, gWeatherStation1%field, gModIntParams%LEVP)
                 ! Compute the value
-                value = computeValue(gWeatherStation1)
+                value = computeValue(gWeatherStation1, gWeatherStation1%value)
                 call loadTimeSeriesArray(gWeatherStation1%timeSeriesBuf, value * gWeatherStation1%scale, &
                                          gWeatherStation1%yCenter, gWeatherStation1%gDCcolor, .true., gWeatherStation2%field == PLOTTING_OFF)
                 call DrawHorizontalLines(.false., .true., WX_STN_TEMP_COLOR, gWeatherStation1) ! true means force screen update. false means draw labels on right side
@@ -1820,7 +1866,7 @@ module PlotModule
             endif
             if (gWeatherStation2%field /= PLOTTING_OFF) then
                 call loadFields(gWeatherStation2%value, gWeatherStation2%field, gModIntParams%LEVP)
-                value = computeValue(gWeatherStation2)
+                value = computeValue(gWeatherStation2, gWeatherStation2%value)
                 call loadTimeSeriesArray(gWeatherStation2%timeSeriesBuf, value * gWeatherStation2%scale, &
                                          gWeatherStation2%yCenter, gWeatherStation2%gDCcolor, gWeatherStation1%field == PLOTTING_OFF, .true.)
                 call DrawHorizontalLines(.false., gWeatherStation1%field == PLOTTING_OFF, WX_STN_TEMP_COLOR, gWeatherStation2)
@@ -1829,32 +1875,40 @@ module PlotModule
             call labelPlotsAndDisplayTime(.true.)
 
         end subroutine plotTimeSeries
-        
-        function computeValue(weatherStn) result (value)
+
+        !> This routine gets the value at a (longitude, latitude, level) point 
+        function computeValue(trigTableType, variable) result (value)
+                use ConstantsModule, only: SQRT2
                 use ArrayDimensionsModule, only: gCurrentDims
                 use ModelParamsModule, only: gModIntParams
                 implicit none
 
-                type(WeatherStation), intent(in) :: weatherStn
+                class(TrigTable), intent(in) :: trigTableType
+                real, intent(in) :: variable(:)
                 
-                real :: value
+                real :: value, value2
                 integer :: I, K, L
 
                 value = 0.0
                 do I = 1, gModIntParams%LMAX2
-                    value = value + weatherStn%value(I) * weatherStn%cosy(I)
+                    value = value + variable(I) * trigTableType%cosy(I)
                 end do
+                value = SQRT2 * value
                 K = 1
                 L = 1
-                do I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT - 1
-                    value = value + (weatherStn%value(I) * weatherStn%cosx(K) + &
-                                     weatherStn%value(I + 1) * weatherStn%sinx(K)) * weatherStn%siny(L)
+                value2 = 0.0
+                I = gModIntParams%LMAX2 + 1
+                do while (I .LT. gCurrentDims%ITOT)
+                    value2 = value2 + (variable(I) * trigTableType%cosx(K) + &
+                                     variable(I + 1) * trigTableType%sinx(K)) * trigTableType%siny(L)
                     L = L + 1
                     if (L .GT. gModIntParams%LMAX2) then
-                        K = 1
+                        K = K + 1
                         L = 1
                     endif
+                    I = I + 2
                 end do
+                value = value + 2.0 * value2
         end function computeValue
 
         subroutine loadTimeSeriesArray(timeSeriesBuf, value, yzero_axis, color, clearScreen, drawMovingTimeLines)
@@ -2031,8 +2085,6 @@ module PlotModule
             integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr, currentRow
             integer(c_intptr_t) :: bytesPerRow
 
-            type(InterpolationBounds) b
-            
             ! Returns transformed latitude line at specified level in gTransArr%GZonal
             call loadLatValues(latHovmoller, gModIntParams%LEVP, 1.0)
 
@@ -2043,14 +2095,9 @@ module PlotModule
                 if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%width, 3))
                 Xptr => X_Overlay
             endif
-            
-            b%il = 1
-            b%iu = gCurrentDims%IXMAX + 1
-            b%KL = 1
-            b%KU = gBitMapInfo%width
 
             currentRow = mod(latHovmoller%row, 3) + 1 
-            call Interpolate1D(gTransArr%GZonal, b, .true., Xptr(:, currentRow)) ! is periodic
+            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IXMAX + 1, 1, gBitMapInfo%width, .true., Xptr(:, currentRow)) ! is periodic
 
             if (latHovmoller%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
@@ -2171,10 +2218,9 @@ module PlotModule
             
             if (latVertCrossSec%field == PLOTTING_OFF) return    ! Do nothing
             
-            LEVS = SIZE(gVertArr%LVS)
             gTransArr%plotFull = 0.0
 
-            do N = 1, LEVS
+            do N = 1, gCurrentDims%LVS
                 ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
                 call loadLatValues(latVertCrossSec, N, latVertCrossSec%tempScales(N))
                 gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
@@ -2210,7 +2256,7 @@ module PlotModule
             b%il = 1
             b%iu = gCurrentDims%IXMAX + 1
             b%jl = 1
-            b%ju = LEVS
+            b%ju = gCurrentDims%LVS
             b%KL = 1
             b%KU = gBitMapInfo%width
             b%LL = 1
@@ -2337,7 +2383,9 @@ module PlotModule
 
             ! 1. Initialize input with zeros (crucial since k=0 is empty)
             gTransArr%GcZ = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
-            temp_calc = 2. * norm_fwd * scale ! Do the normalization first so we dont have to normalize after the transform
+            temp_calc = 4. * norm_fwd * scale ! Do the normalization first so we dont have to normalize after the transform
+            ! We have a 4 here instead of a 2 as norm_fwd is defined as 1/4 which is okay for 2-d transform. This is a 1-d which needs to be 1/2
+            ! Then we have the 2 factor in front of the wave eigenfunctions.
 
             ! 2. Sum over L to collapse the Y-dimension
             do L = 1, LMAX
@@ -2383,7 +2431,6 @@ module PlotModule
 
             integer(RGB32), target :: Pixels(gBitMapInfo%height)
             integer ::  iVal, iValDown, iValLeft, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
-            type(InterpolationBounds) b
 
             call loadLonValues(lonHovmoller, gModIntParams%LEVP, 1.0) ! Returns loaded values along a longitude in gTransArr%GZonal including polar value at boundary
             
@@ -2395,12 +2442,8 @@ module PlotModule
                 Xptr => X_Overlay
             endif
 
-            b%il = 1
-            b%iu = gCurrentDims%IYMAX
-            b%KL = 1
-            b%KU = gBitMapInfo%height
             currentColumn = MOD(lonHovmoller%row, 3) + 1
-            call Interpolate1D(gTransArr%GZonal, b, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IYMAX, 1, gBitMapInfo%height, .false., Xptr(:, currentColumn)) ! is NOT periodic
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
@@ -2474,7 +2517,7 @@ module PlotModule
             call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
 
         end subroutine plotLonHovmoller
-        
+
         subroutine loadLonValues(baseMapType, level, tempScale)
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: SQRT22
@@ -2540,7 +2583,7 @@ module PlotModule
             gTransArr%GZonal(1:gCurrentDims%IYMAX) = gTransArr%GZonal(1:gCurrentDims%IYMAX) + gTransArr%G2Zonal(1:gCurrentDims%IYMAX)
 
         end subroutine loadLonValues
-        
+
 ! PLOT VERTICAL CROSS SECTION AT LONGITUDE -------------------------------------------
         subroutine plotLonVertCrossSec(lonVertCrossSec, invalidate)
             USE IFWIN
@@ -2575,10 +2618,9 @@ module PlotModule
             
             if (lonVertCrossSec%field == PLOTTING_OFF) return    ! Do nothing
             
-            LEVS = SIZE(gVertArr%LVS)
             gTransArr%plotFullY = 0.0
 
-            do N = 1, LEVS
+            do N = 1, gCurrentDims%LVS
                 ! Populates gTransArr%GZonal with a row of transformed values at that level and latitude including the periodic IXMAX + 1
                 call loadLonValues(lonVertCrossSec, N, lonVertCrossSec%tempScales(N))
                 gTransArr%plotFullY(1 : gCurrentDims%IYMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IYMAX + 1)
@@ -2614,7 +2656,7 @@ module PlotModule
             b%il = 1
             b%iu = gCurrentDims%IYMAX
             b%jl = 1
-            b%ju = LEVS
+            b%ju = gCurrentDims%LVS
             b%KL = 1
             b%KU = gBitMapInfo%width
             b%LL = 1
@@ -2701,6 +2743,125 @@ module PlotModule
 
         end subroutine plotLonVertCrossSec
 
+! PLOT VERTICAL HOVMOLLER AT WEATHER STN -------------------------------------------
+        subroutine plotVertHovmoller(vertHovmollerType, invalidate)
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gTransArr
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModIntParams, gIsTemperature
+
+            IMPLICIT NONE
+
+            type(VertHovmoller), intent(inout) :: vertHovmollerType  ! Need the out as the 'column' is kept track of here.
+            LOGICAL, intent(in) :: invalidate
+
+            LOGICAL(BOOL) :: bret
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:, :)
+            integer(RGB32), pointer :: dibArray(:,:)
+
+            integer(RGB32), target :: Pixels(gBitMapInfo%height)
+            integer ::  iVal, iValDown, iValLeft, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
+
+            gTransArr%GZonal = 0.0
+            do K = 1, gCurrentDims%LVS
+                ! Places the current field to be plotted at level K in value which has size ITOT
+                call loadFields(vertHovmollerType%value, vertHovmollerType%field, K)
+                gTransArr%GZonal(K) = computeValue(vertHovmollerType, vertHovmollerType%value)
+            end do
+            !! scale the fields to their dimensional values
+            if (gIsTemperature(vertHovmollerType%field)) then
+                gTransArr%GZonal(1 : gCurrentDims%LVS) = gTransArr%GZonal(1 : gCurrentDims%LVS) * vertHovmollerType%tempScales(1 : gCurrentDims%LVS)
+            else
+                gTransArr%GZonal = gTransArr%GZonal * vertHovmollerType%scale
+            endif
+            
+            if (vertHovmollerType%useSolidColor) then
+                if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
+                Xptr => X        ! Note the pointer and not the equals! Not like C!
+            else
+                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%height, 3))
+                Xptr => X_Overlay
+            endif
+
+            currentColumn = MOD(vertHovmollerType%column, 3) + 1
+            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%LVS, 1, gBitMapInfo%height, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            
+            ! Get access to the DIBSection 
+            call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
+            if (vertHovmollerType%useSolidColor) then
+                ! Turn X into an integer array of 32-pixel values
+                do K = 1, gBitMapInfo%height
+                    ! Calculate value based on the contour interval
+                    iVal = FLOOR(Xptr(K, currentColumn) * vertHovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                    ! Cycle through the colorRam if iVal exceeds its size
+                    ! Use ABS to handle negative iVal if necessary
+                    ! Modulo keeps the recylcing postive versus mod which does not
+                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+
+                    Pixels(K) = RAM_COLORS(colorIdx)
+                end do
+
+
+                ! 2. Loop through 'Pixels' array (height) 
+                ! and place each pixel into the DIBSection row-by-row
+                do K = gBitMapInfo%height, 1, -1
+                    dibArray(vertHovmollerType%column + 1, gBitMapInfo%height - K + 1) = Pixels(K)
+                end do
+            else
+                ! 2. Calculate borders by comparing current pixel to its neighbors.
+                ! We stop at Height-1 to prevent "out of bounds" on the iVal checks.
+                prevColumn = currentColumn - 1
+                if (prevColumn < 1) prevColumn = 3
+                do K = 1, gBitMapInfo%height - 1
+        
+                    ! J_data maps Screen Top (J=1) to Array North (Height)
+                    L = gBitMapInfo%height - K + 1
+                    ! J_next is the row physically below J on the screen (one step South in data)
+
+                    ! Calculate interval bins
+                    iVal      = floor(X_Overlay(L, currentColumn) * vertHovmollerType%contourIntervalInv)
+                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * vertHovmollerType%contourIntervalInv)
+                    iValLeft  = floor(X_Overlay(L, prevColumn) * vertHovmollerType%contourIntervalInv)
+        
+                    ! Detect boundary
+                    if (iVal /= iValDown) then
+                        colorIdx = max(iVal, iValDown)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                            
+                        ! J=1 is the leftmost column of the pixelArray
+                        dibArray(vertHovmollerType%column + 1, K) = colorToDraw
+                    end if
+                    if (iVal /= iValLeft .AND. vertHovmollerType%column > 0) then
+                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
+                        if (colorIdx > 0) then
+                            colorToDraw = z'00DD0077' ! Reddish-pink
+                        else if (colorIdx < 0) then
+                            colorToDraw = z'000000FF' ! Blue
+                        else 
+                            colorToDraw = z'00000000' ! White for the 0-contour
+                        end if
+                        ! J=1 is the top row of the pixelArray
+
+                        dibArray(vertHovmollerType%column + 1, K) = colorToDraw
+                    end if
+                end do
+            endif
+
+            vertHovmollerType%column = mod(vertHovmollerType%column + 1, gBitMapInfo%width)
+            call labelPlotsAndDisplayTime(.true.)
+            !call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
+        end subroutine plotVertHovmoller
 
 ! PLOT WEATHER MAP -------------------------------------------
         ! @param Y: the spectral components array

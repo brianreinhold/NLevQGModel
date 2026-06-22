@@ -3,19 +3,22 @@ SUBMODULE (PlotModule) InterpolateSubmodule
 
     CONTAINS
 
-        MODULE SUBROUTINE Interpolate1D(R, b, isPeriodic, X)
+        MODULE SUBROUTINE Interpolate1D(R, ILin, IUin, KLin, KUin, isPeriodic, X)
+            implicit none
             !------------------------------------------------------Passed variables:
             LOGICAL, intent(in) :: isPeriodic
             REAL, intent(in) :: R(:)
             REAL, intent(out) :: X(:)
-            type(InterpolationBounds), intent(in) :: b
+            integer, intent(in) :: ILin, IUin, KLin, KUin
+
+
             !------------------------------------------------------INPUT VARIABLES:
             !
             !  R is input one-dimensional array
-            !  b%IL is the lower bound in x in the input array
-            !  b%IU is the upper bound in x in the input array
-            !  b%KL is the lower x-position in the new array
-            !  b%KU is the upper x-position in the new array
+            !  IL is the lower bound in x in the input array
+            !  IU is the upper bound in x in the input array
+            !  KL is the lower x-position in the new array
+            !  KU is the upper x-position in the new array
             !  X is the output array.
 
             !--------------------------- METHOD:
@@ -42,18 +45,18 @@ SUBMODULE (PlotModule) InterpolateSubmodule
 
             !       X(j) = (2t^3-3t^2+1)*R(i) + (t^3-2t^2+t)h*d(i) + (-2t^3+3t^2)*R(i+1) + (t^3-t^2)*h*d(i+1)
         
-            integer :: i
+            integer :: i, k
             INTEGER :: IL, IU, KL, KU
             real, allocatable :: D(:) ! Array to hold derivatives
             real :: t, h, dx_ratio
             real :: h00, h10, h01, h11
             
-            real :: u2, u3
+            real :: u, u2, u3
 
-            IL = MAX(1, b%IL)
-            IU = MIN(SIZE(R), b%IU)
-            KL = MAX(1, b%KL)
-            KU = MIN(SIZE(X), b%KU)
+            IL = MAX(1, ILin)
+            IU = MIN(SIZE(R), IUin)
+            KL = MAX(1, KLin)
+            KU = MIN(SIZE(X), KUin)
             ! Insure there are enough points to do interpolation
             IF (IU <= IL .OR. KU <= KL) RETURN
 
@@ -103,16 +106,17 @@ SUBMODULE (PlotModule) InterpolateSubmodule
         END subroutine Interpolate1D
 
         MODULE SUBROUTINE Interpolate2D(R, b, X)
+            implicit none
             ! R(b%IL:b%IU, b%JL:b%JU) - Input Grid
             ! X(b%KL:b%KU, b%LL:b%LU) - Output Grid
             REAL, INTENT(IN)  :: R(:, :)
             REAL, INTENT(OUT) :: X(:, :)
             type(InterpolationBounds), intent(in) :: b
 
-
             ! Intermediate array: same width as output, but same height as input
             REAL, save,  ALLOCATABLE :: TempGrid(:,:)
             INTEGER :: i, j
+            type(InterpolationBounds) bt
 
             ! Only reallocate if dimensions have changed
             if (.not. allocated(TempGrid)) then
@@ -125,13 +129,14 @@ SUBMODULE (PlotModule) InterpolateSubmodule
             ! Step 1: Interpolate each ROW (Horizontal)
             ! We take a 1D slice of R (a row) and expand it into a row of TempGrid
             do j = b%JL, b%JU
-                call Interpolate1D(R(b%IL : b%IU, j), b, b%isPeriodicX, TempGrid(b%KL : b%KU, j)) ! is periodic
+                call Interpolate1D(R(b%IL : b%IU, j), b%IL, b%IU, b%KL, b%KU, b%isPeriodicX, TempGrid(b%KL : b%KU, j)) ! is periodic
             end do
 
             ! Step 2: Interpolate each COLUMN (Vertical)
             ! We take a 1D slice of TempGrid (a column) and expand it into a column of X
+            X = 0.0
             do i = b%KL, b%KU
-                call Interpolate1D(TempGrid(i, b%JL : b%JU), b, .false., X(i, b%LL : b%LU)) ! is not periodic
+                call Interpolate1D(TempGrid(i, b%JL : b%JU), b%JL, b%JU, b%LL, b%LU, .false., X(i, b%LL : b%LU)) ! is not periodic
             end do
 
         END SUBROUTINE Interpolate2D

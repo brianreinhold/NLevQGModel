@@ -1494,9 +1494,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine NonDimensionalizeVerticalParams
         
         subroutine DimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ModelParamsModule, only: gModIntParams, gScaleFactors
+            use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
 
             implicit none
@@ -1508,13 +1508,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Do temperature variables first. There is one less interface than levels
             do N = 1, gModIntParams%NLEV - 1
-                tempScale = gScaleFactors%temperatureScale / gVertArr%A(N) ! The scaling factor for the temperature at level N
+                tempScale = gPlotScales(TEMPERATURE) / gVertArr%A(N) ! The scaling factor for the temperature at level N
                 do Index = 1, gCurrentDims%ITOT
+                    gHorzArr%TH(Index, N) = tempScale * gHorzArr%TH(Index, N)
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
-            gHorzArr%PS = gScaleFactors%heights * gHorzArr%PS ! Convert to dimensional heights all at once
-            gHorzArr%SF = gScaleFactors%heights * gHorzArr%SF ! Convert to dimensional heights
+            gHorzArr%PS = gPlotScales(HEIGHT)  * gHorzArr%PS ! Convert to dimensional heights all at once
+            gHorzArr%FS = gPlotScales(TOT_HGT_TEND) * gHorzArr%FS 
+            gHorzArr%ADS = gPlotScales(ADV_BETA_HGT_TEND) * gHorzArr%ADS 
+            gHorzArr%SF = gPlotScales(HGT_FORCING) * gHorzArr%SF ! Convert to dimensional heights
 
             ! The height of a 'standard' pressure level PP(n) is given by z = (R*T/g)ln(PP(1)/PP(N))
             ! T is the virtual temperature of the column in K which is given by (THS(1) + THS(2))/2
@@ -1528,9 +1531,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine DimensionalizeHorizontalParams
 
         subroutine NonDimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use ModelParamsModule, only: gModIntParams, gScaleFactors
+            use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
 
             implicit none
@@ -1542,14 +1545,16 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             ! Do temperature variables first. There is one less interface than levels
             do N = 1, gModIntParams%NLEV - 1
-                tempScale = gVertArr%A(N) / gScaleFactors%temperatureScale ! The scaling factor for the temperature at level N
+                tempScale = gVertArr%A(N) / gPlotScales(TEMPERATURE) ! The scaling factor for the temperature at level N
                 do Index = 1, gCurrentDims%ITOT
+                    gHorzArr%TH(Index, N) = tempScale * gHorzArr%TH(Index, N)
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
                 end do
             end do
-            heightsScale = 1.0 / gScaleFactors%heights ! The scaling factor for the heights
-            gHorzArr%PS = heightsScale * gHorzArr%PS ! Convert to nondimensional 
-            gHorzArr%SF = heightsScale * gHorzArr%SF ! Convert to nondimensional 
+            gHorzArr%FS = gHorzArr%FS / gPlotScales(TOT_HGT_TEND)
+            gHorzArr%ADS = gHorzArr%ADS / gPlotScales(ADV_BETA_HGT_TEND)
+            gHorzArr%PS = gHorzArr%PS / gPlotScales(HEIGHT) ! Convert to nondimensional 
+            gHorzArr%SF = gHorzArr%SF / gPlotScales(HGT_FORCING)! Convert to nondimensional 
 
             if (gModIntParams%NLEV > 1) then
                 topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))

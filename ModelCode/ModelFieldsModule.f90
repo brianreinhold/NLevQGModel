@@ -137,9 +137,9 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: G3_pool(:)       !  G3(IXMAX*IYMAX) grid point arrays for transform routine
     REAL, ALLOCATABLE, TARGET :: G4_pool(:)       !  G4(IXMAX*IYMAX) grid point arrays for transform routine
     real, allocatable, target :: plot_pool(:)     !  plot(IXMAX*IYMAX) grid point array for plotting with fftw3
-    real, allocatable, target :: plotFull_pool(:) !  plotFull(KX*LY) grid point array for plotting to screen
+    real, allocatable, target :: plotFull_pool(:) !  plotFull(KX*LY, or KX*LVS, LY*LVS) grid point array for plotting to screen
     COMPLEX, ALLOCATABLE, TARGET :: GcZ_pool(:)   !  Gc(KX or LY) complex grid point array for the periodic transform routine
-    real, allocatable, target :: GZonal_pool(:)   !  GZonal(KX or LY) grid point array for zonal component of transform 
+    real, allocatable, target :: GZonal_pool(:)   !  GZonal(KX or LY or LVS) grid point array for zonal component of transform 
     real, allocatable, target :: G2Zonal_pool(:)  !  G2Zonal(KX or LY) grid point array for zonal component of transform 
 
     TYPE :: HorzArrays
@@ -374,8 +374,8 @@ MODULE ModelFieldsModule
                     G4_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
                     plot_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),            &
                     plotFull_pool(maxSize),                                    &
-                    GZonal_pool(max(gArrayDims%KX, gArrayDims%LY)),            &
-                    G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY)),           &
+                    GZonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),            &
+                    G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),           &
                     GcZ_pool(max(gArrayDims%KX, gArrayDims%LY)),               &
                     STAT = status)
 
