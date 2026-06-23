@@ -204,6 +204,9 @@ module PlotModule
     type(TimeSeriesBuffer) :: gApeTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gTotTimeSeriesBuffer
 
+    REAL, ALLOCATABLE :: gPressure(:) ! Array containing the pressure values interpolated from gVertArr%LVS to screen height
+                                     ! This array will be used only by the vertical cross sections and the vertical hovmollers
+
  
     type :: CartesianData           ! Used only locally 
         integer(4) :: x_origin
@@ -275,8 +278,8 @@ module PlotModule
     END INTERFACE
 
     INTERFACE
-        MODULE SUBROUTINE DrawGridLines(invalidate)
-            LOGICAL, intent(in) :: invalidate
+        MODULE SUBROUTINE DrawGridLines(isFullScreen, invalidate)
+            LOGICAL, intent(in) :: isFullScreen, invalidate
         END SUBROUTINE DrawGridLines
     END INTERFACE
     
@@ -312,8 +315,8 @@ module PlotModule
         ! during a model run. The user might be able to change some parameters while the model is
         ! running that could require that this routine be called again.
         subroutine initializePlot()
-            use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_AND_MAP, WEATHER_MAP, &
-                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG, VERT_HOV_AT_WEATHER_STN, &
+            use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PHASE_AND_MAP, WEATHER_MAP, &
+                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, VERT_HOV_AT_WEATHER_STN, &
                                        LATITUDE, LONGITUDE, LAT_LON, SQRT2, PLOTTING_OFF
             use ModelParamsModule, only: gModIntParams, gPlotScales, gIsTemperature
             IMPLICIT NONE
@@ -409,7 +412,7 @@ module PlotModule
                 endif
                 
 ! ------ VERTICAL CROSS SECTION AT LONGITUDE -----------------------------
-            else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG)  then
+            else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)  then
                 gLonVertCrossSec1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeVerticalCrossSectionType(gModIntParams%field1, gLonVertCrossSec1, .true., LONGITUDE)
@@ -420,7 +423,7 @@ module PlotModule
                 endif
 
 ! ------ HOVMOLLER LONGITUDE -----------------------------
-            else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+            else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 gLonHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field1, gLonHovmoller1, .true., LONGITUDE)
@@ -617,6 +620,19 @@ module PlotModule
                 end do
             endif
         end subroutine initializeTrigTablesType
+        
+        subroutine interpolateVerticalCoordinate()
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gVertArr
+            use NLevQGModelGlobals, only: gBitMapInfo
+            implicit none
+
+            if (ALLOCATED(gPressure)) deallocate(gPressure)
+            allocate(gPressure(gBitMapInfo%height))
+
+            call Interpolate1D(gVertArr%LVS, 1, gCurrentDims%LVS, 1, gBitMapInfo%height, .false., gPressure)
+
+        end subroutine interpolateVerticalCoordinate
 
         !! Initializes all the parameters for a weather map plot that do not depend upon the newly generated values
         !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
@@ -659,7 +675,9 @@ module PlotModule
             ! for every level if a temperature field. However, we need to keep the non temperature scale factor so we can 
             ! can generate thr correct temperature scale which is scale/gVertArr%A(level)
             vertHovmollerType%scale = gPlotScales(vertHovmollerType%field)
-            
+
+            call interpolateVerticalCoordinate()
+
             ! Create the temperature scale factors for the different levels if a temperature field
             ! The scaling factor gVertArr%A is a function of level.
             totalLevels = SIZE(gVertArr%LVS)
@@ -695,6 +713,8 @@ module PlotModule
 
             call initializeBaseMapType(field, vertCrossSecType, useSolidColor)
             call initializeTrigTablesType(latLon, vertCrossSecType, gModRealParams%hovLat, gModRealParams%hovLon)
+            
+            call interpolateVerticalCoordinate()
             
             ! Create the temperature scale factors for the different levels if a temperature field
             ! The scaling factor gVertArr%A is a function of level.
@@ -740,7 +760,7 @@ module PlotModule
 
         end function interpolateTemperatureScale
 
-        !! Initializes all the parameters for a hovmoller plot that do not depend upon the newly generated values
+        !! Initializes all the parameters for a horizontal hovmoller plot that do not depend upon the newly generated values
         !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
         !! Also good for the vertical cross sections because both have the same horizontal transforms
         !> @param field: This is the quantity being plotted, such as HEIGHT, TEMPERATURE, etc.
@@ -822,8 +842,8 @@ module PlotModule
         !> and gDataType%dataSource (where the data to be plotted is coming from the model, a file
         !> or a set of ensemble files
         subroutine outputPlot()
-            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
+            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LON, &
+                HOV_DIAG_AT_LON, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
@@ -876,7 +896,7 @@ module PlotModule
             endif
     
     ! HOVMOLLER LON ----------------------
-            if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+            if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller2, .TRUE.)
             endif
@@ -888,7 +908,7 @@ module PlotModule
             endif
 
     ! LON CROSS SECTION----------------------
-            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec2, .TRUE.)
             endif
@@ -1371,7 +1391,7 @@ module PlotModule
             endif
             gModIntParams%field1 = saveField
             call labelPlotsAndDisplayTime(.false.)
-            call DrawGridLines(.true.)
+            call DrawGridLines(.false., .true.)
             gModIntParams%field1 = DIAGNOSTIC
             call pauseRun()
             gModIntParams%field1 = saveField
@@ -1429,8 +1449,8 @@ module PlotModule
             USE USER32
             use IFWBASE ! Contains RGB macro
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LONG, &
-                HOV_DIAG_AT_LONG, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, PLOTTING_OFF, &
+            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LON, &
+                HOV_DIAG_AT_LON, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, PLOTTING_OFF, &
                 HEIGHT, TEMPERATURE, wp
             use ModelParamsModule, only: gModIntParams
             
@@ -1485,7 +1505,7 @@ module PlotModule
                 gLatHovmoller1%row = 0
                 gLatHovmoller2%row = 0
                 call DrawVerticalLines(.false.)
-            else if (gModIntParams%plotType == HOV_DIAG_AT_LONG) then
+            else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 gLonHovmoller1%row = 0
                 gLonHovmoller2%row = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
@@ -1493,9 +1513,9 @@ module PlotModule
                 gVertHovmoller1%column = 0
                 gVertHovmoller2%column = 0
             else if (gModIntParams%plotType == WEATHER_MAP) then
-                call DrawGridLines(.false.)
+                call DrawGridLines(.false., .false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
-                call DrawGridLines(.false.)
+                call DrawGridLines(.false., .false.)
                 call DrawCartesianAxes(.false.)
             endif
 
@@ -2339,8 +2359,8 @@ module PlotModule
                     end do
                 end do
             endif
-            call labelPlotsAndDisplayTime(invalidate)
-            !call DrawGridLines(invalidate)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawGridLines(.true., invalidate)
 
         end subroutine plotLatVertCrossSec
         
@@ -2514,7 +2534,7 @@ module PlotModule
 
             lonHovmoller%row = mod(lonHovmoller%row + 1, gBitMapInfo%width)
             call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
+            call DrawHorizontalLines(.true., .true., Z'00000000') ! True invalidates window and forces redraw #00646464
 
         end subroutine plotLonHovmoller
 
@@ -2739,7 +2759,8 @@ module PlotModule
                     end do
                 end do
             endif
-            call labelPlotsAndDisplayTime(invalidate)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawGridLines(.true., invalidate)
 
         end subroutine plotLonVertCrossSec
 
@@ -2859,8 +2880,8 @@ module PlotModule
             endif
 
             vertHovmollerType%column = mod(vertHovmollerType%column + 1, gBitMapInfo%width)
-            call labelPlotsAndDisplayTime(.true.)
-            !call DrawHorizontalLines(.true., .true., #00646464) ! True invalidates window and forces redraw
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
         end subroutine plotVertHovmoller
 
 ! PLOT WEATHER MAP -------------------------------------------
@@ -3024,7 +3045,7 @@ module PlotModule
                 end do
             endif
             call labelPlotsAndDisplayTime(.false.)
-            call DrawGridLines(invalidate)
+            call DrawGridLines(.false., invalidate)
             !call inverseTransform(gTransArr%G1plot, weatherMapType)
 
         end subroutine plotWeatherMap
@@ -3036,7 +3057,7 @@ module PlotModule
         ! This routine is called from the main window callback when the user presses F1 while the
         ! model is integrating. This array is populated only once for every pause.
         subroutine populateInterpolatedGrid(X, field)
-        use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LONG
+        use ConstantsModule, only: PLOTTING_OFF, DIAGNOSTIC, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
             use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr, gVertArr
@@ -3061,7 +3082,7 @@ module PlotModule
                     call loadLatValues(xSecType, N, xSecType%tempScales(N))
                     gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
                 end DO
-            elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+            elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) then
                 xSecType = getLonCrossSectionType(field)
                 gTransArr%plotFull = 0.0
                 do N = 1, gCurrentDims%LVS
@@ -3087,7 +3108,7 @@ module PlotModule
                 b%ju = gCurrentDims%LVS
                 b%LU = gBitMapInfo%height
             endif
-            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LONG) then
+            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) then
                 b%iu = gCurrentDims%IYMAX
                 b%ju =gCurrentDims%LVS
                 b%LU = gBitMapInfo%height

@@ -61,7 +61,8 @@ module InitVariablesDialogModule
             type(T_POINT) :: pt
             
             real, pointer :: pTempDriving(:)  ! Local 1D pointer
-            integer, save :: levelIndex = 1 ! Current levelIndex being edited in the list view. 
+            integer, save :: levelIndex = 1 ! Current levelIndex when the list view displays the components at a given level
+            integer, save :: componentIndex = 1 ! Current componentIndex when the list view displays levels for a given component
             
             ! For the list view report rows
             integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo
@@ -88,21 +89,12 @@ module InitVariablesDialogModule
                     call ZeroVariables()
                     RETURN
                 CASE (WM_APP + 302)
-                    gHorzArr%PS = 0.0
-                    gHorzArr%TH = 0.0
-                    call populateListControls(levelIndex)
                     RETURN
                 CASE (WM_APP + 303)
-                    gHorzArr%TF = 0.0
-                    call populateListControls(levelIndex)
                     RETURN
                 CASE (WM_APP + 304)
-                    gHorzArr%TOP = 0.0
-                    call populateListControls(levelIndex)
                     RETURN
                 CASE (WM_APP + 305)
-                    gHorzArr%SF = 0.0
-                    call populateListControls(levelIndex)
                     RETURN
                 CASE (WM_APP + 306)
                     RETURN
@@ -115,7 +107,7 @@ module InitVariablesDialogModule
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgInitVariablesProc), NULL, GetCurrentThreadId())
                     ghInitVariablesDlg = hDlg
-                    
+
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_LEVEL)
                     do i = 1, gModIntParams%NLEV
                         write(buffer, '(F6.1)') gVertArr%PV(i)

@@ -83,8 +83,8 @@ module ConstantsModule
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
     integer, parameter :: VERT_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
     integer, parameter :: HOV_DIAG_AT_LAT = 3       ! Hovmoller diagram at specified 'latitude' and level
-    integer, parameter :: VERT_CROSS_SEC_AT_LONG = 4   ! Longitude-pressure (meridional) cross section at a slected 'longitude'
-    integer, parameter :: HOV_DIAG_AT_LONG = 5      ! Hovmoller diagram at specified 'longitude' and level
+    integer, parameter :: VERT_CROSS_SEC_AT_LON = 4   ! Longitude-pressure (meridional) cross section at a slected 'longitude'
+    integer, parameter :: HOV_DIAG_AT_LON = 5      ! Hovmoller diagram at specified 'longitude' and level
     integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
     integer, parameter :: WEATHER_STN = 7           ! Time series of a field at a particular point (lat-lon)
     integer, parameter :: VERT_HOV_AT_WEATHER_STN = 8  ! Hovmoller vertical cross section at the point of the weather station

@@ -26,7 +26,7 @@ module ModelControlDialogModule
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use SetUpModule, only: CheckUserSettingsChanges, CheckModelControlChanges, SetModRealParamsDimensionalState, &
                                    ReadSaveFile, SaveModelState
-            use ConstantsModule, only: WEATHER_MAP, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LONG, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
+            use ConstantsModule, only: WEATHER_MAP, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PHASE_SPACE, NO_PLOT, TEMPERATURE, TOT_HGT_TEND_GRAF, &
                                        FIELD_START, FIELD_GRAPH_START, SECONDS_PER_DAY, CORIOLIS_INVERSE
             use KeyboardHooksModule, only: KeyboardForDlgModelControlProc, paramChange
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
@@ -546,7 +546,7 @@ module ModelControlDialogModule
                     bret = reloadComboBoxFields(hDlg, gModIntParams%plotType, IDC_COMBO_FIELD3)   ! Always load with map options
                     ! initialize FIELD1
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD1)
-                    !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LONG) then
+                    !if (gModIntParams%plotType .LE. HOV_DIAG_AT_LON) then
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_START, UINT_PTR), 0) ! Silly cast avoids warning.Still runs without it
                     !else
                     !    bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field1 - FIELD_GRAPH_START, UINT_PTR), 0)
@@ -560,7 +560,7 @@ module ModelControlDialogModule
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_FIELD3)
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%field3 - FIELD_START, UINT_PTR), 0)
                     ! Do not enable this option unless the type of plot is one of the maps (hovmoller or weather map)
-                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LONG)) ! No three fields in phase space
+                    bret = EnableWindow(hCombo, MERGE(1_BOOL, 0_BOOL, gModIntParams%plotType .LE. HOV_DIAG_AT_LON)) ! No three fields in phase space
                     
                     !! ============================ Levels
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_PLOT_LEVEL)
@@ -918,7 +918,7 @@ module ModelControlDialogModule
         function reloadComboBoxFields(hDlg, plotType, comboId) result(bret)
             use ifwinty
             use user32      ! For SendMessage
-            use ConstantsModule, only: HOV_DIAG_AT_LONG
+            use ConstantsModule, only: HOV_DIAG_AT_LON
 
             implicit none
 
@@ -933,7 +933,7 @@ module ModelControlDialogModule
             bret = SendDlgItemMessage(hDlg, comboId, CB_RESETCONTENT, 0, 0)
             ! Get handle to combo box
             hCombo = GetDlgItem(hDlg, comboID)
-            !if (plotType .LE. HOV_DIAG_AT_LONG) then
+            !if (plotType .LE. HOV_DIAG_AT_LON) then
                 ! Load with map options
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vorticity in 10**-5/s'//char(0)))
                 bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Height in meters'//char(0)))

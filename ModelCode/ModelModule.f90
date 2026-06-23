@@ -1162,7 +1162,7 @@ module ModelModule
                 ! Replace the do loop over ITOT
                 gHorzArr%T(1:ITOT, N) = gVertArr%H(N) * (gHorzArr%TF(1:ITOT, N) - gHorzArr%TH(1:ITOT, N))
                 if (N > 1) gHorzArr%T(1:ITOT, N) = gHorzArr%T(1:ITOT, N) &
-                    + R_Upper(N) * (gHorzArr%TH(1:ITOT, N + 1) * gVertArr%AU(N) - gHorzArr%TH(1:ITOT, N)) &
+                    + R_Upper(N) * (gHorzArr%TH(1:ITOT, N + 1) * gVertArr%AU(N) - gHorzArr%TH(1:ITOT, N)) & ! Cut the upper transfer in half
                     + R_Lower(N) * (gHorzArr%TH(1:ITOT, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(1:ITOT, N))
             END DO
         END subroutine TTERMS

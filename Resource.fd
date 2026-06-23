@@ -8,6 +8,7 @@
       integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
       integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
       integer, parameter :: IDC_CHECK_MODREAL_DIMENSIONALIZE = 1060
+      integer, parameter :: IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE = 1081
       integer, parameter :: IDC_COMBO_LEVEL = 1073
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
@@ -36,6 +37,7 @@
       integer, parameter :: IDD_INIT_VARIABLES = 110
       integer, parameter :: IDC_EDIT_HORZ = 1046
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
+      integer, parameter :: IDC_STATIC_COMBO_COMPONENT = 1089
       integer, parameter :: IDC_BUTTON_SET_SCALE_FACTORS = 1021
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY = 1069
       integer, parameter :: IDC_EDIT_CONTOURS = 1080
@@ -66,6 +68,7 @@
       integer, parameter :: IDC_COMBO_MAP_TYPE = 1029
       integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
       integer, parameter :: IDC_COMBO_PHASE_SPACE_Y = 1074
+      integer, parameter :: IDC_STATIC_INIT_SELECT_COMPONENT = 1089
       integer, parameter :: IDC_LIST_TURB_MIXING = 1051
       integer, parameter :: IDC_LIST_CONTOURS = 1075
       integer, parameter :: IDC_BUTTON_RUN_MODEL = 1046
@@ -106,6 +109,7 @@
       integer, parameter :: IDC_BUTTON_INIT_FLOW_VARIABLES = 1043
       integer, parameter :: IDC_CHECK1 = 1081
       integer, parameter :: IDC_COMBO1 = 1073
+      integer, parameter :: IDC_COMBO2 = 1088
       integer, parameter :: IDC_STATIC_TEMP_MIXING = 1056
       integer, parameter :: IDC_BUTTON_SETUP_BOMB = 1049
       integer, parameter :: IDC_STATIC_COMBO_SETTINGS1 = 1014

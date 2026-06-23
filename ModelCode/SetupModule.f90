@@ -377,7 +377,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gVertArr%allocated, &
                   gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
                   gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, &
-                  gVertArr%X, gVertArr%Y, gVertArr%PRF
+                  gVertArr%X, gVertArr%Y, gVertArr%PRF, gVertArr%LVS
 
             READ(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gHorzArr%allocated, &
@@ -425,7 +425,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gVertArr%allocated, &
                   gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
-                  gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, gVertArr%X, gVertArr%Y, gVertArr%PRF
+                  gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, gVertArr%X, gVertArr%Y, gVertArr%PRF, gVertArr%LVS
 
         end function WriteSensFileHeader
 
@@ -465,7 +465,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                   gVertArr%allocated, &
                   gVertArr%PP, gVertArr%PV, gVertArr%DP, gVertArr%DPI, gVertArr%THS, gVertArr%FK, gVertArr%FJ, &
                   gVertArr%AU, gVertArr%A, gVertArr%H, gVertArr%G, gVertArr%SIG, &
-                  gVertArr%X, gVertArr%Y, gVertArr%PRF
+                  gVertArr%X, gVertArr%Y, gVertArr%PRF, gVertArr%LVS
 
             WRITE(fileHandle, IOSTAT = errorCode, IOMSG = errorMsg) &
                   gHorzArr%allocated, &
@@ -1120,12 +1120,14 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             DO N = 1, gModIntParams%NLEV
                 IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
                     gVertArr%THS(N) = gVertArr%THS(1) + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
+                    gVertArr%FK(1 : gModIntParams%NLEV) = 0.  ! Set Ekman friction to 0
                 ELSE
         !-----------------------------------Stratospheric isothermal profile in Temp.
                     gVertArr%THS(N) = EX * (gVertArr%tropopauseLevel / gVertArr%PV(N))**KAPPA
+                    gVertArr%FK(1 : gModIntParams%NLEV) = 50.     ! Set ekman friction to 50 days for stratosphere
                 ENDIF
             END DO
-            gVertArr%FK(1 : gModIntParams%NLEV) = 0.     ! Zero ekman friction for every level
+            !gVertArr%FK(1 : gModIntParams%NLEV) = 20.     ! Set ekman friction to 20 days for every level
         !========================Thermal mixing exp decay (Convective mixing of temperature):
             EX = 6.
             DO N = 1, gModIntParams%NLEV - 1
@@ -1138,7 +1140,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ENDIF
             END DO
             !  Vort mix=Constant=20 days:
-            gVertArr%FJ(1:gModIntParams%NLEV) = gScaleFactors%dissipation / 11.0  ! This gives the same value for all N of 11 days
+            gVertArr%FJ(1:gModIntParams%NLEV) = gScaleFactors%dissipation / 20.0  ! This gives the same value for all N of 20 days
 
         !====================================================Compute PP,DPI,A,AU,SIG
             CALL ComputeVerticalProfiles()
@@ -1181,7 +1183,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: STATS_OPT_NONE, PI, VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, &
                 OROG_HGT_TEND, HGT_FORCING, PLOTTING_OFF, TOT_HGT_TEND_GRAF, TOT_TEMP_TEND_GRAF, MEAN_HGT_TEND_GRAF, MEAN_TEMP_TEND_GRAF, &
                 HGT_WAVE_SPEED_GRAF, WEATHER_MAP, STANDARD_NLEVEL, OROGRAPHY, HGT_TEMP_PHASE_DIFF, GROWTH_RATE_GRAF, &
-                AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3, USE_INTERACTION_COEFFICIENTS
+                AMPLITUDE_RATIO_GRAF, ZLEVEL_1, ZLEVEL_2, ZLEVEL_3, USE_TRANSFORM
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gUserSettingsPrev, gScaleFactors, &
                 gContourIntervals, gModSensParams, gPlotScales
             use NLevQGModelGlobals, only: LogMessage
@@ -1193,9 +1195,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             INTEGER I, I1, J, J1
             
             gUserSettings%maxZonalWaves = 10
-            gUserSettings%maxMeridWaves = 5
-            gUserSettings%maxLevels = 10
-            gUserSettings%integrationMethod = USE_INTERACTION_COEFFICIENTS
+            gUserSettings%maxMeridWaves = 10
+            gUserSettings%maxLevels = 32
+            gUserSettings%integrationMethod = USE_TRANSFORM
             gUserSettings%statsOption = STATS_OPT_NONE
 
             gUserSettingsPrev = gUserSettings
@@ -1231,7 +1233,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! latPoint=latPoint/RAD_TO_DEGREES
         !-------------------------------------------------Set user default parameters:
             gModRealParams%isDimensionalized = .FALSE.
-            gModRealParams%RN = gScaleFactors%longestWave/28000.
+            gModRealParams%RN = gScaleFactors%longestWave/24000.
             gModRealParams%BETA = .25
             gModRealParams%DELT = 60./gScaleFactors%timeScale
             gModRealParams%field1Level = 900.
@@ -1347,7 +1349,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%LMAX2 = gUserSettings%maxMeridWaves
             gModIntParams%NLEV = gUserSettings%maxLevels
             gModIntParams%ICYC = 1
-            gModIntParams%ISTEP = 10000
+            gModIntParams%ISTEP = 100000
             gModIntParams%outputInterval = 1
             gModIntParams%plotType = WEATHER_MAP
             gModIntParams%field1 = TEMPERATURE

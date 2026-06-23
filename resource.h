@@ -104,12 +104,16 @@
 #define IDC_CHECK1                      1081
 #define IDC_CHECK_RUN_INVISCID          1081
 #define IDC_CHECK_VIEW_DIMENSIONAL      1081
+#define IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE 1081
 #define IDC_STATIC_PHASE_SPACE          1082
 #define IDC_LIST_VIEW_VARIABLES         1083
 #define IDC_BUTTON_EXIT_VIEW_VARIABLES  1085
 #define IDC_STATIC_VIEW_LEVELS          1086
 #define IDC_BUTTON1                     1087
 #define IDC_BUTTON_VIEW_VARIABLES       1087
+#define IDC_COMBO2                      1088
+#define IDC_STATIC_INIT_SELECT_COMPONENT 1089
+#define IDC_STATIC_COMBO_COMPONENT      1089
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -119,7 +123,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        116
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1088
+#define _APS_NEXT_CONTROL_VALUE         1090
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
