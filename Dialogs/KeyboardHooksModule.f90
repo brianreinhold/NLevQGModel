@@ -168,13 +168,14 @@ module KeyboardHooksModule
         !DEC$ ENDIF
             USE IFWIN
             use user32
-            use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghVerticalParamsDlg, ghInitVariablesDlg, ghContoursAndRangesDlg, LogMessage
+            use NLevQGModelGlobals, only: ghInstance, ghModelControlDlg, ghVerticalParamsDlg, ghInitVariablesDlg, ghContoursAndRangesDlg, &
+                                          ghBombDlg, LogMessage
             use SetUpModule, only: CheckModelControlChanges, SaveModelState, ReadSaveFile, SetModRealParamsDimensionalState
             use ModelModule, only: InitModelWithModelControlVals, StartTimeLoop
             use ModelParamsModule, only: gModIntParams, gModRealParams, gNLevFile
             use DialogHelpersModule, only: HideMyEdit, GetNameOfUserSelectedFile, GetUserSelectedSaveName
             use PlotModule, only: ClearScreen
-            use DlgProcInterfacesModule, only: VerticalParamsDlgProc, InitVariablesDlgProc, ContoursAndRangesDlgProc
+            use DlgProcInterfacesModule, only: VerticalParamsDlgProc, InitVariablesDlgProc, ContoursAndRangesDlgProc, BombDlgProc
             use UtilitiesModule, only: openModelFile
 
             implicit none
@@ -271,6 +272,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F9 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F9: Set up 'bomb' disturbance
                         call LogMessage('User pressed F9 key in Model Control Dialog')
+                        bret = DialogBoxParam(ghInstance, INT(IDD_BOMB, LONG_PTR), ghBombDlg, LOC(BombDlgProc), 0_LONG_PTR)
                         KeyboardForDlgModelControlProc = 1  ! Swallow the key
                         RETURN
                     END IF
@@ -680,5 +682,100 @@ module KeyboardHooksModule
             ! Pass to next hook in chain
             KeyboardForDlgContoursAndRangesProc = CallNextHookEx(0, nCode, wParam, lParam)
         END FUNCTION KeyboardForDlgContoursAndRangesProc
+        
+        function KeyboardForDlgBombProc(nCode, wParam, lParam)
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_KeyboardForDlgBombProc@16' :: KeyboardForDlgBombProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'KeyboardForDlgBombProc' :: KeyboardForDlgBombProc
+            !DEC$ ENDIF
+            USE IFWIN
+            use user32
+            use NLevQGModelGlobals, only: ghBombDlg, LogMessage
+
+            implicit none
+
+            include '../resource.fd'
+
+            INTEGER(kind=4), INTENT(IN) :: nCode
+            integer(UINT_PTR), intent(in) :: wParam
+            integer(LONG_PTR), intent(in) :: lParam
+
+            integer(LRESULT) ::  KeyboardForDlgBombProc ! LRESULT
+            integer(kind=4) :: iret
+            integer(BOOL) ::   bret
+            integer(HANDLE) :: hFocus, hLB_User
+
+            IF (GetForegroundWindow() .EQ. ghBombDlg) then
+
+                IF (nCode >= 0) THEN
+                    IF (wParam == VK_F1 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only F1 key up; lParam bit 31 set
+                        ! F1: Zero variables
+                        call LogMessage('User pressed F1 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F2 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F2: Load data from a saved file
+                        call LogMessage('User pressed F2 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F3 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F3: Save data to a file
+                        call LogMessage('User pressed F3 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        call LogMessage('User pressed F4 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F5 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F5: Go to Sensitivity file menu
+                        call LogMessage('User pressed F5 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F6: Generic help
+                        call LogMessage('User pressed F6 key in Bomb Dialog')
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_F10 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
+                        ! F10: Return to main menu
+                        call LogMessage('User pressed F10 key in Bomb Dialog')
+                        bret = PostMessage(ghBombDlg, WM_CLOSE, 0, 0)
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+
+                    IF (wParam == VK_RETURN) THEN
+                        ! Trap the Enter key: return non-zero to prevent default processing
+                        call LogMessage('User pressed Enter key, trapped by hook')
+                        ! Get the handle of the window that currently has focus
+                        ! If it is one of the list boxes, we are going to programmatically
+                        ! click on the top row.
+                        hFocus = GetFocus() ! currently focused control
+                        hLB_User = GetDlgItem(ghBombDlg, IDC_EDIT_VERTICAL)    ! Vertical levels EDIT box handle
+                        IF (hFocus == hLB_User) THEN
+                            bret = PostMessage(ghBombDlg, WM_APP + 300, 0, 0) ! Hides edit box if it is in focus
+                        END IF
+                        KeyboardForDlgBombProc = 1  ! Swallow the key
+                        RETURN
+                    END IF
+                END IF
+            END IF
+            ! Pass to next hook in chain
+            KeyboardForDlgBombProc = CallNextHookEx(0, nCode, wParam, lParam)
+        END FUNCTION KeyboardForDlgBombProc
 
 end module KeyboardHooksModule

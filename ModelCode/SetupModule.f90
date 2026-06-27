@@ -690,9 +690,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = IOR(errorCode, LEVELS_CHANGED)
             end if
 
-            !----------------------------------Checking lower bounds on JX0,JY0:
-            IF(gModIntParams%JX0 .LT. 0) gModIntParams%JX0 = 0
-            IF(gModIntParams%JY0 .LT. 1) gModIntParams%JY0 = 1
+            !----------------------------------Checking lower bounds on lowerZonalWave,upperZonalWave:
+            IF(gModIntParams%lowerZonalWave .LT. 0) gModIntParams%lowerZonalWave = 0
+            IF(gModIntParams%upperZonalWave .LT. 1) gModIntParams%upperZonalWave = 1
 
 
             !-------------------------------------------Field or variable type ranges
@@ -709,13 +709,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = PLOTTING_OFF
             IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = PLOTTING_OFF
 
-            !---------------------------------------------JX0,JX1:
-            IF(gModIntParams%JX0 .GT. gModIntParams%KMAX2) gModIntParams%JX0 = gModIntParams%KMAX2
-            IF(gModIntParams%JY0 .GT. gModIntParams%LMAX2) gModIntParams%JY0 = gModIntParams%LMAX2
-            IF(gModIntParams%JX1 .GT. gModIntParams%KMAX2) gModIntParams%JX1 = gModIntParams%KMAX2
-            IF(gModIntParams%JY1 .GT. gModIntParams%LMAX2) gModIntParams%JY1 = gModIntParams%LMAX2
-            IF(gModIntParams%JX1 .LT. gModIntParams%JX0) gModIntParams%JX1 = gModIntParams%JX0
-            IF(gModIntParams%JY1 .LT. gModIntParams%JY0) gModIntParams%JY1 = gModIntParams%JY0
+            !---------------------------------------------lowerZonalWave,lowerMeridWave:
+            IF(gModIntParams%lowerZonalWave .GT. gModIntParams%KMAX2) gModIntParams%lowerZonalWave = gModIntParams%KMAX2
+            IF(gModIntParams%upperZonalWave .GT. gModIntParams%LMAX2) gModIntParams%upperZonalWave = gModIntParams%LMAX2
+            IF(gModIntParams%lowerMeridWave .GT. gModIntParams%KMAX2) gModIntParams%lowerMeridWave = gModIntParams%KMAX2
+            IF(gModIntParams%upperMeridWave .GT. gModIntParams%LMAX2) gModIntParams%upperMeridWave = gModIntParams%LMAX2
+            IF(gModIntParams%lowerMeridWave .LT. gModIntParams%lowerZonalWave) gModIntParams%lowerMeridWave = gModIntParams%lowerZonalWave
+            IF(gModIntParams%upperMeridWave .LT. gModIntParams%upperZonalWave) gModIntParams%upperMeridWave = gModIntParams%upperZonalWave
 
             !---------------------------------------------IV1, IV2:
             IF(gModIntParams%IV1 .GT. OROGRAPHY) gModIntParams%IV1 = OROGRAPHY
@@ -736,17 +736,17 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%ITER1 .LT. 1) gModIntParams%ITER1 = 1
             IF(gModIntParams%ITER2 .LT. 1) gModIntParams%ITER2 = 1
 
-            !---------------------------------------------KMODE,LMODE:
-            IF(gModIntParams%KMODE .GT.gModIntParams%KMAX2) gModIntParams%KMODE = gModIntParams%KMAX2
-            IF(gModIntParams%LMODE .GT.gModIntParams%LMAX2) gModIntParams%LMODE = gModIntParams%LMAX2
+            !---------------------------------------------bombZonalWave,bombMeridWave:
+            IF(gModIntParams%bombZonalWave .GT.gModIntParams%KMAX2) gModIntParams%bombZonalWave = gModIntParams%KMAX2
+            IF(gModIntParams%bombMeridWave .GT.gModIntParams%LMAX2) gModIntParams%bombMeridWave = gModIntParams%LMAX2
 
-            !------------------------------------Turn off IPRM2 for KMODE>0, IPRM1>7:
-            IF(gModIntParams%KMODE .GE. 1) THEN
+            !------------------------------------Turn off IPRM2 for bombZonalWave>0, IPRM1>7:
+            IF(gModIntParams%bombZonalWave .GE. 1) THEN
                 IF(gModIntParams%IPRM1 .GE. 8) gModIntParams%ITER2 = 1 !?
                 IF(gModIntParams%IPRM2 .GE. 8) gModIntParams%IPRM2 = 1 !?
             ENDIF
-            IF(gModIntParams%KMODE .LT. 0) gModIntParams%KMODE = 0
-            IF(gModIntParams%LMODE .LT. 1) gModIntParams%LMODE = 1
+            IF(gModIntParams%bombZonalWave .LT. 0) gModIntParams%bombZonalWave = 0
+            IF(gModIntParams%bombMeridWave .LT. 1) gModIntParams%bombMeridWave = 1
         
             !---------------------------------------------Some idiot tests:
             IF(gModRealParams%RN .LE. 0. .OR. gModRealParams%DELT .LT. 0.) errorCode = IOR(errorCode, RN_BAD)
@@ -1124,7 +1124,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 ELSE
         !-----------------------------------Stratospheric isothermal profile in Temp.
                     gVertArr%THS(N) = EX * (gVertArr%tropopauseLevel / gVertArr%PV(N))**KAPPA
-                    gVertArr%FK(1 : gModIntParams%NLEV) = 50.     ! Set ekman friction to 50 days for stratosphere
+                    gVertArr%FK(1 : gModIntParams%NLEV) = gScaleFactors%dissipation / 50.     ! Set ekman friction to 50 days for stratosphere
                 ENDIF
             END DO
             !gVertArr%FK(1 : gModIntParams%NLEV) = 20.     ! Set ekman friction to 20 days for every level
@@ -1247,8 +1247,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModRealParams%TPP = 0.
             gModRealParams%CONV = 0.
             gModRealParams%SPINUP = 160.
-            gModRealParams%AMPT = 500.
-            gModRealParams%AMPS = 50.
+            gModRealParams%AMPT = 50.
+            gModRealParams%AMPS = 500.
             gModRealParams%ANGS = 60.
             gModRealParams%EFOLD = 3.
         !----------------------------------------------VR variables
@@ -1288,7 +1288,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gContourIntervals%Contours(VORTICITY) = 1.0
             gContourIntervals%Contours(HEIGHT) = 60.0         ! Gives 60m contours for L=5000km/PI
             gContourIntervals%Contours(TEMPERATURE) = 5.0
-            gContourIntervals%Contours(VERTICAL_WIND) = 5.0
+            gContourIntervals%Contours(VERTICAL_WIND) = 2.0
             gContourIntervals%Contours(TEMP_FORCING) = 5.0
             DO I = 1, 4
                gContourIntervals%Contours(I + 5) = 60.0
@@ -1326,7 +1326,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !  zonalWavenumber and meridWavenumber are the wave#s of quant to plot to phase space/time series diagram
         !  sinZonal,sinMerid are the number of maps in the x, y directions
         !  modelType: tells what type of model to be run. One of STANDARD_NLEVEL, BAROCLINIC_STRUCTS, ZONAL_MEAN_FLOWS
-        !  JX1,JY1 are the number of waves to retain in the 'at a point' plots
+        !  lowerMeridWave,upperMeridWave are the number of waves to retain in the 'at a point' plots
         !-------------------------------------------------------------ICN(31) values:
         !  maxZonalWaves,maxMeridWaves: are the 'frame' maximum horizontal resolutions
         !  maxLevels: is the maximum vertical resolution
@@ -1359,10 +1359,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%phaseSpaceY = gModIntParams%LMAX2 + 2
             gModIntParams%LEVP = 2      ! Lowest streamfunction layer.
             gModIntParams%modelType = STANDARD_NLEVEL
-            gModIntParams%JX0 = 0
-            gModIntParams%JY0 = 1
-            gModIntParams%JX1 = gModIntParams%KMAX2
-            gModIntParams%JY1 = gModIntParams%LMAX2
+            gModIntParams%lowerZonalWave = 0
+            gModIntParams%upperZonalWave = 1
+            gModIntParams%lowerMeridWave = gModIntParams%KMAX2
+            gModIntParams%upperMeridWave = gModIntParams%LMAX2
         !----------------------------------------------Stats variables:
             gModIntParams%IV1 = gModIntParams%field1
             gModIntParams%IV2 = gModIntParams%field2
@@ -1370,9 +1370,11 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%IPRM2 = 8
             gModIntParams%ITER1 = 1
             gModIntParams%ITER2 = 1
-            gModIntParams%KMODE = 0
-            gModIntParams%LMODE = 1
-            gModIntParams%IADD = 0
+            ! Bomb creation 
+            gModIntParams%bombZonalWave = 1
+            gModIntParams%bombMeridWave = 1
+            gModIntParams%addToCurrent = .FALSE.
+            gModIntParams%timeStepsToDelay = 0
 
         !-------------------------------Defaults for SENSIV routine:
         !  MSEN(1-3)=Fields 1-3; PS,th,ww
@@ -1775,5 +1777,53 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             END DO
 
         END subroutine RaisanenRadiationProfile
+        
+        subroutine CreateBomb()
+            use ConstantsModule, only: PI, DEGREES_TO_RAD, HEIGHT
+            use ModelParamsModule, only: gModRealParams, gModIntParams, gPlotScales
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            implicit none
+
+            REAL :: ANG, AMP, P0, RC, RS, Y
+            INTEGER :: N, J
+!----------------------------------------Start:
+            P0 = gVertArr%PP(1)
+            Y = PI - ASIN(gModRealParams%AMPT / gModRealParams%AMPS)
+            Y = ALOG(2.0 * Y / PI) / ALOG(P0 / gVertArr%tropopauseLevel)
+            J = gModIntParams%LMAX2 + 2 * (gModIntParams%bombZonalWave - 1) * gModIntParams%LMAX2 + gModIntParams%bombMeridWave
+            IF (gModIntParams%bombZonalWave .EQ. 0) J = gModIntParams%bombMeridWave
+            DO N = 1, gModIntParams%NLEV
+!---------------------------------------------------Compute phase tilt:
+                ANG = gModRealParams%ANGS * EXP(-gModRealParams%EFOLD * (P0 - gVertArr%PP(N)) / (P0 - gVertArr%tropopauseLevel))
+!---------------------------------------Compute amplitude below TROPOPAUSE:
+                IF (gVertArr%PP(N) .GT. gVertArr%tropopauseLevel) THEN
+                    AMP = (PI / 2.) * (gVertArr%PP(N) / gVertArr%tropopauseLevel)**Y
+                    AMP = gModRealParams%AMPS * SIN(AMP)
+!---------------------------------------Amplitude above tropopause:
+                ELSE
+                    AMP = PI * (gVertArr%tropopauseLevel - gVertArr%PP(N)) / gVertArr%tropopauseLevel
+                    AMP = gModRealParams%AMPS * (1. + COS(AMP)) / 2.
+                ENDIF
+!---------------------------------------Zonal perturbation:
+                IF(gModIntParams%bombZonalWave .EQ. 0)THEN
+                    RC = AMP
+                    RS = 0.
+!---------------------------------------Wave perturbation:
+                ELSE
+                    RC = .5 * AMP * COS(ANG * DEGREES_TO_RAD) / gPlotScales(HEIGHT) ! Make non dimensional
+                    RS = .5 * AMP * SIN(ANG * DEGREES_TO_RAD) / gPlotScales(HEIGHT)
+                ENDIF
+!---------------------------------------Combine with current:
+                IF (gModIntParams%addToCurrent) THEN
+                    gHorzArr%PS(J, N) = gHorzArr%PS(J, N) + RC
+                    gHorzArr%PS(J + 1, N) = gHorzArr%PS(J + 1, N) + RS
+!---------------------------------------Replace current:
+                ELSE
+                    gHorzArr%PS(J, N) = RC
+                    gHorzArr%PS(J + 1, N) = RS
+                ENDIF
+            END DO
+        END subroutine CreateBomb
+
 
 end module SetUpModule

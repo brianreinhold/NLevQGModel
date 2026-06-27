@@ -61,17 +61,17 @@
 		</Filter>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 			<Filter Name="Dialogs">
+				<File RelativePath=".\Dialogs\BombDialogModule.f90">
+				</File>
 				<File RelativePath=".\Dialogs\ContoursAndRangesDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\DialogHelpersModule.f90"/>
 				<File RelativePath=".\Dialogs\DlgProcInterfacesModule.f90"/>
-				<File RelativePath=".\Dialogs\InitVariablesDialogModule.f90">
-				</File>
+				<File RelativePath=".\Dialogs\InitVariablesDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\KeyboardHooksModule.f90"/>
 				<File RelativePath=".\Dialogs\ModelControlDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\SettingsDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\VerticalParamsDialogModule.f90"/>
-				<File RelativePath=".\Dialogs\ViewVariablesDialogModule.f90">
-				</File>
+				<File RelativePath=".\Dialogs\ViewVariablesDialogModule.f90"/>
 			</Filter>
 			<Filter Name="Libraries">
 				<File RelativePath=".\Libraries\fftw3.f03"/>
@@ -94,7 +94,8 @@
 				<File RelativePath=".\PlotCode\InterpolateSubModule.f90"/>
 				<File RelativePath=".\PlotCode\PlotModule.f90"/>
 			</Filter>
-			<File RelativePath=".\NLevQGModel.f90"/>
+			<File RelativePath=".\NLevQGModel.f90">
+			</File>
 			<File RelativePath=".\NLevQGModelglobals.f90">
 			</File>
 			<File RelativePath=".\WndProcInterfacesModule.f90"/>

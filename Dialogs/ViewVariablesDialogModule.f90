@@ -199,7 +199,7 @@ module ViewVariablesDialogModule
                               "Component         ", &
                               "Heights meters    ", &
                               "Temperature "//ACHAR(176)//"C    ", &
-                              "Omega mb/day      ", &
+                              "Omega mb/hr      ", &
                               "Temp Driving      ", &
                               "Total Hght tend   ", &
                               "Adv-beta hght tend", &

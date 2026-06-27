@@ -481,6 +481,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         
         case (WM_DESTROY)
             ret = 0
+            if (gNLevFile%fileHandle /= -1) close(gNLevFile%fileHandle)
+            gNLevFile%fileName = 'NLEVQG.SAV'
             if (openModelFile(gNLevFile, .false., ghwndMain) == 0) ret = SaveModelState(gNLevFile, .true.)     ! Saves current model state to file and deallocates arrays
             if (ret .NE. 0) ret = WriteMessageBox(ghwndMain, ret, 'Unable to save model state', 'File IO error')
             call PostQuitMessage( 0 )
@@ -703,15 +705,16 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ret = EnableWindow(ghCurrentDlg, .TRUE.)
                     ret = SetFocus(ghCurrentDlg)
                     ret = SetActiveWindow(ghCurrentDlg)
-                endif
-                gElapsedTime%timeSteps = 0 ! Reset the elapsed time displayed in plots
-                if(ALLOCATED(X)) then
-                    call LogMessage("DeAllocated interpolated grid X on F10")
-                    deallocate(X)
-                endif
-                if(ALLOCATED(X_Overlay)) then
-                    call LogMessage("DeAllocated interpolated grid X_overlay on F10")
-                    deallocate(X_Overlay)
+
+                    gElapsedTime%timeSteps = 0 ! Reset the elapsed time displayed in plots
+                    if(ALLOCATED(X)) then
+                        call LogMessage("DeAllocated interpolated grid X on F10")
+                        deallocate(X)
+                    endif
+                    if(ALLOCATED(X_Overlay)) then
+                        call LogMessage("DeAllocated interpolated grid X_overlay on F10")
+                        deallocate(X_Overlay)
+                    endif
                 endif
             endif
             MainWndProc = 0
@@ -938,7 +941,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             select case (field)     ! semi colon allows more than one line of code on a single line like in C
                 case (HEIGHT);      write(buf, '("Heights ", F10.2, " m")') val
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
-                case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/day")') val
+                case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/hr")') val
                 case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
                 case (ADV_BETA_HGT_TEND); write(buf, '("Adv height ", F10.2, " m/day")') val
                 case default;       buf = ""

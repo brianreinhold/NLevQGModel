@@ -17,7 +17,7 @@ module ConstantsModule
     real, parameter :: SQRT2 = SQRT(2.)
     real, parameter :: SQRT22 = SQRT2/2.
    !--------------------------------Set scale factors:
-    real, parameter :: CHANNEL_WIDTH = 5000000.*PI_INVERSE  ! 1591549.
+    real, parameter :: CHANNEL_WIDTH = 5000000.*PI_INVERSE  ! 1591549 so L = 1591.549 km
     real, parameter :: CORIOLIS = 7.292 * SQRT2 / 100000   ! Omega is the Earth's angular velocity (= 7.292×10-5 radians per second)      
                                                 ! f = 2*Omega*sin(45) = 1.03*10-4 rad/sec (note: 2 * SQRT22 = SQRT2) = .00010312445
     real, parameter :: CORIOLIS_INVERSE = 1./CORIOLIS       ! 9697.021
@@ -45,10 +45,14 @@ module ConstantsModule
     integer, parameter :: STATS_OPT_MEAN = 1        ! Compute averages and Lorenz energy cycle
     integer, parameter :: STATS_OPT_VAR = 2         ! Compute variances in addition to STATS_OPT_MEAN
     
-    integer, parameter :: VERT_ARRAYS = 1           ! Vertical arrays allocated when isAlloced(VERT_ARRAYS]) is true
-    integer, parameter :: HORZ_ARRAYS = 2           ! Horizontal arrays allocated when isAlloced(HORZ_ARRAYS] is true
-    integer, parameter :: INTERACT_COEF_ARRAYS = 3  ! Interaction coefficient arrays allocated when isAlloced(INTERACT_COEF_ARRAYS] is true
-    integer, parameter :: STATS_ARRAYS = 4          ! Statistics arrays allocated when isAlloced(STATS_ARRAYS] is true
+    integer, parameter :: ONE = 1                   ! Flag indicating Pre-configuration type for plotting is the first one, such as gPhaseSpace1
+    integer, parameter :: TWO = 2                   ! Flag indicating Pre-configuration type for plotting is the second one, such as gPhaseSpace2
+                                                    ! We need this to point the value to the correct array when interpolated. The problem without
+                                                    ! this addition is that if both cases where height-related fields, the gHorzArr%Interp_one
+                                                    ! would be used for both fields. Fine for running the plots live but when paused an mousing
+                                                    ! over we need both at the same time. So if plotting omega and heights, the omega field displayed
+                                                    ! in the mouse over would be the heights (scaled by omega scaling) and not omega. Arrg!
+
 
                                                     ! Options for 'modelType'
     integer, parameter :: STANDARD_NLEVEL = 0       ! Equations are integrated as as a fully nonlinear Quasi-geostrophic standard N-Level model
@@ -166,6 +170,7 @@ module ConstantsModule
     
     !============================= ERROR CODES
     integer, parameter :: ERR_SCALING_PARAMETER_ZERO = -24  ! One of the model scaling parameters is zero. Can lead to divide by zero.
+    integer, parameter :: ERR_NUMERIC_INSTABILITY = 100     ! Numeric instability.
       
 
 end module ConstantsModule

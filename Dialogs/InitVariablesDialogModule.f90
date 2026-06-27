@@ -355,14 +355,10 @@ module InitVariablesDialogModule
         contains
                 subroutine ZeroVariables()
                     implicit none
-                    gHorzArr%PS = 0.0
-                    gHorzArr%TF = 0.0
-                    gHorzArr%TH = 0.0
-                    gHorzArr%TOP = 0.0
-                    gHorzArr%SF = 0.0
                     call CreateEquivBarotropic()
                     call populateListControls(levelIndex)
                 end subroutine ZeroVariables
+                
 
                 subroutine CreateEquivBarotropic()
                     use ConstantsModule, only: HEIGHT

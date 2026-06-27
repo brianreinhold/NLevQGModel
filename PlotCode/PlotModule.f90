@@ -11,7 +11,8 @@ module PlotModule
     integer, parameter :: RGB32 = c_int32_t
 
     ! Base colors for the contours (little endian)
-    integer(RGB32), parameter :: RAM_COLORS(18) = [ &
+    integer(RGB32), parameter :: RAM_COLORS(20) = [ &
+        INT(z'000000AA'), & ! 0: Dark Blue
         INT(z'000000FF'), & ! 1: Deep Blue (Was z'00FF0000')
         INT(z'000066FF'), & ! 2: Blue
         INT(z'00008DFF'), & ! 3: Medium Blue
@@ -32,7 +33,8 @@ module PlotModule
         INT(z'00FF0000'), & ! 15: Red
         INT(z'00FF0077'), & ! 16: Magenta
         INT(z'00FF00AA'), & ! 17: Lite Magenta
-        INT(z'00FF77AA')  & ! 18: Pink Magenta
+        INT(z'00FF77AA'), & ! 18: Pink Magenta
+        INT(z'00FF77FF')  & ! 19: Pink Lilac
     ]
     integer, parameter :: NUM_RAM_COLORS = size(RAM_COLORS)
     
@@ -116,6 +118,7 @@ module PlotModule
         ! with color 'color'. Then it will be set to x_pix, y_pix. 
         integer :: prev_x = 0
         integer :: prev_y = 0 
+        integer :: interpArrSelection
     end type PhaseSpace
     
     type :: TrigTable
@@ -132,6 +135,10 @@ module PlotModule
         real :: contourIntervalInv  ! The contour interval for the map. Since the field has to be divided by the contour interval specified
         real :: scale               ! The scaling factor needed to make the quantity dimensional and contoured.
         integer :: field = PLOTTING_OFF  ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
+        integer :: interpArrSelection   ! Makes sure the global instances of this type use a different interpolated array. For example,
+                                        ! gPhaseSpace1%interpArrSelection = ONE and gPhaseSpace2%interpArrSelection = TWO so the correct
+                                        ! value is set when doing the mouse-over. This is a weird situation and arises because we are
+                                        ! displaying the values in between layers or in between interfaces.
     end type BaseMap
 
     type, extends(BaseMap) :: WeatherMap    ! Contains all the data not dependent upon input for creating 2d weather maps.
@@ -152,6 +159,7 @@ module PlotModule
 
     type, extends(TrigTable) :: WeatherStation
         LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
+        integer :: interpArrSelection
         integer(4) :: color         ! Color to use in GDC calls. This is the RGB color passed by the caller.
         integer(4) :: gDCcolor      ! Internal reversed byte color for DIB section plotting of points.
         integer :: yCenter          ! Location of the origin in the y-axis. The x-axis will be time in this plot.
@@ -257,8 +265,9 @@ module PlotModule
 
 ! ----------------------- Axes submodule interfaces
     INTERFACE
-        MODULE SUBROUTINE DrawCartesianAxes(invalidate)
+        MODULE SUBROUTINE DrawCartesianAxes(invalidate, phaseSpace1, phaseSpace2)
             LOGICAL, INTENT(IN)  :: invalidate
+            TYPE(PhaseSpace), intent(in) :: phaseSpace1, phaseSpace2
         END SUBROUTINE DrawCartesianAxes
     END INTERFACE
 
@@ -317,7 +326,7 @@ module PlotModule
         subroutine initializePlot()
             use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PHASE_AND_MAP, WEATHER_MAP, &
                                        VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, VERT_HOV_AT_WEATHER_STN, &
-                                       LATITUDE, LONGITUDE, LAT_LON, SQRT2, PLOTTING_OFF
+                                       LATITUDE, LONGITUDE, LAT_LON, SQRT2, PLOTTING_OFF, ONE, TWO
             use ModelParamsModule, only: gModIntParams, gPlotScales, gIsTemperature
             IMPLICIT NONE
             
@@ -334,6 +343,7 @@ module PlotModule
                         leadColor = PHASE_SPACE_HEIGHT_LEAD_COLOR
                         color = PHASE_SPACE_HEIGHT_COLOR
                     endif
+                    gPhaseSpace1%interpArrSelection = ONE
                     call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace1, leadColor, color)
                 endif
                 gPhaseSpace2%field = gModIntParams%field2
@@ -347,11 +357,14 @@ module PlotModule
                         leadColor = PHASE_SPACE_TEMP_LEAD_COLOR
                         color = PHASE_SPACE_TEMP_COLOR
                     endif
+                    gPhaseSpace2%interpArrSelection = TWO
                     call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2, leadColor, color)
                 endif
+                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
  
 ! ------ WEATHER STN -----------------------------
             else if (gModIntParams%plotType == WEATHER_STN) then
+                gWeatherStation1%interpArrSelection = ONE
                 gWeatherStation1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     if (gIsTemperature(gModIntParams%field1)) then
@@ -361,6 +374,7 @@ module PlotModule
                     endif
                     call initializeWeatherStationType(gModIntParams%field1, gWeatherStation1, color)
                 endif
+                gWeatherStation2%interpArrSelection = TWO
                 gWeatherStation2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     if (color == PHASE_SPACE_TEMP_COLOR) then
@@ -380,10 +394,12 @@ module PlotModule
                 
 ! ------ VERTICAL HOVMOLLER AT WEATHER STN -----------------------------
             else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                gVertHovmoller1%interpArrSelection = ONE
                 gVertHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeVertHovmollerType(gVertHovmoller1, .true.)
                 endif
+                gVertHovmoller2%interpArrSelection = TWO
                 gVertHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeVertHovmollerType(gVertHovmoller2, gModIntParams%field1 == PLOTTING_OFF)
@@ -391,10 +407,12 @@ module PlotModule
 
 ! ------ VERTICAL CROSS SECTION AT LATITUDE -----------------------------
             else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT)  then
+                gLatVertCrossSec1%interpArrSelection = ONE
                 gLatVertCrossSec1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeVerticalCrossSectionType(gModIntParams%field1, gLatVertCrossSec1, .true., LATITUDE)
                 endif
+                gLatVertCrossSec2%interpArrSelection = TWO
                 gLatVertCrossSec2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeVerticalCrossSectionType(gModIntParams%field2, gLatVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, LATITUDE)
@@ -402,10 +420,12 @@ module PlotModule
 
 ! ------ HOVMOLLER LATITUDE -----------------------------
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                gLatHovmoller1%interpArrSelection = ONE
                 gLatHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field1, gLatHovmoller1, .true., LATITUDE)
                 endif
+                gLatHovmoller2%interpArrSelection = TWO
                 gLatHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLatHovmoller2, gModIntParams%field1 == PLOTTING_OFF, LATITUDE)
@@ -413,10 +433,12 @@ module PlotModule
                 
 ! ------ VERTICAL CROSS SECTION AT LONGITUDE -----------------------------
             else if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)  then
+                gLonVertCrossSec1%interpArrSelection = ONE
                 gLonVertCrossSec1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeVerticalCrossSectionType(gModIntParams%field1, gLonVertCrossSec1, .true., LONGITUDE)
                 endif
+                gLonVertCrossSec2%interpArrSelection = TWO
                 gLatVertCrossSec2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeVerticalCrossSectionType(gModIntParams%field2, gLonVertCrossSec2, gModIntParams%field1 == PLOTTING_OFF, LONGITUDE)
@@ -424,10 +446,12 @@ module PlotModule
 
 ! ------ HOVMOLLER LONGITUDE -----------------------------
             else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+                gLonHovmoller1%interpArrSelection = ONE
                 gLonHovmoller1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field1, gLonHovmoller1, .true., LONGITUDE)
                 endif
+                gLonHovmoller2%interpArrSelection = TWO
                 gLonHovmoller2%field = gModIntParams%field2
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, LONGITUDE)
@@ -437,13 +461,16 @@ module PlotModule
 ! ------ WEATHER MAP & COMBO -----------------------------
             if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
                 gWeatherMap1%field = gModIntParams%field1
+                gWeatherMap1%interpArrSelection = ONE
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field1, gWeatherMap1, .true.)
                 endif
                 gWeatherMap2%field = gModIntParams%field2
+                gWeatherMap2%interpArrSelection = TWO
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeWeatherMapType(gModIntParams%field2, gWeatherMap2, gModIntParams%field1 == PLOTTING_OFF)
                 endif
+                if (gModIntParams%plotType == PHASE_AND_MAP) call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             endif
         
         end subroutine initializePlot
@@ -535,10 +562,10 @@ module PlotModule
 
             ! No need to call these anymore - They have to be called every time step because of interpolation
             ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
-            !call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP)
+            !call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP, ONE)
                 
             ! Now get the variable to be plotted along the y-axis. That will be gModIntParams%field1. 
-            !call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP)
+            !call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP, TWO)
 
             phaseSpaceType%colorLead = IOR(ISHFT(IAND(colorLead, Z'000000FF'), 16), & ! R: bit 0 -> 16
                         IOR(IAND(colorLead, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)
@@ -1500,7 +1527,7 @@ module PlotModule
             !    call DrawHorizontalLines(.false., .true., .false., #00323232) ! The isHeight parameter is not used in this case
 
             else if (gModIntParams%plotType == PHASE_SPACE) then
-                call DrawCartesianAxes(.false.)
+                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%row = 0
                 gLatHovmoller2%row = 0
@@ -1516,7 +1543,7 @@ module PlotModule
                 call DrawGridLines(.false., .false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
                 call DrawGridLines(.false., .false.)
-                call DrawCartesianAxes(.false.)
+                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             endif
 
             ! Invalidate the window rectangle to trigger a redraw
@@ -1540,10 +1567,10 @@ module PlotModule
         ! Helper to point to the arrays containing the user-selected field to  plot
         ! The level is now trickier. Now we have all levels in LEVP which includes the interfaces just for plotting
         ! So to get the actual levels where the fields are define we need to set levels = 1 + (plotLevels - 1) / 2 
-        subroutine loadFields(ptr, field, plotLevel)
+        subroutine loadFields(ptr, field, plotLevel, interpArrSelection)
             use ConstantsModule, only: VORTICITY, HEIGHT, TEMPERATURE, VERTICAL_WIND, TEMP_FORCING, TOT_HGT_TEND, ADV_BETA_HGT_TEND, &
                 OMEGA_HGT_TEND, DIABATIC_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, HGT_FORCING, &
-                OROG_HGT_TEND, OROGRAPHY
+                OROG_HGT_TEND, OROGRAPHY, ONE, TWO
 
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gVertArr
@@ -1553,11 +1580,11 @@ module PlotModule
             
             real, pointer, intent(out) :: ptr(:)
             integer, intent(in)        :: field
-            integer, intent(in)        :: plotLevel
+            integer, intent(in)        :: plotLevel, interpArrSelection
             
             integer :: level, levelt
             logical :: isTempField, isOdd, isInterp
-            REAL, pointer :: var(:, :)
+            REAL, pointer :: var(:, :), tempPtr(:, :)
             REAL :: weight
             
             level = min(1 + (plotLevel - 1) / 2, gModIntParams%NLEV)
@@ -1659,28 +1686,43 @@ module PlotModule
             isOdd = BTEST(plotLevel, 0) ! if Bit 0 is 1, the function returns true and the number is odd. This means we are in the middle of a layer 
 
             if (isTempField) then
-                if (isOdd .OR. (plotLevel .LE. 3) .OR. (plotLevel .GE. SIZE(gVertArr%LVS) - 2)) then
+                if (isOdd .OR. (plotLevel .LE. 3) .OR. (plotLevel .GE. gCurrentDims%LVS - 2)) then
                     ptr => var(:, levelt) ! At the interface level. Use the actual temperature and do not interpolate
                     isInterp = .FALSE.
                 else
-                    weight = (gVertArr%PP(level) - gVertArr%PV(level)) / (gVertArr%PP(level)- gVertArr%PP(level + 1))
-                    gHorzArr%Interp_Temp(:) =  (1.0 - weight) * var(:, levelt - 1) + weight * var(:, levelt)
-                    ptr => gHorzArr%Interp_Temp
                     isInterp = .TRUE.
                 end if
             else
-                if (isOdd .AND. (plotLevel .GE. 3) .AND. (plotLevel .LT. SIZE(gVertArr%LVS) - 1)) then
-                    weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
-                    gHorzArr%Interp_Strm(:) =  (1.0 - weight) * var(:, level - 1) + weight * var(:, level)
-                    ptr => gHorzArr%Interp_Strm
+                if (isOdd .AND. (plotLevel .GE. 3) .AND. (plotLevel .LT. gCurrentDims%LVS - 1)) then
                     isInterp = .TRUE.
                 else
                     ptr => var(:, level)    ! At the middle of the layer. Use the actual streamfunction and do not interpolate
                     isInterp = .FALSE.
                 endif
             end if
+            if (isInterp) then
+                if (interpArrSelection == ONE) then
+                    if (isTempField) then
+                        weight = (gVertArr%PP(level) - gVertArr%PV(level)) / (gVertArr%PP(level)- gVertArr%PP(level + 1))
+                        gHorzArr%Interp_one(:) =  (1.0 - weight) * var(:, levelt - 1) + weight * var(:, levelt)
+                    else
+                        weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
+                        gHorzArr%Interp_one(:) =  (1.0 - weight) * var(:, level - 1) + weight * var(:, level)
+                    endif
+                    ptr => gHorzArr%Interp_one
+                elseif (interpArrSelection == TWO) then
+                    if (isTempField) then
+                        weight = (gVertArr%PP(level) - gVertArr%PV(level)) / (gVertArr%PP(level)- gVertArr%PP(level + 1))
+                        gHorzArr%Interp_two(:) =  (1.0 - weight) * var(:, levelt - 1) + weight * var(:, levelt)
+                    else
+                        weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
+                        gHorzArr%Interp_two(:) =  (1.0 - weight) * var(:, level - 1) + weight * var(:, level)
+                    endif
+                    ptr => gHorzArr%Interp_two
+                endif
+            endif
             ! Example when NLEV = 10
-            !write(*,*) 'Debug: plotLevel=', plotLevel, ' -> level=', level, ' levelt=', levelt, ' isOdd=', isOdd, ' is Temp: ', isTempField, ' is Interpolated: ', isInterp
+            ! write(*,*) 'Debug: plotLevel=', plotLevel, ' -> level=', level, ' levelt=', levelt, ' isOdd=', isOdd, ' is Temp: ', isTempField, ' is Interpolated: ', isInterp
             ! Debug: plotLevel= 1  -> level= 1  levelt= 1  isOdd= T  is Temp:  T  is Interpolated:  F
             ! Debug: plotLevel= 1  -> level= 1  levelt= 1  isOdd= T  is Temp:  F  is Interpolated:  F
             !
@@ -1833,8 +1875,8 @@ module PlotModule
             INTEGER(4), POINTER :: pixelArray(:, :)
 
             ! Need to do this to recompute interplated fields every plot time
-            call loadFields( phaseSpaceType%x, phaseSpaceType%field, gModIntParams%LEVP)
-            call loadFields( phaseSpaceType%y, phaseSpaceType%field, gModIntParams%LEVP)
+            call loadFields( phaseSpaceType%x, phaseSpaceType%field, gModIntParams%LEVP, phaseSpaceType%interpArrSelection)
+            call loadFields( phaseSpaceType%y, phaseSpaceType%field, gModIntParams%LEVP, phaseSpaceType%interpArrSelection)
 
             xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
             yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
@@ -1876,7 +1918,7 @@ module PlotModule
             integer :: I, K, L
 
             if (gWeatherStation1%field /= PLOTTING_OFF) then
-                call loadFields(gWeatherStation1%value, gWeatherStation1%field, gModIntParams%LEVP)
+                call loadFields(gWeatherStation1%value, gWeatherStation1%field, gModIntParams%LEVP, gWeatherStation1%interpArrSelection)
                 ! Compute the value
                 value = computeValue(gWeatherStation1, gWeatherStation1%value)
                 call loadTimeSeriesArray(gWeatherStation1%timeSeriesBuf, value * gWeatherStation1%scale, &
@@ -1885,7 +1927,7 @@ module PlotModule
 
             endif
             if (gWeatherStation2%field /= PLOTTING_OFF) then
-                call loadFields(gWeatherStation2%value, gWeatherStation2%field, gModIntParams%LEVP)
+                call loadFields(gWeatherStation2%value, gWeatherStation2%field, gModIntParams%LEVP, gWeatherStation2%interpArrSelection)
                 value = computeValue(gWeatherStation2, gWeatherStation2%value)
                 call loadTimeSeriesArray(gWeatherStation2%timeSeriesBuf, value * gWeatherStation2%scale, &
                                          gWeatherStation2%yCenter, gWeatherStation2%gDCcolor, gWeatherStation1%field == PLOTTING_OFF, .true.)
@@ -2388,7 +2430,7 @@ module PlotModule
             LMAX = gModIntParams%LMAX2
             IXMAX = gCurrentDims%IXMAX
 
-            call loadFields(baseMapType%value, baseMapType%field, level)
+            call loadFields(baseMapType%value, baseMapType%field, level, baseMapType%interpArrSelection)
             
             if (gIsTemperature(baseMapType%field)) then
                 scale = baseMapType%scale / tempScale
@@ -2556,7 +2598,7 @@ module PlotModule
             real :: wave_real, wave_imag
             integer :: KMAX, LMAX, index, K
 
-            call loadFields(baseMapType%value, baseMapType%field, level)
+            call loadFields(baseMapType%value, baseMapType%field, level, baseMapType%interpArrSelection)
             if (gIsTemperature(baseMapType%field)) then
                 scale = baseMapType%scale / tempScale
             else 
@@ -2791,7 +2833,7 @@ module PlotModule
             gTransArr%GZonal = 0.0
             do K = 1, gCurrentDims%LVS
                 ! Places the current field to be plotted at level K in value which has size ITOT
-                call loadFields(vertHovmollerType%value, vertHovmollerType%field, K)
+                call loadFields(vertHovmollerType%value, vertHovmollerType%field, K, vertHovmollerType%interpArrSelection)
                 gTransArr%GZonal(K) = computeValue(vertHovmollerType, vertHovmollerType%value)
             end do
             !! scale the fields to their dimensional values
@@ -2926,7 +2968,7 @@ module PlotModule
             
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
             
-            call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP)
+            call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP, weatherMapType%interpArrSelection)
         
             ! This routine also dimensionalizes the values
             call createGrid(gTransArr%plotFull, weatherMapType)

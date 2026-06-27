@@ -34,6 +34,7 @@ module ModelControlDialogModule
             use VerticalParamsDialogModule, only: VerticalParamsDlgProc
             use InitVariablesDialogModule, only: InitVariablesDlgProc
             use ContoursAndRangesDialogModule, only: ContoursAndRangesDlgProc
+            use BombDialogModule, only: BombDlgProc
             use UtilitiesModule, only: openModelFile
             use PlotModule, only: ClearScreen, initializePlot, gElapsedTime
 
@@ -347,6 +348,7 @@ module ModelControlDialogModule
                             endif
 
                         case (IDC_CHECK_RUN_INVISCID)
+                            call cleanUpEditBoxes()
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
                                 gModelState%runInviscid = (IsDlgButtonChecked(hDlg, IDC_CHECK_RUN_INVISCID) /= 0)
                                 if (gModelState%runInviscid) then
@@ -405,7 +407,10 @@ module ModelControlDialogModule
                         case (IDC_BUTTON_CLEAR_SCREEN)
                             call ClearScreen()
                             ghModelControlDlg = hDlg
-
+                            
+                        case(IDC_BUTTON_SETUP_BOMB)
+                            ret = DialogBoxParam(ghInstance, INT(IDD_BOMB, LONG_PTR), hDlg, LOC(BombDlgProc), 0_LONG_PTR)
+                            ghModelControlDlg = hDlg
 
 ! ---- F10:  Exit to main
                         case (IDC_BUTTON_RETURN_TO_MAIN) ! F10 Close
@@ -457,6 +462,7 @@ module ModelControlDialogModule
                 
                 !-------- F1: run model
                 subroutine setupAndRunModel()
+                    use ConstantsModule, only: ERR_NUMERIC_INSTABILITY
                     implicit none
 
                     call cleanUpEditBoxes()
@@ -480,6 +486,12 @@ module ModelControlDialogModule
                     bret = SetFocus(ghwndMain)
                     call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     ret = StartTimeLoop()
+                    if (ret == ERR_NUMERIC_INSTABILITY) then
+                        bret = MessageBox (hDlg, &
+                            "The model has gone unstable. Dependent variables reset"C, &
+                            "Numeric Instability!"C, &
+                            IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
+                    endif
                     call SetModRealParamsDimensionalState(isDimensional)
                     call initializeDialog()
                 end subroutine setupAndRunModel
@@ -492,7 +504,7 @@ module ModelControlDialogModule
                     
                     integer :: waveStart, K, L, I, M
                     character(len=32) :: description
-
+                    call cleanUpEditBoxes()
                     call SetModRealParamsDimensionalState(isDimensional)
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
                     if (isDimensional) then
@@ -624,6 +636,7 @@ module ModelControlDialogModule
 
                 !-------- F4: save current flow
                 subroutine saveCurrentFlow()
+                    call cleanUpEditBoxes()
                     res = GetUserSelectedSaveName(hDlg, gNLevFile)
                     if (res) then
                         call SetModRealParamsDimensionalState(.false.)
@@ -762,10 +775,10 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Number of integration cycles", gModIntParams%ICYC)
             call AddListViewRow(hList, "Number of time steps", gModIntParams%ISTEP)
             call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
-            call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%JX0)
-            call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%JY0)
-            call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%JX1)
-            call AddListViewRow(hList, "Upper bound of meridional waves to retain in maps", gModIntParams%JY1)
+            call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%lowerZonalWave)
+            call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%upperZonalWave)
+            call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%lowerMeridWave)
+            call AddListViewRow(hList, "Upper bound of meridional waves to retain in maps", gModIntParams%upperMeridWave)
         end subroutine loadIntItemsIntoListView
 
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
@@ -837,13 +850,13 @@ module ModelControlDialogModule
                 case (5)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%outputInterval, .TRUE.)
                 case (6)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX0, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%lowerZonalWave, .TRUE.)
                 case (7)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY0, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%upperZonalWave, .TRUE.)
                 case (8)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JX1, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%lowerMeridWave, .TRUE.)
                 case (9)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%JY1, .TRUE.)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%upperMeridWave, .TRUE.)
             end select
         end function loadIntegerParameterIntoEditBox
 
@@ -905,13 +918,13 @@ module ModelControlDialogModule
                 case (5)
                     gModIntParams%outputInterval = newValue
                 case (6)
-                    gModIntParams%JX0 = newValue
+                    gModIntParams%lowerZonalWave = newValue
                 case (7)
-                    gModIntParams%JY0 = newValue
+                    gModIntParams%upperZonalWave = newValue
                 case (8)
-                    gModIntParams%JX1 = newValue
+                    gModIntParams%lowerMeridWave = newValue
                 case (9)
-                    gModIntParams%JY1 = newValue
+                    gModIntParams%upperMeridWave = newValue
             end select
         end subroutine readIntDataFromEditBox
 

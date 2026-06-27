@@ -72,17 +72,16 @@ module ModelModule
 
         function StartTimeLoop() result(errorCode)
             use ConstantsModule, only: ADV_BETA_HGT_TEND, RUNNING, SENS_STATIC_LAPSE_RATE, STATS_OPT_NONE, STATS_OPT_VAR, &
-                ZONAL_MEAN_FLOW, BAROCLINIC_STRUCTS, STOPPED, PAUSED
+                ZONAL_MEAN_FLOW, BAROCLINIC_STRUCTS, STOPPED, PAUSED, ERR_NUMERIC_INSTABILITY
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, gContourIntervals
             use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
-            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation, DFDIAB
+            use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation, CreateBomb, DFDIAB
             use InteractionCoefficientsModule
             use NLevQGModelGlobals, only: ghwndMain, LogMessage
             use iso_c_binding
-            !use Fftw3HelpersModule, only: test_transforms
             use UtilitiesModule, only: openModelFile
-            use PlotModule, only: outputPlot, PumpMessages !, PlotDiagnostic
+            use PlotModule, only: outputPlot, PumpMessages
             use, intrinsic :: ieee_arithmetic
 
             implicit none
@@ -246,8 +245,20 @@ module ModelModule
                     !--------------------------------------------------- Actual beginning of loop:
                     DO KCYC = 1, gModIntParams%ICYC
                         DO KSTEP = 1, gModIntParams%ISTEP
+                            ! timeStepsToDelay, if set to 0 will skip generating a bomb. 
+                            ! If set to 1, it will get invoked on the first step. In that case there is no need to
+                            !   to create the bomb, it has already been created and it is part of the PS variables.
+                            !   In that manner, several different scaled bombs can be superimposed upon one another.
+                            ! If greater than 1, only a single perturbation is added to the fields at the time the
+                            !   the time step is reached. Here the CreateBomb is created.
+                            ! In all cases, the timeStepsToDelay is set to its negative so it does not get called 
+                            ! again until the user resets it.
+                            if (gModIntParams%timeStepsToDelay == KSTEP) then
+                                if (KSTEP > 1) call CreateBomb()
+                                gModIntParams%timeStepsToDelay = -gModIntParams%timeStepsToDelay ! Have to reset to repeat
+                            endif
                             !---------------------------------------KSTEPT=Total # of current time steps:
-850                         KSTEPT = KSTEPT + 1
+                            KSTEPT = KSTEPT + 1
                             !write(*, '(A, I4, A, I4, A, I4)') 'KSTEPT=', KSTEPT, ' KSTEP=', KSTEP, ' KCYC=', KCYC
                             !write(msg, '(A, I4, A, I4, A, I4)') 'KSTEPT=', KSTEPT, ' KSTEP=', KSTEP, ' KCYC=', KCYC
                             !call LogMessage(msg)
@@ -285,9 +296,10 @@ module ModelModule
                                         write(msg, '(A, I4, A, I4, A, I4)') 'Level=', N, ' KSTEP=', KSTEP, ' NCYC4=', NCYC4
                                         call LogMessage("Numerical instability. Exiting. " // msg)
                                         call ZeroHorzArrays(.true.) ! Don't zero settings like TF, SF, TOP, AKL, etc.
-                                        call DFDIAB(.false.)
+                                        !call DFDIAB(.false.)
                                         call CreatePerturbation()
                                         gModelState%runState = STOPPED
+                                        errorCode = ERR_NUMERIC_INSTABILITY
                                         return
                                     ENDIF
                                 END DO
@@ -1218,8 +1230,8 @@ module ModelModule
             IF (I .EQ. 2) gModRealParams%BETA = gVertArr%PRF(1) + R * (gVertArr%PRF(addressToPRF1_2) - gVertArr%PRF(1))
             !-----------------------------------------------Do  profiles:
             IF (I .GE. 3 .AND. I .LE. 11) THEN
-                J = gModIntParams%LMODE
-                IF (gModIntParams%KMODE .GT. 0) J = (2 * gModIntParams%KMODE - 1) * gModIntParams%LMAX2 + 2 * J
+                J = gModIntParams%bombMeridWave
+                IF (gModIntParams%bombZonalWave .GT. 0) J = (2 * gModIntParams%bombZonalWave - 1) * gModIntParams%LMAX2 + 2 * J
                 M = gModIntParams%NLEV
                 IF (I .EQ. 11) M = 1
                 DO N = 1, M
@@ -1248,7 +1260,7 @@ module ModelModule
                             IF (I .EQ. 11) gHorzArr%TOP(J) = X  !K = 15
                                                           !PS(J, N, K) = X
                             !-----------------------------------------------Get phase:
-                            IF (gModIntParams%KMODE .GE. 1) THEN
+                            IF (gModIntParams%bombZonalWave .GE. 1) THEN
                                 Y = (gVertArr%PRF(N + addressToPRF1_3) + R * (gVertArr%PRF(N + addressToPRF1_4) - gVertArr%PRF(N + addressToPRF1_3))) / RAD_TO_DEGREES
                                 IF (I .EQ. 8) Then
                                     gHorzArr%PS(J - 1, N) = X * COS(Y)
@@ -1434,5 +1446,96 @@ module ModelModule
             END DO
         end subroutine DoubleLoops
 
+        SUBROUTINE COMPUTE_ENERGY_SPECTRUM(DELTA_K, ENERGY_1D, MAX_BIN)
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelParamsModule, only: gModRealParams, gModIntParams
+            IMPLICIT NONE
 
+            ! Inputs
+            INTEGER, INTENT(IN) :: MAX_BIN
+            REAL, INTENT(IN) :: DELTA_K                 ! Bin size for 1D spectrum
+    
+            ! Outputs
+            REAL, DIMENSION(MAX_BIN), INTENT(OUT) :: ENERGY_1D
+    
+            ! Locals
+            integer :: KMAX, LMAX, NMAX
+            INTEGER :: I, N, K, L, BIN_IDX
+            REAL :: K_PHYS_SQ, L_SQ, K_TOTAL, KE, APE, RN_SQ, RN, DELTA_K_INV
+            REAL, DIMENSION(gModIntParams%NLEV - 1) :: APE_WEIGHT
+
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+            NMAX = gModIntParams%NLEV
+    
+            ENERGY_1D = 0.0
+            RN = gModRealParams%RN
+            RN_SQ = RN**2
+            DELTA_K_INV = 1.0 / DELTA_K
+    
+            ! Precompute APE weighting factor: A(N)^2 / SIG(N)
+            APE_WEIGHT(1:NMAX-1) = (gVertArr%A(1:NMAX-1) * gVertArr%A(1:NMAX-1)) / MAX(gVertArr%SIG(1:NMAX-1), 1.0E-8)
+
+            ! ==========================================
+            ! STEP 1: PROCESS ZONAL MEAN FLOW (K = 0)
+            ! ==========================================
+            K_PHYS_SQ = 0.0 ! Zonal mean has no x-dependence, so n*k = 0
+            DO I = 1, LMAX
+                L = I
+                L_SQ = REAL(L)**2
+                K_TOTAL = SQRT(K_PHYS_SQ + L_SQ) ! K_TOTAL = L
+                BIN_IDX = INT(K_TOTAL * DELTA_K_INV) + 1
+        
+                IF (BIN_IDX <= MAX_BIN) THEN
+                    ! Kinetic Energy for K=0 across all layers
+                    KE = 0.0
+                    DO N = 1, NMAX
+                        KE = KE + 0.5 * L_SQ * (gHorzArr%PS(I, N) * gHorzArr%PS(I, N))
+                    END DO
+            
+                    ! Available Potential Energy directly from temperature coefficients
+                    APE = 0.0
+                    DO N = 1, NMAX - 1
+                        APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(I, N) * gHorzArr%TH(I, N))
+                    END DO
+
+                    ENERGY_1D(BIN_IDX) = ENERGY_1D(BIN_IDX) + KE + APE
+                END IF
+            END DO
+
+            ! ==========================================
+            ! STEP 2: PROCESS WAVE COMPONENTS (K > 0)
+            ! ==========================================
+            I = LMAX + 1
+            DO K = 1, KMAX
+                ! Scale the zonal wavenumber by the aspect ratio 'n'
+                K_PHYS_SQ = (REAL(K) * RN)**2
+
+                DO L = 1, LMAX
+                    L_SQ = REAL(L)**2
+                    K_TOTAL = SQRT(K_PHYS_SQ + L_SQ)
+                    BIN_IDX = INT(K_TOTAL * DELTA_K_INV) + 1
+
+                    IF (BIN_IDX <= MAX_BIN) THEN
+                        KE = 0.0
+                        APE = 0.0
+
+                        ! Sum KE over layers using scaled total wavenumber
+                        DO N = 1, NMAX
+                            KE = KE + 0.5 * (K_PHYS_SQ + L_SQ) * (gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I + 1, N) * gHorzArr%PS(I + 1, N))
+                        END DO
+
+                        ! Sum APE over interfaces directly from TH wave pairs
+                        DO N = 1, NMAX - 1
+                            APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I + 1, N) * gHorzArr%TH(I + 1, N))
+                        END DO
+
+                        ENERGY_1D(BIN_IDX) = ENERGY_1D(BIN_IDX) + KE + APE
+                    END IF
+                    ! Jump past the (cos, sin) pair
+                    I = I + 2
+                END DO
+            END DO
+
+        END SUBROUTINE COMPUTE_ENERGY_SPECTRUM
     end module ModelModule

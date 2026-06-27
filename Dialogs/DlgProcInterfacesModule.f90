@@ -1,5 +1,21 @@
 module DlgProcInterfacesModule
     interface 
+        function  BombDlgProc(hwnd, mesg, wParam, lParam)
+            !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
+            !DEC$ IF DEFINED(_X86_)
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : '_BombDlgProc@16' :: BombDlgProc
+            !DEC$ ELSE
+            !DEC$ ATTRIBUTES STDCALL, ALIAS : 'BombDlgProc' :: BombDlgProc
+            !DEC$ ENDIF
+            use ifwinty
+            integer(LRESULT) :: BombDlgProc ! LRESULT
+            integer(HANDLE)   hwnd 
+            integer(UINT)     mesg  
+            integer(UINT_PTR) wParam
+            integer(LONG_PTR) lParam 
+        end function 
+    end interface
+    interface 
         function  ContoursAndRangesDlgProc(hwnd, mesg, wParam, lParam)
             !! DO NOT FORGET TO UPDATE THESE CALL PROCEDURES !!
             !DEC$ IF DEFINED(_X86_)

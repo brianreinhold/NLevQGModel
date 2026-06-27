@@ -74,9 +74,9 @@ module ModelParamsModule
                         !     a sequence of intergrations where a parameter (like the surface friction) changes by
                         !     certain amount and a run is done and statistics taken.
         ! Parameters for a created 'bomb' disturbance like that done for the sudden stratospheric warming experiments.
-        REAL :: AMPT    !  Amplitude of the streamfunction for the prescribed "bomb" disturbance feature 
-        REAL :: AMPS    !  Amplitude of the temperature for the prescribed "bomb" disturbance feature  
-        REAL :: ANGS
+        REAL :: AMPT    !  Amplitude of the temperature for the prescribed "bomb" disturbance feature 
+        REAL :: AMPS    !  Amplitude of the streamfunction for the prescribed "bomb" disturbance feature  
+        REAL :: ANGS    !  Likely phase difference between S and T at lowest level
         REAL :: EFOLD
     END TYPE ModelRealParams
 
@@ -95,10 +95,10 @@ module ModelParamsModule
         integer :: phaseSpaceY  ! component index to plot along y-axis
         integer :: LEVP         ! LEVP is the level to plot in graphs and phase space
         integer :: modelType    ! Model type (1 = standard  2 = GQ initial value model (zonal fields held constant))
-        integer :: JX0          ! JX0 is the lower range of the zonal wavenumbers being displayed in the two-d plots
-        integer :: JY0          ! JY0 is the lower range of the meridional wavenumbers being displayed in the two-d plots
-        integer :: JX1          ! JX1 is the upper range of the zonal wavenumbers being displayed in the two-d plots
-        integer :: JY1          ! JY1 is the upper range of the meridional wavenumbers being displayed in the two-d plots
+        integer :: lowerZonalWave   ! lowerZonalWave is the lower range of the zonal wavenumbers being displayed in the two-d plots
+        integer :: upperZonalWave   ! upperZonalWave is the lower range of the meridional wavenumbers being displayed in the two-d plots
+        integer :: lowerMeridWave   ! lowerMeridWave is the upper range of the zonal wavenumbers being displayed in the two-d plots
+        integer :: upperMeridWave   ! upperMeridWave is the upper range of the meridional wavenumbers being displayed in the two-d plots
         integer :: IV1          ! Parameter 1 to take the variance of 
         integer :: IV2          ! Parameter 2 to take the variance of
         integer :: IPRM1        ! Believe that this is a model parameter to increment in the sensitivity runs
@@ -106,14 +106,14 @@ module ModelParamsModule
         integer :: ITER1        ! This is the number of iterations to make of parameter 1 in sensitivity runs
         integer :: ITER2        ! This is the number of iterations to make of parameter 2 in sensitivity runs
                                 ! If both ITER1 and ITER2 are set to 1, then there is only one run.
-        integer :: KMODE
-        integer :: LMODE
-        integer :: IADD
+        ! For the  'bomb'
+        integer :: bombZonalWave    ! K wavenumber of the bomb distrubance. If 0 we just create a zonal profile.
+        integer :: bombMeridWave    ! L wavenumber of the bomb disturbance
+        logical :: addToCurrent     ! If true, the bomb disturbance is added to what is already present. If false,
+                                    ! the bomb disturbance replaces the existing values.
+
         integer :: MP(20)   ! MP is the array of previous plot parameters
-        integer :: JHOV     ! JHOV indicates whether a multiple-line time series graph shall be plotted as a 'sideways' hovmoller
-                            ! For example, an n-level time series of a wave component amplitude can be plotted as N lines or
-                            ! interpolated into a Hovmoller so all the values between each line are displayed.
-                            !   JHOV = 1 means toggle to a sideways hovmoller plot. Not sure what other values mean beside no sideways hovmoller.
+        integer :: timeStepsToDelay
     end type ModelIntParams
 
     type ModelSensParams    ! Previously MSEN(1-14) [part of the IPARAM buffer] (Still need some work to figure out what these all do)
@@ -249,7 +249,7 @@ module ModelParamsModule
             !---------------------------Temperature in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMPERATURE) = gScaleFactors%temperatureScale
             !---------------------------Vertical velocity (omega) in mb/hr or mm/sec
-            gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480
+            gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480 scaling is P*f*w' = w
             !---------------------------Temperature forcing in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
             !---------------------------Total height tendencies m/day:
@@ -297,7 +297,10 @@ module ModelParamsModule
             gFieldLabels(VORTICITY)%s =  "Vorticity in 10**-5/s"
             gFieldLabels(HEIGHT)%s =  "Height in meters"
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
+            gFieldLabels(VERTICAL_WIND)%s = "Omega mb/hr"
             gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ß m/day"
+            gFieldLabels(DIABATIC_HGT_TEND)%s = "Diab hgt tend m/day"
+            gFieldLabels(DIABATIC_TEMP_TEND)%s = "Diab temp tend "//ACHAR(176)//"day"
 
         end subroutine initConstants
     

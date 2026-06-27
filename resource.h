@@ -8,6 +8,7 @@
 #define IDD_INIT_VARIABLES              110
 #define IDD_CONTOURS                    112
 #define IDD_VIEW_VARIABLES              114
+#define IDD_BOMB                        116
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
 #define IDC_COMBO_USERSETTINGS1         1013
@@ -50,19 +51,26 @@
 #define IDC_EDIT1                       1046
 #define IDC_EDIT_VERTICAL               1046
 #define IDC_EDIT_HORZ                   1046
+#define IDC_EDIT_BOMB_ZONAL_WAVE        1046
 #define IDC_BUTTON_VIEW_STATISTICS2     1047
 #define IDC_LIST_TEMPERATURES           1047
+#define IDC_EDIT_BOMB_MERID_WAVE        1047
 #define IDC_STATIC_TEMPERATURES         1048
 #define IDC_BUTTON_CLEAR_SCREEN         1048
+#define IDC_EDIT_BOMB_STRM_AMP          1048
 #define IDC_BUTTON_SETUP_BOMB           1049
 #define IDC_LIST_EKMAN_FRICTION         1049
+#define IDC_EDIT_BOMB_TEMP_AMP          1049
 #define IDC_BUTTON_RETURN_TO_MAIN       1050
 #define IDC_STATIC_EKMAN_FRICTION       1050
+#define IDC_EDIT_BOMB_PHASE_DIFF        1050
 #define IDC_BUTTON_EXIT_SETTINGS        1051
 #define IDC_LIST_TURB_MIXING            1051
 #define IDC_COMBO_PLOT_LEVEL            1051
+#define IDC_EDIT_BOMB_EXPONENT          1051
 #define IDC_STATIC_TURB_MIXING          1052
 #define IDC_STATIC_COMBO_PLOT_LEVEL     1052
+#define IDC_EDIT_BOMB_TIMESTEPS_DELAY   1052
 #define IDC_LIST_NEWT_COOLING           1053
 #define IDC_STATIC_NEWT_COOLING         1054
 #define IDC_LIST_TEMP_MIXING            1055
@@ -105,15 +113,26 @@
 #define IDC_CHECK_RUN_INVISCID          1081
 #define IDC_CHECK_VIEW_DIMENSIONAL      1081
 #define IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE 1081
+#define IDC_CHECK_BOMB_ADD              1081
 #define IDC_STATIC_PHASE_SPACE          1082
 #define IDC_LIST_VIEW_VARIABLES         1083
 #define IDC_BUTTON_EXIT_VIEW_VARIABLES  1085
 #define IDC_STATIC_VIEW_LEVELS          1086
 #define IDC_BUTTON1                     1087
 #define IDC_BUTTON_VIEW_VARIABLES       1087
+#define IDC_BUTTON_EXIT_BOMB            1087
 #define IDC_COMBO2                      1088
-#define IDC_STATIC_INIT_SELECT_COMPONENT 1089
 #define IDC_STATIC_COMBO_COMPONENT      1089
+#define IDC_STATIC_BOMB_ZONAL_WAVE      1090
+#define IDC_STATIC_BOMB_MERID_WAVE      1091
+#define IDC_STATIC_BOMB_STRM_AMP        1092
+#define IDC_STATIC_BOMB_TEMP_AMP        1093
+#define IDC_STATIC_BOMB_PHASE_DIFF      1094
+#define IDC_STATIC_BOMB_EXPONENT        1095
+#define IDC_STATIC_BOMB_TIMESTEPS_DELAY 1096
+#define IDC_BUTTON_BOMB_CREATE          1097
+#define IDC_EDIT2                       1099
+#define IDC_EDIT_BOMB_READ_ONLY         1099
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -121,9 +140,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        116
+#define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1090
+#define _APS_NEXT_CONTROL_VALUE         1100
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
