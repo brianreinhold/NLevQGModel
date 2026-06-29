@@ -690,10 +690,19 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = IOR(errorCode, LEVELS_CHANGED)
             end if
 
-            !----------------------------------Checking lower bounds on lowerZonalWave,upperZonalWave:
+            !----------------------------------Checking bounds on lowerZonalWave,upperZonalWave:
             IF(gModIntParams%lowerZonalWave .LT. 0) gModIntParams%lowerZonalWave = 0
             IF(gModIntParams%upperZonalWave .LT. 1) gModIntParams%upperZonalWave = 1
+            IF(gModIntParams%lowerZonalWave .GT. gModIntParams%KMAX2) gModIntParams%lowerZonalWave = gModIntParams%KMAX2
+            IF(gModIntParams%upperZonalWave .GT. gModIntParams%KMAX2) gModIntParams%upperZonalWave = gModIntParams%KMAX2
+            IF(gModIntParams%lowerZonalWave .GT. gModIntParams%upperZonalWave) gModIntParams%lowerZonalWave = gModIntParams%upperZonalWave
 
+            !----------------------------------Checking bounds on lowerMeridWave,upperMeridWave:
+            IF(gModIntParams%lowerMeridWave .LT. 0) gModIntParams%lowerMeridWave = 0
+            IF(gModIntParams%upperMeridWave .LT. 1) gModIntParams%upperMeridWave = 1
+            IF(gModIntParams%lowerMeridWave .GT. gModIntParams%LMAX2) gModIntParams%lowerMeridWave = gModIntParams%LMAX2
+            IF(gModIntParams%upperMeridWave .GT. gModIntParams%LMAX2) gModIntParams%upperMeridWave = gModIntParams%LMAX2
+            IF(gModIntParams%lowerMeridWave .GT. gModIntParams%upperMeridWave) gModIntParams%lowerMeridWave = gModIntParams%upperMeridWave
 
             !-------------------------------------------Field or variable type ranges
             I2 = PLOTTING_OFF
@@ -708,14 +717,6 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             IF(gModIntParams%field3 .GT. PLOTTING_OFF) gModIntParams%field3 = HEIGHT
             IF(gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = PLOTTING_OFF
             IF(gModIntParams%field3 .LT. VORTICITY) gModIntParams%field3 = PLOTTING_OFF
-
-            !---------------------------------------------lowerZonalWave,lowerMeridWave:
-            IF(gModIntParams%lowerZonalWave .GT. gModIntParams%KMAX2) gModIntParams%lowerZonalWave = gModIntParams%KMAX2
-            IF(gModIntParams%upperZonalWave .GT. gModIntParams%LMAX2) gModIntParams%upperZonalWave = gModIntParams%LMAX2
-            IF(gModIntParams%lowerMeridWave .GT. gModIntParams%KMAX2) gModIntParams%lowerMeridWave = gModIntParams%KMAX2
-            IF(gModIntParams%upperMeridWave .GT. gModIntParams%LMAX2) gModIntParams%upperMeridWave = gModIntParams%LMAX2
-            IF(gModIntParams%lowerMeridWave .LT. gModIntParams%lowerZonalWave) gModIntParams%lowerMeridWave = gModIntParams%lowerZonalWave
-            IF(gModIntParams%upperMeridWave .LT. gModIntParams%upperZonalWave) gModIntParams%upperMeridWave = gModIntParams%upperZonalWave
 
             !---------------------------------------------IV1, IV2:
             IF(gModIntParams%IV1 .GT. OROGRAPHY) gModIntParams%IV1 = OROGRAPHY
@@ -1114,20 +1115,31 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gVertArr%tropopauseLevel = 250.         ! Height of tropopause
             gVertArr%THS(1) = 285.0                 ! Potential temperature of vorticity level 1 (lowest layer). Note that it is NOT at an interface
                                                     ! The THS field is to compute static stabilty at the interfaces and to use in the Raisanen sheme
-            THS1 = .14          ! Increase in potential temperature per 100 mb
-        !----------------------------------Potential temperature at tropopause
-            EX = gVertArr%THS(1) + (gVertArr%PV(1) - gVertArr%tropopauseLevel) * THS1
+            call ComputeBasicStateTemperatureProfile(gVertArr%THS(1))
+            ! Compute FK
             DO N = 1, gModIntParams%NLEV
-                IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
-                    gVertArr%THS(N) = gVertArr%THS(1) + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
-                    gVertArr%FK(1 : gModIntParams%NLEV) = 0.  ! Set Ekman friction to 0
+                IF (gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
+                    gVertArr%FK(N) = 0.  ! Set Ekman friction to 0
                 ELSE
-        !-----------------------------------Stratospheric isothermal profile in Temp.
-                    gVertArr%THS(N) = EX * (gVertArr%tropopauseLevel / gVertArr%PV(N))**KAPPA
-                    gVertArr%FK(1 : gModIntParams%NLEV) = gScaleFactors%dissipation / 50.     ! Set ekman friction to 50 days for stratosphere
+                    gVertArr%FK(N) = gScaleFactors%dissipation / 50.     ! Set ekman friction to 50 days for stratosphere
                 ENDIF
             END DO
-            !gVertArr%FK(1 : gModIntParams%NLEV) = 20.     ! Set ekman friction to 20 days for every level
+            gVertArr%FK(1) = gScaleFactors%dissipation / 1.0   ! Gives a 1 day dissipation 
+
+        !    THS1 = .14          ! Increase in potential temperature per 100 mb
+        !!----------------------------------Potential temperature at tropopause
+        !    EX = gVertArr%THS(1) + (gVertArr%PV(1) - gVertArr%tropopauseLevel) * THS1
+        !    DO N = 1, gModIntParams%NLEV
+        !        IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
+        !            gVertArr%THS(N) = gVertArr%THS(1) + THS1 * (gVertArr%PV(1) - gVertArr%PV(N))
+        !            gVertArr%FK(1 : gModIntParams%NLEV) = 0.  ! Set Ekman friction to 0
+        !        ELSE
+        !!-----------------------------------Stratospheric isothermal profile in Temp.
+        !            gVertArr%THS(N) = EX * (gVertArr%tropopauseLevel / gVertArr%PV(N))**KAPPA
+        !            gVertArr%FK(1 : gModIntParams%NLEV) = gScaleFactors%dissipation / 50.     ! Set ekman friction to 50 days for stratosphere
+        !        ENDIF
+        !    END DO
+
         !========================Thermal mixing exp decay (Convective mixing of temperature):
             EX = 6.
             DO N = 1, gModIntParams%NLEV - 1
@@ -1154,9 +1166,39 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             ! gScaleFactors%dissipation = 1.0_wp / (secondsPerDay * scaleCoriolis)
             ! to increase the damping. Not sure why it is divided by 8. Probably because
             ! the scale factor gives 0.1157 / day or about 2.7 hr damping.
-            
-            gVertArr%FK(1) = gScaleFactors%dissipation / 1.0   ! Gives a 1 day dissipation 
         END subroutine DFDIAB
+        
+        subroutine ComputeBasicStateTemperatureProfile(THETA_Surface)
+            use ModelFieldsModule, only: gVertArr
+            use ModelParamsModule, only: gModIntParams
+            implicit none
+            
+            real, intent(in) :: THETA_Surface
+
+            ! Profile exponents
+            ! a_trop simulates a moist adiabat (much weaker than the dry adiabatic value of 0.286)
+            real, parameter :: A_TROP  = 0.08
+            real, parameter :: A_STRAT = 0.30        ! Strong stratospheric stratification
+    
+            ! Internal variables
+            integer :: N
+            real    :: theta_trop                    ! Theta matched at the tropopause
+
+            ! Calculate the matching value at the tropopause to ensure continuity
+            theta_trop = THETA_Surface * (gVertArr%PP(1) / gVertArr%tropopauseLevel)**A_TROP
+    
+            ! Loop through all N vertical levels
+            do N = 1, gModIntParams%NLEV
+                if (gVertArr%PV(N) >= gVertArr%tropopauseLevel) then
+                    ! Troposphere: Weak increase mimicking moist adiabatic profile
+                    gVertArr%THS(N) = THETA_Surface * (gVertArr%PP(1) / gVertArr%PV(N))**A_TROP
+                else
+                    ! Stratosphere: Sharp increase with height (decreasing pressure)
+                    gVertArr%THS(N) = theta_trop * (gVertArr%tropopauseLevel / gVertArr%PV(N))**A_STRAT
+                end if
+            end do
+
+        end subroutine ComputeBasicStateTemperatureProfile
 
         !*****************************************Place perturbation in flow:
         SUBROUTINE CreatePerturbation()
@@ -1359,7 +1401,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%phaseSpaceY = gModIntParams%LMAX2 + 2
             gModIntParams%LEVP = 2      ! Lowest streamfunction layer.
             gModIntParams%modelType = STANDARD_NLEVEL
-            gModIntParams%lowerZonalWave = 0
+            gModIntParams%lowerZonalWave = 1
             gModIntParams%upperZonalWave = 1
             gModIntParams%lowerMeridWave = gModIntParams%KMAX2
             gModIntParams%upperMeridWave = gModIntParams%LMAX2

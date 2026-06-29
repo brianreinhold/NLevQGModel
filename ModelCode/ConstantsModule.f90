@@ -165,6 +165,10 @@ module ConstantsModule
                         ! parameter values of 21-31 do the same as above but each experiment starts with the same initial conditions. I am guessing that
                         ! the the others begin with an initial condition that is that which is left from the previous run. I can't see how this would make 
                         ! any difference unless there are multiple stable quasi-equilibria.
+    
+    !============================= Vertical Profiles
+    integer, parameter :: DEFAULT_PROFILE          = 1  ! Uses Petri Raisanen radiation model results
+    integer, parameter :: STRATOSPHERIC_WARMING_32 = 2  ! Vertical profile matching the Sudden Stratospheric Warmings study. Note - 32 levels.
 
 
     

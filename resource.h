@@ -121,7 +121,7 @@
 #define IDC_BUTTON1                     1087
 #define IDC_BUTTON_VIEW_VARIABLES       1087
 #define IDC_BUTTON_EXIT_BOMB            1087
-#define IDC_COMBO2                      1088
+#define IDC_COMBO_VERT_PROFILES         1088
 #define IDC_STATIC_COMBO_COMPONENT      1089
 #define IDC_STATIC_BOMB_ZONAL_WAVE      1090
 #define IDC_STATIC_BOMB_MERID_WAVE      1091
@@ -131,8 +131,8 @@
 #define IDC_STATIC_BOMB_EXPONENT        1095
 #define IDC_STATIC_BOMB_TIMESTEPS_DELAY 1096
 #define IDC_BUTTON_BOMB_CREATE          1097
-#define IDC_EDIT2                       1099
 #define IDC_EDIT_BOMB_READ_ONLY         1099
+#define IDC_STATIC_VERT_PROFILES        1100
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -142,7 +142,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1100
+#define _APS_NEXT_CONTROL_VALUE         1101
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -9,6 +9,7 @@
       integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
       integer, parameter :: IDC_EDIT_BOMB_TEMP_AMP = 1049
       integer, parameter :: IDC_CHECK_MODREAL_DIMENSIONALIZE = 1060
+      integer, parameter :: IDC_STATIC_VERT_PROFILES = 1100
       integer, parameter :: IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE = 1081
       integer, parameter :: IDC_COMBO_LEVEL = 1073
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
@@ -31,7 +32,6 @@
       integer, parameter :: IDC_COMBO_USERSETTINGS2 = 1015
       integer, parameter :: IDD_MODEL_CONTROL = 106
       integer, parameter :: IDC_STATIC_TURB_MIXING = 1052
-      integer, parameter :: IDC_EDIT2 = 1099
       integer, parameter :: IDC_BUTTON_GENERAL_INFO = 1022
       integer, parameter :: IDC_LIST_RANGES = 1077
       integer, parameter :: IDD_SETTINGS_DLG = 107
@@ -83,6 +83,7 @@
       integer, parameter :: IDC_EDIT_BOMB_ZONAL_WAVE = 1046
       integer, parameter :: IDC_BUTTON_RUN_MODEL = 1046
       integer, parameter :: IDC_LIST_EKMAN_FRICTION = 1049
+      integer, parameter :: IDC_COMBO_VERT_PROFILES = 1088
       integer, parameter :: IDC_BUTTON_INIT_ZERO_OROGRAPHY2 = 1078
       integer, parameter :: IDC_BUTTON_EDIT_INT_DONE = 1036
       integer, parameter :: IDM_ABOUT = 30015
@@ -127,7 +128,6 @@
       integer, parameter :: IDC_COMBO1 = 1073
       integer, parameter :: IDC_EDIT_BOMB_STRM_AMP = 1048
       integer, parameter :: IDC_STATIC_BOMB_EXPONENT = 1095
-      integer, parameter :: IDC_COMBO2 = 1088
       integer, parameter :: IDC_STATIC_TEMP_MIXING = 1056
       integer, parameter :: IDC_BUTTON_SETUP_BOMB = 1049
       integer, parameter :: IDC_STATIC_COMBO_SETTINGS1 = 1014

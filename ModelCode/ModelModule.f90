@@ -1109,12 +1109,7 @@ module ModelModule
 
             EkmanMixingLower = 2.0 * gVertArr%FJ(1) * (gVertArr%PP(2) - gVertArr%PP(3)) / (gVertArr%PP(1) + gVertArr%PP(3))
             EkmanMixingUpper = 2.0 * gVertArr%FJ(NLEV - 1) * (gVertArr%PP(NLEV - 1) - gVertArr%PP(NLEV)) / (gVertArr%PP(NLEV -1) - gVertArr%PP(NLEV + 1))
-            ! Replace the do loop over ITOT
-            !gHorzArr%S(1:ITOT, 1) = (1. + gHorzArr%AKL(1 : ITOT)) * gVertArr%FK(1) * (gHorzArr%SF(1:ITOT, 1) - gHorzArr%PS(1:ITOT, 1)) + &
-            !            EkmanMixingLower * (gHorzArr%PS(1:ITOT, 2) - gHorzArr%PS(1:ITOT, 1))
-            !gHorzArr%S(1:ITOT, NLEV) = (1. + gHorzArr%AKL(1 : ITOT)) * gVertArr%FK(NLEV) * (gHorzArr%SF(1:ITOT, NLEV) - gHorzArr%PS(1:ITOT, NLEV)) + &
-            !            EkmanMixingUpper * (gHorzArr%PS(1:ITOT, NLEV - 1) - gHorzArr%PS(1:ITOT, NLEV))
-            
+            ! Replace the do loop ove
             gHorzArr%S(1:ITOT, 1) = gVertArr%FK(1) * (gHorzArr%SF(1:ITOT, 1) - gHorzArr%PS(1:ITOT, 1)) + &
                         EkmanMixingLower * (gHorzArr%PS(1:ITOT, 2) - gHorzArr%PS(1:ITOT, 1))
             gHorzArr%S(1:ITOT, NLEV) = gVertArr%FK(NLEV) * (gHorzArr%SF(1:ITOT, NLEV) - gHorzArr%PS(1:ITOT, NLEV)) + &
@@ -1126,9 +1121,6 @@ module ModelModule
                 EkmanFromAbove = 2.0 * gVertArr%FJ(N) * (gVertArr%PP(N + 1) - gVertArr%PP(N + 2)) / (gVertArr%PP(N) - gVertArr%PP(N + 2))
                 EkmanFromBelow = 2.0 * gVertArr%FJ(N - 1) * (gVertArr%PP(N - 1) - gVertArr%PP(N)) / (gVertArr%PP(N - 1) - gVertArr%PP(N + 1))
                 ! Replace the do loop over ITOT
-                !gHorzArr%S(1:ITOT, N) = (1. + gHorzArr%AKL(1 : ITOT)) * gVertArr%FK(N) * (gHorzArr%SF(1:ITOT, N) - gHorzArr%PS(1:ITOT, N)) + &
-                !   EkmanFromAbove * (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) + &
-                !   EkmanFromBelow * (gHorzArr%PS(1:ITOT, N - 1) - gHorzArr%PS(1:ITOT, N))
                 gHorzArr%S(1:ITOT, N) = gVertArr%FK(N) * (gHorzArr%SF(1:ITOT, N) - gHorzArr%PS(1:ITOT, N)) + &
                    EkmanFromAbove * (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) + &
                    EkmanFromBelow * (gHorzArr%PS(1:ITOT, N - 1) - gHorzArr%PS(1:ITOT, N))

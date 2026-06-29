@@ -491,6 +491,9 @@ module ModelControlDialogModule
                             "The model has gone unstable. Dependent variables reset"C, &
                             "Numeric Instability!"C, &
                             IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
+                        bret = EnableWindow(hDlg, .TRUE.)
+                        bret = SetFocus(hDlg)
+                        bret = SetActiveWindow(hDlg)
                     endif
                     call SetModRealParamsDimensionalState(isDimensional)
                     call initializeDialog()
@@ -776,8 +779,8 @@ module ModelControlDialogModule
             call AddListViewRow(hList, "Number of time steps", gModIntParams%ISTEP)
             call AddListViewRow(hList, "Number of time steps between display output", gModIntParams%outputInterval) 
             call AddListViewRow(hList, "Lower bound of zonal waves to retain in maps", gModIntParams%lowerZonalWave)
-            call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%upperZonalWave)
-            call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%lowerMeridWave)
+            call AddListViewRow(hList, "Lower bound of meridional waves to retain in maps", gModIntParams%lowerMeridWave)
+            call AddListViewRow(hList, "Upper bound of zonal waves to retain in maps", gModIntParams%upperZonalWave)
             call AddListViewRow(hList, "Upper bound of meridional waves to retain in maps", gModIntParams%upperMeridWave)
         end subroutine loadIntItemsIntoListView
 
@@ -852,9 +855,9 @@ module ModelControlDialogModule
                 case (6)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%lowerZonalWave, .TRUE.)
                 case (7)
-                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%upperZonalWave, .TRUE.)
-                case (8)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%lowerMeridWave, .TRUE.)
+                case (8)
+                    bret = SetDlgItemInt(hDlg, editId, gModIntParams%upperZonalWave, .TRUE.)
                 case (9)
                     bret = SetDlgItemInt(hDlg, editId, gModIntParams%upperMeridWave, .TRUE.)
             end select
@@ -920,9 +923,9 @@ module ModelControlDialogModule
                 case (6)
                     gModIntParams%lowerZonalWave = newValue
                 case (7)
-                    gModIntParams%upperZonalWave = newValue
-                case (8)
                     gModIntParams%lowerMeridWave = newValue
+                case (8)
+                    gModIntParams%upperZonalWave = newValue
                 case (9)
                     gModIntParams%upperMeridWave = newValue
             end select

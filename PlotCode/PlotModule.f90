@@ -62,28 +62,6 @@ module PlotModule
     integer(kind=4), parameter :: SPRD_TEMP_COLOR = Z'00775577'               ! RGB(119, 85, 119)
     integer(kind=4), parameter :: BFIT_TEMP_COLOR = Z'0000AAFF'               ! RGB(255, 170, 0)
 
-
-
-    !type :: PlotConfig
-    !    integer :: stn_latitude     ! Latitude for weather station plots
-    !    integer :: stn_longitude    ! Longitude for weather station plots
-    !    integer :: row              ! Row for latitude Hovmoller plots
-    !    integer :: col              ! Column for longitude Hovmoller plots
-    !    integer :: contHghtsMaps    ! Contour interval index for Hovmoller and weather map in meters
-    !    integer :: contHghtsSeries  ! Contour interval for Phase space and time series in meters
-    !    integer :: logfloor         ! Orders of magnitude for log plots
-    !    integer :: contKESeries     ! Contour interval for KE 
-    !    integer :: contTempsMaps    ! Contour interval for Hovmoller and weather maps in deg C
-    !    integer :: contTempsSeries  ! Contour interval  for Phase space and time series in deg C
-    !    integer :: hov_latitude     ! Latitude for Hovmoller plots
-    !    integer :: hov_longitude    ! Longitude for Hovmoller plots
-    !    integer :: phaseSpaceXaxis  ! Which spectral coefficient to plot on X-axis in phase space plots
-    !    integer :: phaseSpaceYaxis  ! Which spectral coefficient to plot on Y-axis in phase space plots
-    !    logical :: weatherStnCom(16)! Which spectral components to inlcude in weather station time series (first 10)
-    !                                !   and ensemble stats display (11-16)
-    !    LOGICAL :: drawLines        ! Whether to draw connecting lines in time series plots
-    !end type PlotConfig
-    
     type :: TimeSeriesBuffer
         REAL(4), ALLOCATABLE :: data_buffer(:)
         REAL(wp), ALLOCATABLE :: real8_buffer(:)        ! Use of circular buffer for other purposes than plotting time series
@@ -1025,7 +1003,7 @@ module PlotModule
             real, intent(inout) :: grid(:, :)
             type(WeatherMap), intent(in) :: weatherMapType
 
-            integer :: index, K, L, IXMAX, IYMAX, KMAX2, LMAX2
+            integer :: index, K, L, IXMAX, IYMAX, KMIN, LMIN, KMAX, LMAX
             REAL :: temp_calc, wave_cos, wave_sin, zonal_val
 
             if (weatherMapType%field == PLOTTING_OFF) then
@@ -1034,75 +1012,83 @@ module PlotModule
             
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
-            KMAX2 = gModIntParams%KMAX2
-            LMAX2 = gModIntParams%LMAX2
+            KMIN = gModIntParams%lowerZonalWave
+            LMIN = gModIntParams%lowerMeridWave
+            KMAX = gModIntParams%upperZonalWave
+            LMAX = gModIntParams%upperMeridWave
             
             gTransArr%plot = 0.0        !FFTw3 forces us to define two whole arrays JUST for plotting an extra row
             grid = 0.0                  ! Fortran short cut to zero an entire array in all dimensions. This is the output array for the grid
             gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT)
 
-            ! 1. Load ac(k,l)cosknxsinly and as(k,l)sinknxsinly into the imaginary and real parts of Gc for each L
-            ! In two dimensions the spectral coeffcients A(k,l) would be
-            ! A(k,l) = (ac(k,l)*2*cosknx + as(k,l)*2*sinknx)sinly + sqrt(2)*az(l)*cosly
-            ! However, our arrays for the horizonal field are compacted into one dimension such that
-            ! the first LMAX2 components are the zonal az(L) sqrt(2)cosLy part. 
-            ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
-            temp_calc = SQRT22 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+            if (LMIN > 0) then
+                ! 1. Load ac(k,l)cosknxsinly and as(k,l)sinknxsinly into the imaginary and real parts of Gc for each L
+                ! In two dimensions the spectral coeffcients A(k,l) would be
+                ! A(k,l) = (ac(k,l)*2*cosknx + as(k,l)*2*sinknx)sinly + sqrt(2)*az(l)*cosly
+                ! However, our arrays for the horizonal field are compacted into one dimension such that
+                ! the first LMAX2 components are the zonal az(L) sqrt(2)cosLy part. 
+                ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
+                temp_calc = SQRT22 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
             
-            ! ====================================================================
-            ! PART A: LOAD THE ZONAL MODES (cosLy only)
-            ! ====================================================================
-            ! The first LMAX entries in your linear array are your pure zonal components.
-            ! They occupy the K=0 frequency (Column 1 in Fortran's 1-based indexing).
-            !DO L = 1, LMAX2
-            !    ! Extract value from the linear array (1 to LMAX2 block) weatherMapType%value(L)
-            !    ! Map to 2D complex array: K=0 implies column 1.
-            !    ! Zonal-only modes are cosLy, so place entirely in the REAL part.
-            !    ! Note: Add +1 to L if your physical grid index L=0 is reserved for mean flow
-            !    gTransArr%Gc(1, L + 1) = CMPLX(temp_calc *weatherMapType%value(L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-            !end do
+                ! ====================================================================
+                ! PART A: LOAD THE ZONAL MODES (cosLy only)
+                ! ====================================================================
+                ! The first LMAX entries in your linear array are your pure zonal components.
+                ! They occupy the K=0 frequency (Column 1 in Fortran's 1-based indexing).
+                !DO L = 1, LMAX2
+                !    ! Extract value from the linear array (1 to LMAX2 block) weatherMapType%value(L)
+                !    ! Map to 2D complex array: K=0 implies column 1.
+                !    ! Zonal-only modes are cosLy, so place entirely in the REAL part.
+                !    ! Note: Add +1 to L if your physical grid index L=0 is reserved for mean flow
+                !    gTransArr%Gc(1, L + 1) = CMPLX(temp_calc *weatherMapType%value(L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                !end do
             
-            do L = 1, LMAX2
-                zonal_val = temp_calc * weatherMapType%value(L)
+                do L = LMIN, LMAX
+                    zonal_val = temp_calc * weatherMapType%value(L)
     
-                ! Positive frequency (+L)
-                gTransArr%Gc(1, L + 1)         = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-                ! Negative frequency (-L) matches exactly because cosine is symmetric: cos(-Ly) = cos(Ly)
-                gTransArr%Gc(1, IYMAX - L + 1) = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
-            end do
+                    ! Positive frequency (+L)
+                    gTransArr%Gc(1, L + 1)         = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                    ! Negative frequency (-L) matches exactly because cosine is symmetric: cos(-Ly) = cos(Ly)
+                    gTransArr%Gc(1, IYMAX - L + 1) = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+                end do
+            else 
+                if (KMIN > 0) LMIN = 1
+            endif
 
-            !! ====================================================================
-            ! PART B: LOAD THE WAVE MODES (cosKx and sinKx for sinLy)
-            ! ====================================================================
-            ! These follow the LMAX2 block. They cycle through all L for each K.
-            ! Each unique (K, L) combination contains a pair of entries: [Cos, Sin]
-            temp_calc = 0.5 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+            if (KMIN > 0) then
+                !! ====================================================================
+                ! PART B: LOAD THE WAVE MODES (cosKx and sinKx for sinLy)
+                ! ====================================================================
+                ! These follow the LMAX2 block. They cycle through all L for each K.
+                ! Each unique (K, L) combination contains a pair of entries: [Cos, Sin]
+                temp_calc = 0.5 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
             
-            DO K = 1, KMAX2
-                DO L = 1, LMAX2
+                DO K = KMIN, KMAX
+                    DO L = LMIN, LMAX
         
-                    ! 1. Calculate the exact index in your linear storage vector
-                    index = LMAX2 &                         ! Step past Zonal block
-                          + (K - 1) * (LMAX2 * 2) &         ! Step past completed K channels
-                          + (L - 1) * 2 &                   ! Step past completed L pairs in current K
-                          + 1                               ! Pointer to the Cos entry
+                        ! 1. Calculate the exact index in your linear storage vector
+                        index = gModIntParams%LMAX2 &                         ! Step past Zonal block
+                              + (K - 1) * (gModIntParams%LMAX2 * 2) &          ! Step past completed K channels
+                              + (L - 1) * 2 &                   ! Step past completed L pairs in current K
+                              + 1                               ! Pointer to the Cos entry
         
-                    ! Extract the unscaled wave amplitudes
-                    wave_cos = weatherMapType%value(index) * temp_calc      ! The cosknxsinly part
-                    wave_sin = weatherMapType%value(index + 1) * temp_calc  ! The sinknxsinly part
+                        ! Extract the unscaled wave amplitudes
+                        wave_cos = weatherMapType%value(index) * temp_calc      ! The cosknxsinly part
+                        wave_sin = weatherMapType%value(index + 1) * temp_calc  ! The sinknxsinly part
         
-                    ! 2. --- Interaction with positive Y-frequency (+L slot) ---
-                    ! For cos(Kx)*sin(Ly) -> Sits in Imaginary part, with a negative sign
-                    ! For sin(Kx)*sin(Ly) -> Sits in Real part, with a negative sign
-                    gTransArr%Gc(K + 1, L + 1) = CMPLX(-wave_sin, -wave_cos, kind=C_FLOAT)
+                        ! 2. --- Interaction with positive Y-frequency (+L slot) ---
+                        ! For cos(Kx)*sin(Ly) -> Sits in Imaginary part, with a negative sign
+                        ! For sin(Kx)*sin(Ly) -> Sits in Real part, with a negative sign
+                        gTransArr%Gc(K + 1, L + 1) = CMPLX(-wave_sin, -wave_cos, kind=C_FLOAT)
         
-                    ! 3. --- Interaction with negative Y-frequency (-L slot) ---
-                    ! Because sin(-Ly) = -sin(Ly), the signs reverse across the wrap-around boundary.
-                    ! This forces the unwanted cross-terms to cancel out during the 2D transform!
-                    gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(wave_sin, wave_cos, kind=C_FLOAT)
+                        ! 3. --- Interaction with negative Y-frequency (-L slot) ---
+                        ! Because sin(-Ly) = -sin(Ly), the signs reverse across the wrap-around boundary.
+                        ! This forces the unwanted cross-terms to cancel out during the 2D transform!
+                        gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(wave_sin, wave_cos, kind=C_FLOAT)
         
+                    END DO
                 END DO
-            END DO
+            endif
             
             ! ====================================================================
             ! PART C: EXECUTE THE 2D COMPLEX-TO-REAL TRANSFORM
@@ -1111,6 +1097,7 @@ module PlotModule
             ! plot (Output): Real array of size (IXMAX, IYMAX)
 
             call fftwf_execute_dft_c2r(plan_c2r_2d, gTransArr%Gc, gTransArr%plot)
+
 
             ! Copy the first column to the column just after the FFT data
             ! where the FFT data occupies indices 1 to IXMAX
@@ -1940,29 +1927,41 @@ module PlotModule
 
         !> This routine gets the value at a (longitude, latitude, level) point 
         function computeValue(trigTableType, variable) result (value)
-                use ConstantsModule, only: SQRT2
-                use ArrayDimensionsModule, only: gCurrentDims
-                use ModelParamsModule, only: gModIntParams
-                implicit none
+            use ConstantsModule, only: SQRT2
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelParamsModule, only: gModIntParams
+            implicit none
 
-                class(TrigTable), intent(in) :: trigTableType
-                real, intent(in) :: variable(:)
+            class(TrigTable), intent(in) :: trigTableType
+            real, intent(in) :: variable(:)
                 
-                real :: value, value2
-                integer :: I, K, L
+            real :: value, value2
+            integer :: I, K, L, KMIN, KMAX, LMIN, LMAX, IMAX
+                
+            KMIN = gModIntParams%lowerZonalWave
+            LMIN = gModIntParams%lowerMeridWave
+            KMAX = gModIntParams%upperZonalWave
+            LMAX = gModIntParams%upperMeridWave
 
-                value = 0.0
-                do I = 1, gModIntParams%LMAX2
+            value = 0.0
+            if (LMIN > 0) then
+                do I = LMIN, LMAX
                     value = value + variable(I) * trigTableType%cosy(I)
                 end do
                 value = SQRT2 * value
-                K = 1
-                L = 1
-                value2 = 0.0
-                I = gModIntParams%LMAX2 + 1
-                do while (I .LT. gCurrentDims%ITOT)
+            else
+                if (KMIN > 0) LMIN = 1
+            endif
+            value2 = 0.0
+            if (KMIN > 0) then
+                K = KMIN
+                L = LMIN
+                !I = gModIntParams%LMAX2  + 2 * (KMIN - 1) * gModIntParams%LMAX2 + 1
+                I = gModIntParams%LMAX2 * (2 * KMIN - 1) + 1
+                IMAX = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * KMAX
+                do while (I .LT. IMAX)
                     value2 = value2 + (variable(I) * trigTableType%cosx(K) + &
-                                     variable(I + 1) * trigTableType%sinx(K)) * trigTableType%siny(L)
+                                        variable(I + 1) * trigTableType%sinx(K)) * trigTableType%siny(L)
                     L = L + 1
                     if (L .GT. gModIntParams%LMAX2) then
                         K = K + 1
@@ -1970,7 +1969,8 @@ module PlotModule
                     endif
                     I = I + 2
                 end do
-                value = value + 2.0 * value2
+            endif
+            value = value + 2.0 * value2
         end function computeValue
 
         subroutine loadTimeSeriesArray(timeSeriesBuf, value, yzero_axis, color, clearScreen, drawMovingTimeLines)
@@ -2423,11 +2423,14 @@ module PlotModule
             integer, intent(in) :: level
             REAL, intent(in) :: tempScale
             
-            integer :: KMAX, LMAX, IXMAX, K, L, index
+            integer :: KMIN, LMIN, KMAX, LMAX, IXMAX, K, L, index
             REAL :: temp_calc, zonalMean, sin_ly, scale
             
-            KMAX = gModIntParams%KMAX2
-            LMAX = gModIntParams%LMAX2
+            KMIN = gModIntParams%lowerZonalWave
+            LMIN = gModIntParams%lowerMeridWave
+            KMAX = gModIntParams%upperZonalWave
+            LMAX = gModIntParams%upperMeridWave
+
             IXMAX = gCurrentDims%IXMAX
 
             call loadFields(baseMapType%value, baseMapType%field, level, baseMapType%interpArrSelection)
@@ -2441,30 +2444,39 @@ module PlotModule
             ! 1. Calculate the zonal mean (the first LMAX elements)
             !    This is the "background" field at latitude y0
             ! There is no transform here so we dont need to worry about normalization
-            zonalMean = sum(baseMapType%value(1:LMAX) * baseMapType%cosy(1:LMAX)) * SQRT2 * scale
+            zonalMean = 0.0
+            if (LMIN > 0) then
+                zonalMean = sum(baseMapType%value(LMIN:LMAX) * baseMapType%cosy(LMIN:LMAX)) * SQRT2 * scale
+            else
+                if (KMIN > 0) LMIN = 1
+            endif
 
             ! 1. Initialize input with zeros (crucial since k=0 is empty)
-            gTransArr%GcZ = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
-            temp_calc = 4. * norm_fwd * scale ! Do the normalization first so we dont have to normalize after the transform
-            ! We have a 4 here instead of a 2 as norm_fwd is defined as 1/4 which is okay for 2-d transform. This is a 1-d which needs to be 1/2
-            ! Then we have the 2 factor in front of the wave eigenfunctions.
+            if (KMIN > 0) then
+                gTransArr%GcZ = cmplx(0.0, 0.0, kind=C_FLOAT_COMPLEX)
+                temp_calc = 4. * norm_fwd * scale ! Do the normalization first so we dont have to normalize after the transform
+                ! We have a 4 here instead of a 2 as norm_fwd is defined as 1/4 which is okay for 2-d transform. This is a 1-d which needs to be 1/2
+                ! Then we have the 2 factor in front of the wave eigenfunctions.
 
-            ! 2. Sum over L to collapse the Y-dimension
-            do L = 1, LMAX
-                sin_ly = baseMapType%siny(L) ! Precomputed sinly's
-                do K = 1, KMAX
-                    ! Indexing for the 1-d storage of the zonal and wave components:
-                    index = LMAX + 2 * LMAX * (K - 1) + 2 * (L - 1) + 1
-                    ! Accumulate the weighted spectral components
-                    gTransArr%GcZ(K + 1) = gTransArr%GcZ(K + 1) + CMPLX( &
-                        temp_calc * baseMapType%value(index) * sin_ly, &
-                        -temp_calc * baseMapType%value(index + 1) * sin_ly, &
-                        kind=C_FLOAT_COMPLEX)
+                ! 2. Sum over L to collapse the Y-dimension
+                do L = LMIN, LMAX
+                    sin_ly = baseMapType%siny(L) ! Precomputed sinly's
+                    do K = KMIN, KMAX
+                        ! Indexing for the 1-d storage of the zonal and wave components:
+                        index = gModIntParams%LMAX2 + 2 * gModIntParams%LMAX2 * (K - 1) + 2 * (L - 1) + 1
+                        ! Accumulate the weighted spectral components
+                        gTransArr%GcZ(K + 1) = gTransArr%GcZ(K + 1) + CMPLX( &
+                            temp_calc * baseMapType%value(index) * sin_ly, &
+                            -temp_calc * baseMapType%value(index + 1) * sin_ly, &
+                            kind=C_FLOAT_COMPLEX)
+                    end do
                 end do
-            end do
 
-            ! 3. Transform the accumulated 1D row
-            call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
+                ! 3. Transform the accumulated 1D row
+                call fftwf_execute_dft_c2r(plan_x_c2r_1d, gTransArr%GcZ, gTransArr%GZonal)
+            else
+                gTransArr%GZonal = 0.0
+            endif
             gTransArr%GZonal(IXMAX + 1) = gTransArr%GZonal(1)
             gTransArr%GZonal(1 : IXMAX + 1) = gTransArr%GZonal(1 : IXMAX + 1) + zonalMean
         end subroutine loadLatValues
@@ -2596,7 +2608,7 @@ module PlotModule
 
             real :: temp_calc, cos_kx, sin_kx, scale
             real :: wave_real, wave_imag
-            integer :: KMAX, LMAX, index, K
+            integer :: KMIN, LMIN, KMAX, LMAX, index, K
 
             call loadFields(baseMapType%value, baseMapType%field, level, baseMapType%interpArrSelection)
             if (gIsTemperature(baseMapType%field)) then
@@ -2604,43 +2616,49 @@ module PlotModule
             else 
                 scale = baseMapType%scale
             endif
-            KMAX = gModIntParams%KMAX2
-            LMAX = gModIntParams%LMAX2
+            KMIN = gModIntParams%lowerZonalWave
+            LMIN = gModIntParams%lowerMeridWave
+            KMAX = gModIntParams%upperZonalWave
+            LMAX = gModIntParams%upperMeridWave
             
             ! 1. The cosLy components
             ! These are k=0, so they have no x-dependence. 
             ! Put them straight into the cosine buffer.
             gTransArr%GZonal = 0
-            gTransArr%GZonal(2:LMAX+1) = baseMapType%value(1:LMAX) * scale * SQRT22
-
-
-            temp_calc = 2. * norm_cosly * scale ! Do the normalization first so we dont have to normalize after the transform
-
-            ! 2. The Waves (sinLy components)
-            gTransArr%G2Zonal = 0 ! Zero this array
+            if (LMIN > 0) then
+                gTransArr%GZonal(LMIN + 1:LMAX+1) = baseMapType%value(LMIN:LMAX) * scale * SQRT22
             
-            ! 1. Precompute combined phase/normalization factor for each K
-            ! This moves the K-loop's trigonometry out of the L-loop bottleneck
-            do K = 1, KMAX
-                wave_real = temp_calc * baseMapType%cosx(K)
-                wave_imag = temp_calc * baseMapType%sinx(K)
-    
-                index = LMAX + 2 * LMAX * (K - 1) + 1
-    
-                ! 2. Vectorized slice operation
-                ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
-                gTransArr%G2Zonal(1:LMAX) = gTransArr%G2Zonal(1:LMAX) + &
-                    (baseMapType%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
-                    (baseMapType%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
-            end do
+                ! 2. Transform zonal to Grid
+                ! Background flow (using REDFT01 for Cosine)
+                call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%GZonal, gTransArr%GZonal)
+            else
+                if (KMIN > 0) LMIN = 1
+            endif
 
-            ! 3. Transform to Grid
-            ! Background flow (using REDFT01 for Cosine)
-            call fftwf_execute_r2r(plan_y_FFTW_REDFT01, gTransArr%GZonal, gTransArr%GZonal) 
+            gTransArr%G2Zonal = 0 ! Zero this array
+            if (KMIN > 0) then
 
-            ! Waves (using RODFT01 for Sine)
-            ! We use a temp buffer so we can add them to the background
-            call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2Zonal, gTransArr%G2Zonal)
+                temp_calc = 2. * norm_cosly * scale ! Do the normalization first so we dont have to normalize after the transform
+
+                ! 3. Precompute combined phase/normalization factor for each K
+                ! This moves the K-loop's trigonometry out of the L-loop bottleneck
+                do K = KMIN, KMAX
+                    wave_real = temp_calc * baseMapType%cosx(K)
+                    wave_imag = temp_calc * baseMapType%sinx(K)
+
+                    index = LMAX + 2 * LMAX * (K - 1) + 1
+
+                    ! 2. Vectorized slice operation
+                    ! Instead of looping L=1 to LMAX, use stride-2 slices to pick out Real and Imag parts
+                    gTransArr%G2Zonal(LMIN:LMAX) = gTransArr%G2Zonal(LMIN:LMAX) + &
+                        (baseMapType%value(index : index + 2*LMAX - 2 : 2) * wave_real) - &
+                        (baseMapType%value(index + 1 : index + 2*LMAX - 1 : 2) * wave_imag)
+                end do
+
+                ! Waves (using RODFT01 for Sine)
+                ! We use a temp buffer so we can add them to the background
+                call fftwf_execute_r2r(plan_y_FFTW_RODFT01, gTransArr%G2Zonal, gTransArr%G2Zonal)
+            endif
             ! 4. Combine
             gTransArr%GZonal(1:gCurrentDims%IYMAX) = gTransArr%GZonal(1:gCurrentDims%IYMAX) + gTransArr%G2Zonal(1:gCurrentDims%IYMAX)
 

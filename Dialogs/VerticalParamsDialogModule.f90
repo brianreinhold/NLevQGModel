@@ -26,10 +26,10 @@ module VerticalParamsDialogModule
             use NLevQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
-            use ConstantsModule, only: REAL_TO_ASCII, SQRT2
+            use ConstantsModule, only: REAL_TO_ASCII, SQRT2, STRATOSPHERIC_WARMING_32
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
-                                           updateListViewValue, HideMyEdit
+                                           updateListViewValue, HideMyEdit, GetComboIndex
             use ModelParamsModule, only: gModIntParams
             use KeyboardHooksModule, only: KeyboardForDlgVerticalParamsProc
             use ModelFieldsModule, only: gVertArr, gHorzArr
@@ -61,7 +61,7 @@ module VerticalParamsDialogModule
             real, pointer :: pTempDriving(:)  ! Local 1D pointer
 
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus
+            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo
             integer, save :: pvRowClicked, thsRowClicked, fkRowClicked, fjRowClicked
             integer, save :: hRowClicked, gRowClicked, tfRowClicked
             integer :: id
@@ -172,7 +172,26 @@ module VerticalParamsDialogModule
                     !    end select
                     !end if
 
-                    select case (IAND(wParam, 16#FFFF))
+                    select case (IAND(wParam, Z'FFFF'))
+
+                        case (IDC_COMBO_VERT_PROFILES)
+                            iret = GetComboIndex(hDlg, IDC_COMBO_VERT_PROFILES)
+                            if (iret == 0) return
+                            if (iret == STRATOSPHERIC_WARMING_32) then
+                                if (gModIntParams%NLEV .NE. 32) then
+                                    bret = MessageBox (hDlg, &
+                                        "This profile needs to have the model configured to 32 levels."C, &
+                                        "Incorrect number of levels"C, &
+                                        IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
+                                    return
+                                endif
+                            endif
+                            call generateVerticalProfile(iret)
+                            call initializeFields()
+                            bret = MessageBox (hDlg, &
+                                "The selected profile has been set."C, &
+                                "Vertical Profile set"C, &
+                                IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
 
 !  F10  Exit --------------------------------------------
                         case (IDC_BUTTON_EXIT_VERTICAL)
@@ -281,6 +300,13 @@ module VerticalParamsDialogModule
         
                 subroutine initializeFields()
                     implicit none
+                    
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_VERT_PROFILES)
+                    bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming'//char(0)))
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(0, UINT_PTR), 0)
                     
                     call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer", gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer", gModIntParams%NLEV)
@@ -615,5 +641,68 @@ module VerticalParamsDialogModule
             vertArr(rowClicked + 1) = val
 
         end function readRealDataFromEditBox
+        
+        subroutine generateVerticalProfile(profile)
+            use ConstantsModule, only: DEFAULT_PROFILE, STRATOSPHERIC_WARMING_32, TEMPERATURE
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            use ModelParamsModule, only: gModIntParams, gPlotScales
+            use SetupModule, only: DFDIAB, DimensionalizeVerticalParams, DimensionalizeHorizontalParams
+
+            implicit none
+
+            integer, intent(in) :: profile
+            
+            integer :: n
+            
+            if (profile == DEFAULT_PROFILE) then
+                call DFDIAB(.false.)  ! This will create values in non-dimensional form.
+                ! If the Dialog is viewing in dimensional form, we need to set these to their dimensional form
+                if (gVertArr%isDimensionalized) then
+                    gVertArr%isDimensionalized = .false.
+                    call DimensionalizeVerticalParams()
+                    
+                    do n = 1, gModIntParams%NLEV - 1
+                        gHorzArr%TF(1, N) = gHorzArr%TF(1, N) * gPlotScales(TEMPERATURE) / gVertArr%A(N)
+                    end do
+                    
+                endif
+            elseif (gModIntParams%NLEV == 32 .AND. profile == STRATOSPHERIC_WARMING_32) then
+
+                gVertArr%PV = [ &
+                    960.0,  900.0,  840.0,  780.0,  720.0,  660.0,  600.0,  540.0, &
+                    480.0,  420.0,  360.0,  300.0,  285.0,  270.0,  255.0,  240.0, &
+                    225.0,  210.0,  195.0,  180.0,  165.0,  150.0,  135.0,  120.0, &
+                    105.0,   90.0,   75.0,   60.0,   45.0,   30.0,   15.0,    5.0  ]
+                gVertArr%THS = [ &
+                    285.00, 287.96, 290.92, 293.87, 296.83, 299.79, 302.75, 305.70, &
+                    308.66, 311.62, 314.58, 317.54, 318.27, 319.01, 319.75, 323.76, &
+                    329.78, 336.35, 343.55, 351.51, 360.36, 370.31, 381.63, 394.70, &
+                    410.06, 428.53, 451.46, 481.19, 522.44, 586.64, 715.19, 979.07  ]
+                ! These arrays are of length 31
+                gVertArr%FK = [ &
+                    0.07, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  &
+                    0.0,  0.0,  0.0,  0.0,  0.0,  50.0, 50.0, 50.0, &
+                    50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, &
+                    50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 40.0, 10.0  ]
+                gVertArr%FJ = [ &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0        ]
+                gHorzArr%TF(1, :) = [ &
+                    43.0,  46.0,  48.0,  50.0,  51.0,  52.0,  52.0,  51.0,  50.0,  44.0,  43.0,  42.0,  41.0,  41.0,  41.0,  43.0, &
+                    52.0,  67.0,  100.0, 126.0, 152.0, 150.0, 151.0, 155.0, 165.0, 176.0, 190.0, 200.0, 211.0, 227.0, 271.0        ]
+                gVertArr%H = [ &
+                    4.0,   41.0,  40.0,  40.0,  39.0,  39.0,  40.0,  40.0,  39.0,  37.0,  40.0,  42.0,  42.0,  45.0,  49.0,  50.0, &
+                    50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  25.0,  13.0         ]
+                ! This array is only of size 30
+                gVertArr%g = [ &
+                    1.0, 1.2, 1.5, 1.8, 2.1, 2.6, 3.1, 3.7, &
+                    4.5, 5.4, 6.5, 7.9, 8.2, 8.6, 20.0, 20.0, &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
+                    20.0, 20.0, 20.0, 20.0, 20.0, 20.0               ]
+            endif
+        end subroutine generateVerticalProfile
+
 
 end module VerticalParamsDialogModule
