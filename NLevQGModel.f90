@@ -939,6 +939,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             real, intent(in) :: val
 
             select case (field)     ! semi colon allows more than one line of code on a single line like in C
+                case (VORTICITY);   write(buf, '("Vorticity ", F10.2, " 10**-5/s")') val
                 case (HEIGHT);      write(buf, '("Heights ", F10.2, " m")') val
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
                 case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/hr")') val

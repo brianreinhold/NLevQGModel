@@ -159,26 +159,24 @@ module ModelControlDialogModule
                                         intRowClicked = -1 ! Reset integer row clicked
                                         hList = GetDlgItem(hDlg, IDC_REALVALUES)
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_REALVALUES)
-                                        ios = realRowClicked
+                                        !ios = realRowClicked
                                         realRowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
-                                        if (ios .EQ. realRowClicked) then
-                                            bret = SetFocus(hEdit)
-                                            bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
-                                            return
-                                        end if
                                         ! Hides the integer edit box if it is visible
                                         bret = ShowWindow(GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES), SW_HIDE)
                                         ! Moves the edit box over the value and focuses it
-                                        call moveEditBox(hDlg, hList, hEdit, realRowClicked) ! (method in NlevelQGModelglobals))
+                                        call moveEditBox(hDlg, hList, hEdit, realRowClicked) ! (method in DialogHelpers))
 
                                         ! Method picks the correct real parameter to convert to string for edit box
                                         str = getStringFromRealForEditBox(j)
+                                        bret = SetFocus(hEdit)
+                                        ! Forces the edit box to redraw itself. Without this, the edit box will not show the cursor until the user clicks on it.
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
                                     ModelControlDlgProc = 0
                                     return
-                            end select
+                                end select
+                            ! Load string into edit box
                             bret = SetDlgItemText(hDlg, IDC_EDIT_REALVALUES, str)
                         end if
                         if (pnmv%hdr%idFrom == IDC_INTEGERVALUES) then
@@ -193,19 +191,15 @@ module ModelControlDialogModule
                                         realRowClicked = -1 ! Reset real row clicked
                                         hList = GetDlgItem(hDlg, IDC_INTEGERVALUES)
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES)
-                                        ios = intRowClicked
+                                        !ios = intRowClicked
                                         intRowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
-                                        if (ios .EQ. intRowClicked) then
-                                            bret = SetFocus(hEdit)
-                                            bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
-                                            return
-                                        end if
                                         ! Hides the real edit box if it is visible
                                         bret = ShowWindow(GetDlgItem(hDlg, IDC_EDIT_REALVALUES), SW_HIDE)
                                         ! Moves the edit box over the value and focuses it
                                         call moveEditBox(hDlg, hList, hEdit, intRowClicked) ! (method in NlevelQGModelglobals))
                                         ! Method selects the integer in gModIntParams to load into the edit box
                                         bret = loadIntegerParameterIntoEditBox(hDlg, j, IDC_EDIT_INTEGERVALUES)
+                                        bret = SetFocus(hEdit)
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
@@ -312,6 +306,7 @@ module ModelControlDialogModule
                         CASE (IDC_EDIT_INTEGERVALUES) ! The ID of the integer edit box
                             SELECT CASE (ISHFT(wParam, -16))
                                 case( EN_KILLFOCUS)
+                                    call checkForResolutionChange()
                                     call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES))
                                 CASE (EN_CHANGE)
                                     ENB: BLOCK
@@ -437,26 +432,37 @@ module ModelControlDialogModule
 
             contains
 
+                subroutine checkForResolutionChange()
+                    if (paramChange%levels .NE. gModIntParams%NLEV) then
+                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        call initializeDialog()                        
+                    endif 
+                end subroutine checkForResolutionChange
+
                 subroutine cleanUpEditBoxes()
-                    TYPE(T_POINT) :: pt, pt2
-                    return
+                    !TYPE(T_POINT) :: pt, pt2
+                    !return
                     ! In case they are sill open with focus
-                    pt%x = 0
-                    pt%y = 0
-                    pt2%x = 32
-                    pt2%y = 12
+                    !pt%x = 0
+                    !pt%y = 0
+                    !pt2%x = 32
+                    !pt2%y = 12
                     if (realRowClicked > 0) then
                         hEdit = GetDlgItem(hDlg, IDC_EDIT_REALVALUES)
                         bret = SetDlgItemText(hDlg, IDC_EDIT_REALVALUES, ""//char(0))
                         call HideMyEdit(hEdit)
                         bret = SetFocus(GetDlgItem(hDlg, IDC_REALVALUES))
-                        bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                        !bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                        ! Move off screen
+                        bret = SetWindowPos(hEdit, 0, -500, -500, 0, 0, SWP_NOSIZE .OR. SWP_NOZORDER)
                     else
                         bret = SetDlgItemText(hDlg, IDC_EDIT_INTEGERVALUES, ""//char(0))
                         hEdit = GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES)
                         call HideMyEdit(hEdit)
-                        bret = SetFocus(hEdit)
-                        bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                        bret = SetFocus(GetDlgItem(hDlg, IDC_INTEGERVALUES))
+                        !bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                        ! Move off screen
+                        bret = SetWindowPos(hEdit, 0, -500, -500, 0, 0, SWP_NOSIZE .OR. SWP_NOZORDER)
                     endif
                 end subroutine cleanUpEditBoxes
                 
@@ -579,6 +585,7 @@ module ModelControlDialogModule
                     
                     !! ============================ Levels
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_PLOT_LEVEL)
+                    bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
                     do I = 1, SIZE(gVertArr%LVS)
                         WRITE(buffer, '(F6.1, " mb", A)') gVertArr%LVS(I), CHAR(0)
                         bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(buffer))

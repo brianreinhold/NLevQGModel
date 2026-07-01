@@ -689,6 +689,12 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gModIntParams%NLEV = 1
                 errorCode = IOR(errorCode, LEVELS_CHANGED)
             end if
+            !----------------------------------Checking bounds on plot level
+            if (gModIntParams%LEVP .GT. (gModIntParams%NLEV * 2 + 1)) gModIntParams%LEVP = gModIntParams%NLEV
+            
+            !----------------------------------Checking bounds on phase space indicies:
+            if (gModIntParams%phaseSpaceX .GT. gCurrentDims%ITOT) gModIntParams%phaseSpaceX = gModIntParams%LMAX2 + 1
+            if (gModIntParams%phaseSpaceY .GT. gCurrentDims%ITOT) gModIntParams%phaseSpaceY = gModIntParams%LMAX2 + 2
 
             !----------------------------------Checking bounds on lowerZonalWave,upperZonalWave:
             IF(gModIntParams%lowerZonalWave .LT. 0) gModIntParams%lowerZonalWave = 0

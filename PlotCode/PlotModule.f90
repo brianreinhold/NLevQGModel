@@ -1569,9 +1569,9 @@ module PlotModule
             integer, intent(in)        :: field
             integer, intent(in)        :: plotLevel, interpArrSelection
             
-            integer :: level, levelt
+            integer :: level, levelt, I
             logical :: isTempField, isOdd, isInterp
-            REAL, pointer :: var(:, :), tempPtr(:, :)
+            REAL, pointer :: var(:, :)
             REAL :: weight
             
             level = min(1 + (plotLevel - 1) / 2, gModIntParams%NLEV)
@@ -1606,8 +1606,12 @@ module PlotModule
             ! The levelt is for the interface. 
 
             select case (field)
-                case(VORTICITY)             ! Vorticity in 10**-5/s
-                    var => gHorzArr%PS(:, :)      ! PS is the streamfunction spectral components
+            case(VORTICITY)             ! Vorticity in 10**-5/s
+
+                    DO I = 1, SIZE(gHorzArr%PS, 2)
+                        gHorzArr%ZS(:, I) = -gHorzArr%AKL(:) * gHorzArr%PS(:, I)
+                    END DO
+                    var => gHorzArr%ZS(:, :)      ! ZS has the vorticity spectral components (it is zeroed at every N-cycle start so we can reuse
                     isTempField = .FALSE.
 
                 case(HEIGHT)                ! Height in meters

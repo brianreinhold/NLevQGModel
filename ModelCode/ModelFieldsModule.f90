@@ -101,7 +101,7 @@ MODULE ModelFieldsModule
         !END TYPE ChainHorzArrays
     ! Unfortunately Fortran does not allow allocatable target arrays in a type
 
-    REAL, ALLOCATABLE, TARGET :: GQ_pool(:,:)     !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
+    REAL, ALLOCATABLE, TARGET :: GQ_pool(:)       !  GQ(ITOT, maxLevels) is the cosG sinG (QG) values between the mean PS, TH of a layer
     REAL, ALLOCATABLE, TARGET :: BTA_pool(:)      !  BTA(ITOT) is the mean vertically (spatially) averaged flow 
     REAL, ALLOCATABLE, TARGET :: PSB_pool(:)      !  PSB(ITOT) is the vert. mean flow for the waves in the modelType = ZONAL_MEAN_FLOWS option
     REAL, ALLOCATABLE, TARGET :: PS_pool(:)       !  PS(ITOT,maxLevels) is the streamfunction spectral components
@@ -128,8 +128,8 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: Interp_Temp_pool(:)     !  An ITOT array to compute the temp variables at an interpolated level for plotting
     REAL, ALLOCATABLE, TARGET :: RK_pool(:)       !  RK(maxZonalWaves) K wavenumber as a real value
     REAL, ALLOCATABLE, TARGET :: RL_pool(:)       !  RL(maxMeridWaves) L wavenumber as a real value
-    REAL, ALLOCATABLE, TARGET :: ZS_pool(:,:)     !  ZS(ITOTD,maxLevels), for the N-cycle scheme
-    REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:,:) !  PSSAVE(ITOTD,maxLevels)
+    REAL, ALLOCATABLE, TARGET :: ZS_pool(:)       !  ZS(ITOTD,maxLevels), for the N-cycle scheme
+    REAL, ALLOCATABLE, TARGET :: PSSAVE_pool(:)   !  PSSAVE(ITOTD,maxLevels)
 
     COMPLEX, ALLOCATABLE, TARGET :: Gc_pool(:)    !  Gc((IXMAX/2 + 1) * IYMAX) complex grid point array for the periodic transform routine
     REAL, ALLOCATABLE, TARGET :: G1_pool(:)       !  G1(IXMAX*IYMAX) grid point arrays for transform routine
@@ -269,7 +269,7 @@ MODULE ModelFieldsModule
             gVertArr%Y(1 : levels)   => BV(12 * levels + 1 : 13 * levels)
             gVertArr%PP(1 : levels + 1)  => BV(13 * levels + 1 : 14 * levels + 1)  ! This array has one extra element; 1=sfc and maxLevels+1=Top. The size is levels + 1
             gVertArr%PRF(1 : 4 * levels) => BV(14 * levels + 2 : 18 * levels + 1)  ! This array has size 4 * levels
-            gVertArr%LVS(1: 2 * levels + 1) => BV(18 * levels + 3 : 20 * levels + 1) ! This array has size 2 * levels + 1
+            gVertArr%LVS(1: 2 * levels + 1) => BV(18 * levels + 2 : 20 * levels + 2) ! This array has size 2 * levels + 1
             
             gVertArr%defined = .TRUE. ! Set defined flag to true
         end function createVertArr
@@ -311,10 +311,8 @@ MODULE ModelFieldsModule
         !!                     meridional wave numbers are used in this object. 
         !! @return status An integer status code. 0 on success, non-zero on failure.
         FUNCTION AllocateHorizontalArrays() RESULT(status)
-            USE ISO_FORTRAN_ENV
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
 
             IMPLICIT NONE
 
@@ -322,7 +320,7 @@ MODULE ModelFieldsModule
 
             status = 0
 
-            ALLOCATE(GQ_pool(gArrayDims%itot , gUserSettings%maxLevels),&
+            ALLOCATE(GQ_pool(gArrayDims%itot * gUserSettings%maxLevels),&
                     BTA_pool(gArrayDims%itot),                         &
                     PSB_pool(gArrayDims%itot),                         &
                     PS_pool(13 * gArrayDims%itot * gUserSettings%maxLevels),  &
@@ -336,8 +334,8 @@ MODULE ModelFieldsModule
                     Interp_Temp_pool(gArrayDims%itot),                 &
                     RK_pool(gUserSettings%maxZonalWaves),              &
                     RL_pool(gUserSettings%maxMeridWaves),              &
-                    ZS_pool(gArrayDims%ITOT, gUserSettings%maxLevels), &
-                    PSSAVE_pool(gArrayDims%itot, gUserSettings%maxLevels),&
+                    ZS_pool(gArrayDims%ITOT * gUserSettings%maxLevels), &
+                    PSSAVE_pool(gArrayDims%itot * gUserSettings%maxLevels),&
                     STAT = status)
             IF (status /= 0) RETURN
 
@@ -355,8 +353,6 @@ MODULE ModelFieldsModule
             IMPLICIT NONE
 
             INTEGER :: status, maxSize, mk, ml
-            complex(C_FLOAT_COMPLEX), pointer :: dummy_c_2d(:, :)
-            type(C_PTR) :: p_dummy_r, p_dummy_c
 
             status = 0
 
@@ -411,8 +407,6 @@ MODULE ModelFieldsModule
             end if
             ADO_pool = 0.0
             DAT_pool = 0.0
-            AKL_pool = 0.0
-            AKLI_pool = 0.0
 
             ZS_pool = 0.0
             PSSAVE_pool = 0.0
@@ -474,11 +468,14 @@ MODULE ModelFieldsModule
             size2d = itot * levels
 
             ! Handle 2-d arrays that have size (itot, levels)
-            if (size2d > size(GQ_pool)) then
+            if (size2d > size(GQ_pool) .OR. &
+                size2d > size(ZS_pool) .OR. &
+                size2d > size(PSSAVE_pool) .OR. &
+                13 * size2d > size(PS_Pool)) then
                 status = 1
                 return
             end if
-            gHorzArr%GQ(1 : itot, 1 : levels) => GQ_pool(1 : itot, 1 : levels)
+            gHorzArr%GQ(1 : itot, 1 : levels) => GQ_pool(1 : size2d)
 
             gHorzArr%PS(1 : itot, 1 : levels) =>  PS_pool(             1 :     size2d) ! PS_pool has all 14 fields
             gHorzArr%TH(1 : itot, 1 : levels) =>  PS_pool(    size2d + 1 : 2 * size2d)
@@ -494,8 +491,8 @@ MODULE ModelFieldsModule
             gHorzArr%T(1 : itot, 1 : levels) =>   PS_pool(11 * size2d + 1 : 12 * size2d)
             gHorzArr%SF(1 : itot, 1 : levels) =>  PS_pool(12 * size2d + 1 : 13 * size2d)
 
-            gHorzArr%ZS(1 : itot, 1 : levels) => ZS_pool(1 : itot, 1 : levels)
-            gHorzArr%PSSAVE(1 : itot, 1 : levels) => PSSAVE_pool(1 : itot, 1 : levels)
+            gHorzArr%ZS(1 : itot, 1 : levels) => ZS_pool(1 : size2d)
+            gHorzArr%PSSAVE(1 : itot, 1 : levels) => PSSAVE_pool(1 : size2d)
 
             ! Handle 1-d arrays that have size itot
             if (itot > size(BTA_pool)) then
@@ -525,7 +522,7 @@ MODULE ModelFieldsModule
             implicit none
             type(Dims), intent(in) :: arraySizes
             
-            integer :: status, mx, mk, ml
+            integer :: status, mx, mk, ml, mc
 
             status = 0
             if (.not. gTransArr%allocated) then
@@ -535,7 +532,8 @@ MODULE ModelFieldsModule
             mk = max(arraySizes%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
             ml = max(arraySizes%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
             ! Transform arrays
-            mx = max(arraySizes%KX, arraySizes%LY)
+            mc = max(arraySizes%KX, arraySizes%LY)
+            mx = max(arraySizes%KX, arraySizes%LY, arraySizes%LVS)
             gTransArr%Gc(1 : arraySizes%IXMAX/2 + 1, 1 : arraySizes%IYMAX) => Gc_pool(1 : (arraySizes%IXMAX/2 + 1) * arraySizes%IYMAX)
             gTransArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             gTransArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
@@ -545,7 +543,7 @@ MODULE ModelFieldsModule
             gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
             gTransArr%plotFull(1: arraySizes%KX, 1 : ml) => plotFull_pool(1 : arraySizes%KX * ml)
             gTransArr%plotFullY(1: arraySizes%LY, 1 : mk) => plotFull_pool(1 : arraySizes%LY * mk)
-            gTransArr%GcZ(1 : mx) => GcZ_pool(1 : mx)
+            gTransArr%GcZ(1 : mc) => GcZ_pool(1 : mc)
             gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
             gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)
 

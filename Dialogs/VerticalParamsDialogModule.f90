@@ -304,7 +304,8 @@ module VerticalParamsDialogModule
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_VERT_PROFILES)
                     bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('None'//char(0)))
-                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile and default levels'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile with user levels'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming'//char(0)))
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(0, UINT_PTR), 0)
                     
@@ -643,7 +644,7 @@ module VerticalParamsDialogModule
         end function readRealDataFromEditBox
         
         subroutine generateVerticalProfile(profile)
-            use ConstantsModule, only: DEFAULT_PROFILE, STRATOSPHERIC_WARMING_32, TEMPERATURE
+            use ConstantsModule, only: DEFAULT_PROFILE, DEFAULT_WITH_USER_LEVELS, STRATOSPHERIC_WARMING_32, TEMPERATURE
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use SetupModule, only: DFDIAB, DimensionalizeVerticalParams, DimensionalizeHorizontalParams
@@ -653,9 +654,10 @@ module VerticalParamsDialogModule
             integer, intent(in) :: profile
             
             integer :: n
-            
-            if (profile == DEFAULT_PROFILE) then
-                call DFDIAB(.false.)  ! This will create values in non-dimensional form.
+
+            if (profile == DEFAULT_PROFILE .OR. profile == DEFAULT_WITH_USER_LEVELS) then
+                call DFDIAB(profile == DEFAULT_PROFILE)  
+                ! This will create values in non-dimensional form.
                 ! If the Dialog is viewing in dimensional form, we need to set these to their dimensional form
                 if (gVertArr%isDimensionalized) then
                     gVertArr%isDimensionalized = .false.

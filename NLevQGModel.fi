@@ -1,5 +1,5 @@
 !/*********************  Prototypes  ***********************/
-      interface 
+    interface 
       function MainWndProc(hwnd, mesg, wParam, lParam)
 !DEC$ IF DEFINED(_X86_)
 !DEC$ ATTRIBUTES STDCALL, ALIAS : '_MainWndProc@16' :: MainWndProc
