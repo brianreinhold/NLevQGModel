@@ -77,6 +77,12 @@ module BombDialogModule
                             "Reset Done"C, &
                             IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
                     endif
+                    if (gModIntParams%timeStepsToDelay .NE. 1) then
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_HIDE)
+                    else
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_SHOW)
+                    endif
+
                     
                     block
                         character(len=*), parameter :: INSTRUCTIONS = &
@@ -137,6 +143,14 @@ module BombDialogModule
                             ! If it was the edit box, only proceed if it's losing focus (EN_KILLFOCUS)
                             ! If it was IDOK, we proceed regardless.
                             ! If it's an edit box, we only care about it when the user is FINISHED (Kill Focus)
+                            if  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_TIMESTEPS_DELAY) then
+                                gModIntParams%timeStepsToDelay = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_TIMESTEPS_DELAY, LOC(bret), .TRUE.)
+                                if (gModIntParams%timeStepsToDelay .NE. 1) then
+                                    bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_HIDE)
+                                else
+                                    bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_SHOW)
+                                endif
+                            endif
                             if (notifyCode /= en_killfocus) return ! ignore other edit box events (like typing)
 
                             ! When the user presses enter when in the edit box
@@ -149,9 +163,13 @@ module BombDialogModule
                                 gModIntParams%bombZonalWave = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_ZONAL_WAVE, LOC(bret), .TRUE.)
                             elseif  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_MERID_WAVE) then
                                 gModIntParams%bombMeridWave = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_MERID_WAVE, LOC(bret), .TRUE.)
-                            elseif  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_TIMESTEPS_DELAY) then
-                                gModIntParams%timeStepsToDelay = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_TIMESTEPS_DELAY, LOC(bret), .TRUE.)
-
+                            !elseif  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_TIMESTEPS_DELAY) then
+                            !    gModIntParams%timeStepsToDelay = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_TIMESTEPS_DELAY, LOC(bret), .TRUE.)
+                            !    if (gModIntParams%timeStepsToDelay .NE. 1) then
+                            !        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_HIDE)
+                            !    else
+                            !        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_SHOW)
+                            !    endif
                             else if (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_STRM_AMP) then
                                 bret = GetDlgItemText(hDlg, IDC_EDIT_BOMB_STRM_AMP, textFromReal, LEN(textFromReal))
                                 read(textFromReal, *, iostat=ios) gModRealParams%AMPS

@@ -128,16 +128,16 @@ module SettingsDialogModule
                                     call LogMessage("User Settings: pnmv%isubItem (i) and pnmv%iitem (j) have values " //TRIM(buffer)//CHAR(0))
 
                                     if (j >= 0) then
-                                        hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
-                                        bret = ShowWindow(hEdit, SW_SHOW)
                                         hList = GetDlgItem(hDlg, IDC_USERSETTINGS)
+                                        hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
                                         prevRowClicked = rowClicked
                                         rowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
-                                        if (prevRowClicked .EQ. rowClicked) then
-                                            bret = SetFocus(hEdit)
-                                            bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
-                                            return
-                                        end if
+                                        bret = ShowWindow(hEdit, SW_SHOW)
+                                        !if (prevRowClicked .EQ. rowClicked) then
+                                        !    bret = SetFocus(hEdit)
+                                        !    bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
+                                        !    return
+                                        !end if
                                         ! Moves the edit box over the value and focuses it (method in DialogHelpersModule))
                                         call moveEditBox(hDlg, hList, hEdit, rowClicked)
                                         ! Method selects the integer in gModIntParams to load into the edit box
@@ -149,6 +149,7 @@ module SettingsDialogModule
                                             case (2)    !gUserSettings%maxLevels
                                                 bret = SetDlgItemInt(hDlg, IDC_EDIT_USERSETTINGS, gUserSettings%maxLevels, .TRUE.)
                                         end select
+                                        bret = SetFocus(hEdit)
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
@@ -217,16 +218,17 @@ module SettingsDialogModule
                         ! 2. Move the EDIT controls BEFORE the list controls.
                         CASE (IDC_EDIT_USERSETTINGS) ! The ID of the edit box
                             SELECT CASE (ISHFT(uParam, -16))
-                                !case( EN_KILLFOCUS)
-                                !    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS))
+                                case( EN_KILLFOCUS)
+                                    call HideMyEdit(GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS))
                                 CASE (EN_CHANGE)
-                                    BLOCK
+                                    STB: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
 
                                         call LogMessage("EN_CHANGE signaled from edit control ")
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
                                         ! Get the updated text from the edit control
                                         newValue = GetDlgItemInt(hDlg, IDC_EDIT_USERSETTINGS, LOC(bret), .TRUE.)
+                                        if (bret == 0) exit STB
                                         hList = GetDlgItem(hDlg, IDC_USERSETTINGS)
 
                                         ! This should be the row that we clicked. Of course the original value of 'rowClicked'
@@ -244,7 +246,7 @@ module SettingsDialogModule
                                         ! Now get the item as a string to update the parameter in the list
                                         bret = GetDlgItemText(hDlg, IDC_EDIT_USERSETTINGS, strC, LEN(strC))
                                         call updateListViewValue(hEdit, hList, rowClicked, strC)
-                                    end BLOCK
+                                    end BLOCK STB
                             END SELECT
                     end select
 
@@ -303,6 +305,7 @@ module SettingsDialogModule
                 
                 subroutine runModelControlDialog()
                     if (CheckUserSettingsChanges() == 0) then
+                        call cleanUpEditBoxe()
                         ! Going to create another dialog box here. Dialog procedure ModelControlDlgProc is in ModelControlDialogModule.f90
                         iret = EnableWindow(hDlg, .FALSE.)
                         bret = ShowWindow(ghSettingsDlg, SW_HIDE)
@@ -319,7 +322,18 @@ module SettingsDialogModule
                             "Error encountered"C, &
                             IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
                     end if
-                end subroutine
+                end subroutine runModelControlDialog
+                
+                subroutine cleanUpEditBoxe()
+                    bret = SetDlgItemText(hDlg, IDC_EDIT_USERSETTINGS, ""//char(0))
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
+                    call HideMyEdit(hEdit)
+                    bret = SetFocus(GetDlgItem(hDlg, IDC_USERSETTINGS))
+                    !bret = MoveWindow(hEdit, pt%x, pt%y, pt2%x - pt%x, pt2%y - pt%y, 1)
+                    ! Move off screen
+                    bret = SetWindowPos(hEdit, 0, -500, -500, 0, 0, SWP_NOSIZE .OR. SWP_NOZORDER)
+
+                end subroutine cleanUpEditBoxe
 
         end function SettingsDlgProc
 

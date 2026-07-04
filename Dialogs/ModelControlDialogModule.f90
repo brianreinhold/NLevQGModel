@@ -5,7 +5,7 @@ module ModelControlDialogModule
     !public AddListViewRowLoc, ResizeListViewToFitItems
     
     private reloadComboBoxFields
-    private loadIntegerParameterIntoEditBox, getStringFromRealForEditBox, readRealDataFromEditBox, readIntDataFromEditBox
+    private loadIntegerParameterIntoEditBox, getStringFromRealForEditBox, readRealDataFromEditBox, loadIntDataFromEditBoxToField
 
     contains
 
@@ -323,7 +323,7 @@ module ModelControlDialogModule
                                         ! is lost when callback returned so we need to save it
                                         intRowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
                                         ! Load value into the gModIntParams struct
-                                        call readIntDataFromEditBox(intRowClicked, newValue)
+                                        call loadIntDataFromEditBoxToField(intRowClicked, newValue)
                                         ! Now get the item as a string to update the parameter in the list
                                         bret = GetDlgItemText(hDlg, IDC_EDIT_INTEGERVALUES, strC, LEN(strC))
                                         call updateListViewValue(hEdit, hList, intRowClicked, strC)
@@ -909,7 +909,7 @@ module ModelControlDialogModule
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a integer parameter and clicked on the 'DONE' button. This loads the edited
         ! value into the correct field of the modIntlParams type
-        subroutine readIntDataFromEditBox(rowClicked, newValue)
+        subroutine loadIntDataFromEditBoxToField(rowClicked, newValue)
             use ModelParamsModule, only: gModIntParams
 
             integer, intent(in) :: rowClicked, newValue
@@ -936,7 +936,7 @@ module ModelControlDialogModule
                 case (9)
                     gModIntParams%upperMeridWave = newValue
             end select
-        end subroutine readIntDataFromEditBox
+        end subroutine loadIntDataFromEditBoxToField
 
         function reloadComboBoxFields(hDlg, plotType, comboId) result(bret)
             use ifwinty
