@@ -5,7 +5,7 @@ module ModelControlDialogModule
     !public AddListViewRowLoc, ResizeListViewToFitItems
     
     private reloadComboBoxFields
-    private loadIntegerParameterIntoEditBox, getStringFromRealForEditBox, readRealDataFromEditBox, loadIntDataFromEditBoxToField
+    private loadIntegerParameterIntoEditBox, getStringFromRealForEditBox, loadRealDataFromEditBoxIntoField, loadIntDataFromEditBoxToField
 
     contains
 
@@ -287,8 +287,8 @@ module ModelControlDialogModule
                                         hList = GetDlgItem(hDlg, IDC_REALVALUES)
                                         realRowClicked = SendMessage(hList, LVM_GETNEXTITEM, -1, LVNI_SELECTED)
                                         ios = 0
-                                        ! Load the new value into the correct modRealParam field
-                                        ios = readRealDataFromEditBox(str, realRowClicked)
+                                        ! Pass the new value as a string, convert it, and load into the correct modRealParam field
+                                        ios = loadRealDataFromEditBoxIntoField(str, realRowClicked)
                                         if (ios .NE. 0) then
                                             !ret = WriteMessageBox(hDlg, ios, "Input is not a valid real number", "Input Error")
                                             strC = getStringFromRealForEditBox(realRowClicked)
@@ -807,26 +807,27 @@ module ModelControlDialogModule
 
             select case (caseSelect)
                 case (0)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%RN, str)
+                    write(str, '(f10.4)') gModRealParams%RN
                 case (1) 
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BETA, str)
+                    write(str, '(f10.4)') gModRealParams%BETA
                 case (2)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%DELT, str)
+                    write(str, '(f10.4)') gModRealParams%DELT
                 case (3)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLat, str)
+                    write(str, '(f10.4)') gModRealParams%hovLat
                 case (4)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%hovLon, str)
+                    write(str, '(f10.4)') gModRealParams%hovLon
                 case (5)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%lonPoint, str)
+                    write(str, '(f10.4)') gModRealParams%lonPoint
                 case (6)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%latPoint, str)
+                    write(str, '(f10.4)') gModRealParams%latPoint
                 case (7)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%BOT, str)
+                    write(str, '(f10.4)') gModRealParams%BOT
                 case (8)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%TPP, str)
+                    write(str, '(f10.4)') gModRealParams%TPP
                 case (9)
-                    ios = RealToAsciiToReal(REAL_TO_ASCII, gModRealParams%CONV, str)
+                    write(str, '(f10.4)') gModRealParams%CONV
             end select
+            str = TRIM(str)//char(0) ! Null terminate for the edit box
         end function getStringFromRealForEditBox
 
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
@@ -870,10 +871,8 @@ module ModelControlDialogModule
             end select
         end function loadIntegerParameterIntoEditBox
 
-        ! Just to simplify code parsing in the dialog procedure. The user has edit
-        ! a real parameter and clicked on the 'DONE' button. This loads the edited
-        ! value into the correct field of the gModRealParams type
-        function readRealDataFromEditBox(str, rowClicked) result(ios)
+
+        function loadRealDataFromEditBoxIntoField(str, rowClicked) result(ios)
             use ModelParamsModule, only: gModRealParams
             
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
@@ -904,7 +903,7 @@ module ModelControlDialogModule
                 case (9)
                     read(str, *, iostat = ios)  gModRealParams%CONV
             end select
-        end function readRealDataFromEditBox
+        end function loadRealDataFromEditBoxIntoField
 
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a integer parameter and clicked on the 'DONE' button. This loads the edited

@@ -58,6 +58,7 @@ module BombDialogModule
             integer(HANDLE) :: hEdit
 
             integer :: i, controlId, notifyCode, ios
+            real :: angs
             LOGICAL :: saveDimensionalState
 
             BombDlgProc = 0
@@ -163,13 +164,6 @@ module BombDialogModule
                                 gModIntParams%bombZonalWave = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_ZONAL_WAVE, LOC(bret), .TRUE.)
                             elseif  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_MERID_WAVE) then
                                 gModIntParams%bombMeridWave = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_MERID_WAVE, LOC(bret), .TRUE.)
-                            !elseif  (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_TIMESTEPS_DELAY) then
-                            !    gModIntParams%timeStepsToDelay = GetDlgItemInt(hDlg, IDC_EDIT_BOMB_TIMESTEPS_DELAY, LOC(bret), .TRUE.)
-                            !    if (gModIntParams%timeStepsToDelay .NE. 1) then
-                            !        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_HIDE)
-                            !    else
-                            !        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_BOMB_CREATE), SW_SHOW)
-                            !    endif
                             else if (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_STRM_AMP) then
                                 bret = GetDlgItemText(hDlg, IDC_EDIT_BOMB_STRM_AMP, textFromReal, LEN(textFromReal))
                                 read(textFromReal, *, iostat=ios) gModRealParams%AMPS
@@ -178,11 +172,11 @@ module BombDialogModule
                                 read(textFromReal, *, iostat=ios) gModRealParams%AMPT
                             else if (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_PHASE_DIFF) then
                                 bret = GetDlgItemText(hDlg, IDC_EDIT_BOMB_PHASE_DIFF, textFromReal, LEN(textFromReal))
-                                read(textFromReal, *, iostat=ios) gModRealParams%ANGS
+                                if (bret) read(textFromReal, *, iostat=ios) gModRealParams%ANGS
                             else if (IAND(wParam, Z'FFFF') == IDC_EDIT_BOMB_EXPONENT) then
                                 bret = GetDlgItemText(hDlg, IDC_EDIT_BOMB_EXPONENT, textFromReal, LEN(textFromReal))
                                 read(textFromReal, *, iostat=ios) gModRealParams%EFOLD
-                                ! THe following brings the edit box out of focus otherwise it will wait for further edits
+                                ! The following brings the edit box out of focus otherwise it will wait for further edits
                                 !ret = SetFocus(GetDlgItem(hDlg, IDC_BUTTON_ENS_CREATE))
                             endif
                             BombDlgProc = 1
@@ -207,26 +201,6 @@ module BombDialogModule
                             call CreateBomb()
                             if (saveDimensionalState) call DimensionalizeHorizontalParams() 
                             
-!! F2: Load OBS file
-!                        case (IDC_BUTTON_LOAD_OBS_FILE)
-!! F3: View OBS stats
-!                        case (IDC_BUTTON_OBS_VIEW_STATS)
-!                            
-!! F4: Edit single ensemble member initial state.
-!                        case (IDC_BUTTON_EDIT_OBS_VARIABLES) 
-!! F5: Create ensemble file
-!                        case (IDC_BUTTON_ENS_CREATE)
-!! F6: Load ensemble file
-!                        case (IDC_BUTTON_LOAD_ENS_FILE)
-!!F7: View ensemble stats
-!                        case (IDC_BUTTON_ENS_VIEW_STATS) 
-!
-!
-!! F8: Compute RMSE and Spread 
-!                        case (IDC_BUTTON_RUN_DIFF)
-!
-!! F9: Auto create ensemble files
-!                        case (IDC_BUTTON_ENS_AUTO_CREATE)
 ! F10: Exit dialog
                         case (IDC_BUTTON_EXIT_BOMB) 
                             bret = UnhookWindowsHookEx(hHook)

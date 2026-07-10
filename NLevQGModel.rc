@@ -183,7 +183,7 @@ BEGIN
     LTEXT           "Merid wavenumber of Pertubation",IDC_STATIC_BOMB_MERID_WAVE,10,27,103,8
     LTEXT           "Max amplitude of strm in meters",IDC_STATIC_BOMB_STRM_AMP,10,41,97,8
     LTEXT           "Max amplitude of temp in °C",IDC_STATIC_BOMB_TEMP_AMP,10,54,104,8
-    LTEXT           "Phase difference in °lon",IDC_STATIC_BOMB_PHASE_DIFF,10,68,104,8
+    LTEXT           "Phase difference in degrees",IDC_STATIC_BOMB_PHASE_DIFF,10,68,104,8
     LTEXT           "Exponental decay of disturbance",IDC_STATIC_BOMB_EXPONENT,10,82,104,8
     PUSHBUTTON      " F10: Exit",IDC_BUTTON_EXIT_BOMB,433,7,50,14
     EDITTEXT        IDC_EDIT_BOMB_TIMESTEPS_DELAY,121,93,73,12,ES_AUTOHSCROLL | ES_NUMBER

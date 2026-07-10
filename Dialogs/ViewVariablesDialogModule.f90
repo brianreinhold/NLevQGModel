@@ -28,7 +28,6 @@ module ViewVariablesDialogModule
 
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: REAL_TO_ASCII, SQRT2
-            use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit, GetComboIndex
             use ModelParamsModule, only: gModIntParams

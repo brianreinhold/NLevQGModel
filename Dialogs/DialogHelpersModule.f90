@@ -261,6 +261,7 @@ module DialogHelpersModule
                 lvi%iItem = row
                 lvi%iSubItem = i  ! Column index (1, 2, 3...)
 
+                ! Writes 'values(i)' into 'valueStr' using format 'formatStr'
                 write(valueStr, formatStr) values(i)  ! G format is "General" - switches between decimal and scientific
                 !write(*, '(A, A)') "Real value 1: ", valueStr
                 lvi%pszText = LOC(TRIM(ADJUSTL(valueStr))//CHAR(0))

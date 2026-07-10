@@ -503,6 +503,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 createHorzArr, createTransArr, createVertArr, &
                 AllocateHorizontalArrays, AllocateVerticalArrays, AllocateTransformArrays, gVertArr, gHorzArr, gTransArr
             use InteractionCoefficientsModule, only: DeallocateCintArrays, AllocateCintArrays, computeInteractionCoefficients, gCintArr
+            use Fftw3HelpersModule, only: setup_fftw_plans
+
+            implicit none
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
             integer :: errorCode, index
@@ -556,6 +559,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 errorCode = createTransArr(gCurrentDims)
                 if(errorCode .NE. 0) return
+                if (boolHorzResult) call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
@@ -582,10 +586,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 CALL DFDIAB(.true.) ! recreate the vertical profiles. This uses gModIntParams%NLEV as the number of levels
             endif
             !-------------------------------------------Introduce perturbation if there have been reallocations:
-            if (boolHorzResult .OR. boolVertResult) then
-                CALL CreatePerturbation()         ! Subroutine 1ocated in this file
-                CALL DFDIAB(boolVertResult)
-            endif
+            if (boolHorzResult) CALL CreatePerturbation()
+            if (boolVertResult) CALL DFDIAB(boolVertResult)
 
             ! TODO Stats arrays
             !IF(boolStatsResult) isAlloced(STATS_ARRAYS) = NEED_REALLOC
@@ -1408,8 +1410,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gModIntParams%LEVP = 2      ! Lowest streamfunction layer.
             gModIntParams%modelType = STANDARD_NLEVEL
             gModIntParams%lowerZonalWave = 1
-            gModIntParams%upperZonalWave = 1
-            gModIntParams%lowerMeridWave = gModIntParams%KMAX2
+            gModIntParams%upperZonalWave = gModIntParams%KMAX2
+            gModIntParams%lowerMeridWave = 1
             gModIntParams%upperMeridWave = gModIntParams%LMAX2
         !----------------------------------------------Stats variables:
             gModIntParams%IV1 = gModIntParams%field1
@@ -1832,7 +1834,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ModelFieldsModule, only: gVertArr, gHorzArr
             implicit none
 
-            REAL :: ANG, AMP, P0, RC, RS, Y
+            REAL :: ANG, AMP, P0, RC, RS, Y, angs
             INTEGER :: N, J
 !----------------------------------------Start:
             P0 = gVertArr%PP(1)
@@ -1840,9 +1842,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             Y = ALOG(2.0 * Y / PI) / ALOG(P0 / gVertArr%tropopauseLevel)
             J = gModIntParams%LMAX2 + 2 * (gModIntParams%bombZonalWave - 1) * gModIntParams%LMAX2 + gModIntParams%bombMeridWave
             IF (gModIntParams%bombZonalWave .EQ. 0) J = gModIntParams%bombMeridWave
+            angs = gModRealParams%ANGS / REAL(gModIntParams%bombZonalWave)
             DO N = 1, gModIntParams%NLEV
 !---------------------------------------------------Compute phase tilt:
-                ANG = gModRealParams%ANGS * EXP(-gModRealParams%EFOLD * (P0 - gVertArr%PP(N)) / (P0 - gVertArr%tropopauseLevel))
+                ANG = angs * EXP(-gModRealParams%EFOLD * (P0 - gVertArr%PP(N)) / (P0 - gVertArr%tropopauseLevel))
 !---------------------------------------Compute amplitude below TROPOPAUSE:
                 IF (gVertArr%PP(N) .GT. gVertArr%tropopauseLevel) THEN
                     AMP = (PI / 2.) * (gVertArr%PP(N) / gVertArr%tropopauseLevel)**Y

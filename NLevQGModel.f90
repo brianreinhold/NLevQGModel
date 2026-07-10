@@ -646,7 +646,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             return
             
             CASE (WM_MOUSEMOVE)
-                if (GetForegroundWindow() .NE. hWnd .or. gModelState%runState == RUNNING) return
+                if (GetForegroundWindow() .NE. hWnd .or. gModelState%runState /= PAUSED) return
                 mouse_x = IAND(lParam, #FFFF)
                 mouse_y = ISHFT(lParam, -16)
                 maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &

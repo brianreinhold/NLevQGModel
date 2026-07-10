@@ -216,8 +216,18 @@ MODULE ModelFieldsModule
     END TYPE StatsArrays
 
     TYPE(StatsArrays) :: gStatsArr
-    !REAL, ALLOCATABLE, TARGET :: BA(:)      ! Define one array that encompasses all real statistics arrays
+
+    type :: EnergyArrays
+        LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
+        REAL, ALLOCATABLE :: ZonalWaveEnergy(:)     ! This array holds the energy in the zonal waves as a function of the zonal wavenumber
+                                                    ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
+                                                    ! this array will have KMAX elements.
+        REAL, ALLOCATABLE :: ZonalEnergy(:)   ! This array holds the energy in each zonal mode as a function of meridional wavenumber. If there
+                                              ! are LMAX meridional modes this array will have LMAX elements
+        REAL :: TotalZonalEnergy              ! This value contains the sum total of all the zonal mode energy in the array ZonalEnergy
+    end type EnergyArrays
     
+    TYPE(EnergyArrays) :: gEnergyArr
 
     CONTAINS
     ! ================================== Allocate and deallocate Vertical arrays
@@ -343,7 +353,7 @@ MODULE ModelFieldsModule
             CALL ZeroHorzArrays(.false.)
             gHorzArr%ALLOCATED = .TRUE.
         END FUNCTION AllocateHorizontalArrays
-        
+
         FUNCTION AllocateTransformArrays() RESULT(status)
             USE ISO_FORTRAN_ENV
             use ArrayDimensionsModule, only: gArrayDims
@@ -380,7 +390,6 @@ MODULE ModelFieldsModule
             CALL ZeroTransArrays()
             gTransArr%ALLOCATED = .TRUE.
         END FUNCTION AllocateTransformArrays
-
 
         !> This subroutine zeros all horizontal arrays in the horzArr_pool type
         SUBROUTINE ZeroHorzArrays(skipSettings)

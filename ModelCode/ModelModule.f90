@@ -271,7 +271,11 @@ module ModelModule
                                 call sleep(100) ! Suspends the thread for 100ms. 0% CPU usage.
                             end do
                             !---------------------------------------------- Selecting when to output data:
-                            if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) call outputPlot()
+                            if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
+                                call outputPlot()
+                                gHorzArr%FS = 0.0
+                            endif
+
                             !*************************************************************** N-Cycle loop:
                             A1 = 0.
                             B1 = RD
@@ -1438,7 +1442,7 @@ module ModelModule
             END DO
         end subroutine DoubleLoops
 
-        SUBROUTINE COMPUTE_ENERGY_SPECTRUM(DELTA_K, ENERGY_1D, MAX_BIN)
+        SUBROUTINE ComputeEnergySpectrum(DELTA_K, ENERGY_1D, MAX_BIN)
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModRealParams, gModIntParams
             IMPLICIT NONE
@@ -1466,7 +1470,7 @@ module ModelModule
             DELTA_K_INV = 1.0 / DELTA_K
     
             ! Precompute APE weighting factor: A(N)^2 / SIG(N)
-            APE_WEIGHT(1:NMAX-1) = (gVertArr%A(1:NMAX-1) * gVertArr%A(1:NMAX-1)) / MAX(gVertArr%SIG(1:NMAX-1), 1.0E-8)
+            APE_WEIGHT(1 : NMAX - 1) = (gVertArr%A(1 : NMAX - 1) * gVertArr%A(1 : NMAX - 1)) / MAX(gVertArr%SIG(1 : NMAX - 1), 1.0E-8)
 
             ! ==========================================
             ! STEP 1: PROCESS ZONAL MEAN FLOW (K = 0)
@@ -1474,7 +1478,7 @@ module ModelModule
             K_PHYS_SQ = 0.0 ! Zonal mean has no x-dependence, so n*k = 0
             DO I = 1, LMAX
                 L = I
-                L_SQ = REAL(L)**2
+                L_SQ = REAL(L * L)
                 K_TOTAL = SQRT(K_PHYS_SQ + L_SQ) ! K_TOTAL = L
                 BIN_IDX = INT(K_TOTAL * DELTA_K_INV) + 1
         
@@ -1501,10 +1505,10 @@ module ModelModule
             I = LMAX + 1
             DO K = 1, KMAX
                 ! Scale the zonal wavenumber by the aspect ratio 'n'
-                K_PHYS_SQ = (REAL(K) * RN)**2
+                K_PHYS_SQ = REAL(K * K) * RN_SQ
 
                 DO L = 1, LMAX
-                    L_SQ = REAL(L)**2
+                    L_SQ = REAL(L * L)
                     K_TOTAL = SQRT(K_PHYS_SQ + L_SQ)
                     BIN_IDX = INT(K_TOTAL * DELTA_K_INV) + 1
 
@@ -1529,5 +1533,84 @@ module ModelModule
                 END DO
             END DO
 
-        END SUBROUTINE COMPUTE_ENERGY_SPECTRUM
+        END SUBROUTINE ComputeEnergySpectrum
+        
+        !> Returns the total wave energy (kinetic + available potential) as a function of zonal wavenumber (for all L and N) 
+        !> in gTransArr%G2Zonal (reuse of a transform array) and
+        !> the total zonal energy as a function of meridional wavenumber for all N in gTransArr%GZonal.
+        SUBROUTINE ComputeZonalSpectrum()
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gTransArr
+            use ModelParamsModule, only: gModRealParams, gModIntParams
+            IMPLICIT NONE
+
+
+            ! Locals
+            integer :: KMAX, LMAX, NMAX
+            INTEGER :: I, N, K, L, BIN_IDX
+            REAL :: K_PHYS_SQ, L_SQ, K_TOTAL, KE, APE, RN_SQ, RN, DELTA_K_INV
+            REAL, DIMENSION(gModIntParams%NLEV - 1) :: APE_WEIGHT
+
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+            NMAX = gModIntParams%NLEV
+    
+            gTransArr%GZonal = 0.0
+            gTransArr%G2Zonal = 0.0
+            RN = gModRealParams%RN
+            RN_SQ = RN*RN
+   
+            ! Precompute APE weighting factor: A(N)^2 / SIG(N)
+            APE_WEIGHT(1 : NMAX - 1) = (gVertArr%A(1 : NMAX - 1) * gVertArr%A(1 : NMAX - 1)) / MAX(gVertArr%SIG(1 : NMAX - 1), 1.0E-8)
+
+            ! ==========================================
+            ! STEP 1: PROCESS ZONAL MEAN FLOW (K = 0)
+            ! ==========================================
+            DO L = 1, LMAX
+                L_SQ = REAL(L * L)
+                ! Zonal Kinetic Energy across all layers
+                KE = 0.0
+                DO N = 1, NMAX
+                    KE = KE + 0.5 * L_SQ * (gHorzArr%PS(L, N) * gHorzArr%PS(L, N))
+                END DO
+                ! Zonal Available Potential Energy directly from temperature coefficients
+                APE = 0.0
+                DO N = 1, NMAX - 1
+                    APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(L, N) * gHorzArr%TH(L, N))
+                END DO
+
+                gTransArr%GZonal(L) = gTransArr%GZonal(L) + KE + APE
+            END DO
+
+            ! ==========================================
+            ! STEP 2: PROCESS WAVE COMPONENTS (K > 0)
+            ! ==========================================
+            I = LMAX + 1
+            K_PHYS_SQ = 0.0 
+            DO K = 1, KMAX
+                ! Scale the zonal wavenumber by the aspect ratio 'n'
+                K_PHYS_SQ = REAL(K * K) * RN_SQ
+
+                DO L = 1, LMAX
+                    L_SQ = REAL(L * L)
+
+                    KE = 0.0
+                    APE = 0.0
+
+                    ! Sum KE over layers using scaled total wavenumber
+                    DO N = 1, NMAX
+                        KE = KE + 0.5 * (K_PHYS_SQ + L_SQ) * (gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I + 1, N) * gHorzArr%PS(I + 1, N))
+                    END DO
+
+                    ! Sum APE over interfaces directly from TH wave pairs
+                    DO N = 1, NMAX - 1
+                        APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I + 1, N) * gHorzArr%TH(I + 1, N))
+                    END DO
+                    gTransArr%G2Zonal(K) = gTransArr%G2Zonal(K) + KE + APE
+                    ! Jump past the (cos, sin) pair
+                    I = I + 2
+                END DO
+            END DO
+
+        END SUBROUTINE ComputeZonalSpectrum
+
     end module ModelModule
