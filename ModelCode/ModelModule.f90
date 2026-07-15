@@ -272,6 +272,7 @@ module ModelModule
                             end do
                             !---------------------------------------------- Selecting when to output data:
                             if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
+                                !call ComputeZonalSpectrum()
                                 call outputPlot()
                                 gHorzArr%FS = 0.0
                             endif
@@ -299,6 +300,8 @@ module ModelModule
                                         M = 28
                                         write(msg, '(A, I4, A, I4, A, I4)') 'Level=', N, ' KSTEP=', KSTEP, ' NCYC4=', NCYC4
                                         call LogMessage("Numerical instability. Exiting. " // msg)
+                                        !print *, "Streamfunction values: ", gHorzArr%PS(:, N)
+                                        !print *, "Temperature values:    ", gHorzArr%TH(:, N)
                                         call ZeroHorzArrays(.true.) ! Don't zero settings like TF, SF, TOP, AKL, etc.
                                         !call DFDIAB(.false.)
                                         call CreatePerturbation()
@@ -463,6 +466,7 @@ module ModelModule
             use ModelParamsModule, only: gModIntParams, gModRealParams, gModelState
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gVertArr
+            use, intrinsic :: ieee_arithmetic
 
             implicit none
 
@@ -472,6 +476,7 @@ module ModelModule
             INTEGER :: I, K, L, N, NP, NT, ITOT
             REAL :: AX, BRN, R, R1
             REAL :: C, Clower, Cupper, gamma, gammaLower, alpha, alpha1 ! Terms for iterative omega loop
+            logical :: notHit
 
             !-------------------------------------------------Order of events:
             !  First we compute the nonlinear terms by either transforms or interactions,
@@ -539,12 +544,41 @@ module ModelModule
             ENDIF
 
             !---------------------------------------------Compute temperature advection:
-            DO N = 1,  gModIntParams%NLEV - 1
-                !-----------------------------------Compute strm and temp at temperature level:
-                buffer(1:ITOT) = (gHorzArr%PS(1:ITOT, N) + gHorzArr%PS(1:ITOT, N + 1)) / 2. ! Mean streamfunction at temperature interface
-                gHorzArr%TH(1:ITOT, N) = (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) ! Shear centered at temperature interface
-                CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
-            END DO
+            BLOCK
+                REAL :: del_p, del_pi, w_n, w_np1, w_shear
+                INTEGER :: N
+            
+                DO N = 1, gModIntParams%NLEV - 1
+                    ! 1. Calculate physical pressure distance between adjacent layer centers
+                    del_p = gVertArr%PV(N) - gVertArr%PV(N+1)
+                    del_pi = 1.0 / del_p
+            
+                    ! 2. Calculate linear interpolation weights for the mean streamfunction interface PP(N+1)
+                    w_n   = (gVertArr%PP(N+1) - gVertArr%PV(N+1)) * del_pi
+                    w_np1 = (gVertArr%PV(N)   - gVertArr%PP(N+1)) * del_pi
+            
+                    ! 3. Correctly weighted mean streamfunction at the temperature interface
+                    buffer(1:ITOT) = w_n   * gHorzArr%PS(1:ITOT, N) + &
+                                     w_np1 * gHorzArr%PS(1:ITOT, N + 1)
+            
+                    ! 4. Calculate the normalized vertical shear weighting factor.
+                    ! If layers are uniform, (DP(N)+DP(N+1))/2 equals del_p, making w_shear = 1.0
+                    w_shear = 0.5 * (gVertArr%DP(N) + gVertArr%DP(N+1)) * del_pi
+
+                    ! 5. Nondimensional Temperature (Shear) weighted properly for variable spacing
+                    gHorzArr%TH(1:ITOT, N) = (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) !* w_shear
+            
+                    ! 6. Call the non-linear advection routine
+                    CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
+                END DO
+            END BLOCK
+
+            !DO N = 1,  gModIntParams%NLEV - 1
+            !    !-----------------------------------Compute strm and temp at temperature level:
+            !    buffer(1:ITOT) = (gHorzArr%PS(1:ITOT, N) + gHorzArr%PS(1:ITOT, N + 1)) / 2. ! Mean streamfunction at temperature interface
+            !    gHorzArr%TH(1:ITOT, N) = (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) ! Shear centered at temperature interface
+            !    CALL NONLIN(gHorzArr%ADT(:, N), buffer, gHorzArr%TH(:, N))
+            !END DO
             !----------------------------------------Compute diabatic temp terms:
             if (.NOT. gModelState%runInviscid) call TTERMS()
 
@@ -589,7 +623,7 @@ module ModelModule
             ! we can compute WW(NLEV-1)) at the top interface since WW(NLEV) = 0. It will be Y(NLEV-1). Then we can go back down to 
             ! WW(n) for n = NLEV-2 down to 1.
 
-
+            notHit = .true.
             DO I = 1, gCurrentDims%ITOT
                 AX = gHorzArr%AKLI(I)   ! AKLI(i) is the inverse of a**2 and it depends only on the horizontal wavenumbers, not on the vertical level
                 ! DPI(N) = PP(1)/(PP(N)-PP(N+1)) is the scaled inverse of the layer thickness. The PP array itself is NOT scaled
@@ -616,6 +650,64 @@ module ModelModule
                     gVertArr%X(N) = gamma / alpha
                     gVertArr%Y(N) = (gammaLower * gVertArr%Y(N - 1) + C) / alpha
                 END DO
+
+                !!------------------------------------Upper boundary to compute WW(NLEV-1):
+                !gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
+                !
+                !!------------------------------------Compute raw WW(N) via Back-Substitution
+                !DO NT = 2, gModIntParams%NLEV - 1
+                !    N = gModIntParams%NLEV - NT
+                !    gHorzArr%WW(I, N) = gVertArr%X(N) * gHorzArr%WW(I, N + 1) + gVertArr%Y(N)
+                !END DO
+                !
+                !!------------------------------------VERTICAL SMOOTHER FOR WW (Omega)
+                !BLOCK
+                !    REAL :: ww_prev, ww_curr, ww_next
+                !    ww_prev = gHorzArr%WW(I, 1)
+                !    DO N = 2, gModIntParams%NLEV - 2
+                !        ww_curr = gHorzArr%WW(I, N)
+                !        ww_next = gHorzArr%WW(I, N + 1)
+                !
+                !        ! 3-point vertical filter
+                !        gHorzArr%WW(I, N) = ww_curr + 0.125 * (ww_prev + ww_next - 2.0 * ww_curr)
+                !
+                !        ww_prev = ww_curr 
+                !    END DO
+                !END BLOCK
+                !
+                !!-------------------------------------Strm tendency due to omega at top interface:
+                !gHorzArr%WS(I, gModIntParams%NLEV) = -gHorzArr%WW(I, gModIntParams%NLEV - 1) * gHorzArr%AKLI(I) * gVertArr%DPI(gModIntParams%NLEV)
+                !
+                !!------------------------------------Compute top level strm tendency:
+                !gHorzArr%FS(I, gModIntParams%NLEV) = gHorzArr%ADS(I, gModIntParams%NLEV) + gHorzArr%WS(I, gModIntParams%NLEV) + gHorzArr%S(I, gModIntParams%NLEV)
+                !
+                !!-------------------------------------Compute WS and FS using smoothed WW
+                !DO NT = 2, gModIntParams%NLEV - 1
+                !    N = gModIntParams%NLEV - NT
+                !    NP = N + 1
+                !
+                !    gHorzArr%WS(I, NP) = -(gHorzArr%WW(I, N) - gHorzArr%WW(I, NP)) * gVertArr%DPI(NP) * gHorzArr%AKLI(I)
+                !    gHorzArr%FS(I, NP) = gHorzArr%ADS(I, NP) + gHorzArr%WS(I, NP) + gHorzArr%S(I, NP)
+                !
+                !    IF(notHit .AND. (ABS(gHorzArr%FS(I, NP)) .GT. 1. .OR. ieee_is_nan(gHorzArr%FS(I, NP)))) THEN
+                !        print *, 'Level=', NP, ' I=', I, ' FS(I,N)=', gHorzArr%FS(I, NP), ' WS(I, NP)= ', gHorzArr%WS(I, NP), ' PS(I, NP)= ', gHorzArr%PS(I, NP)
+                !        notHit = .false.
+                !    ENDIF
+                !END DO
+                !
+                !!----------------------------------Lower level strm tendency (with orography):
+                !gHorzArr%WS(I, 1) = gHorzArr%WW(I, 1) * gVertArr%DPI(1) * gHorzArr%AKLI(I)
+                !gHorzArr%FS(I, 1) = gHorzArr%ADS(I, 1) + gHorzArr%ADO(I) + gHorzArr%WS(I, 1) + gHorzArr%S(I, 1)
+                !
+                !!-----------------------------------Load temperature arrays for diagnostics:
+                !DO N = 1, gModIntParams%NLEV - 1 
+                !    ! Calculated safely using the smoothed WW values from above
+                !    gHorzArr%WT(I, N) = gVertArr%SIG(N) * gHorzArr%WW(I, N)
+                !    gHorzArr%FT(I, N) = -gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
+                !END DO
+
+
+
                 !------------------------------------Upper boundary to compute WW(NLEV-1):
                 gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
                 !-------------------------------------Strm tendency due to omega:
@@ -630,6 +722,10 @@ module ModelModule
                     !-----------------------------------------Intermediate ws, strm tendencies:
                     gHorzArr%WS(I, NP) = -(gHorzArr%WW(I, N) - gHorzArr%WW(I, NP)) * gVertArr%DPI(NP) * gHorzArr%AKLI(I)
                     gHorzArr%FS(I, NP) = gHorzArr%ADS(I, NP) + gHorzArr%WS(I, NP) + gHorzArr%S(I, NP)
+                    IF(notHit .AND. ABS(gHorzArr%FS(I, NP)) .GT. 1. .OR. ieee_is_nan(gHorzArr%FS(I, NP))) THEN
+                        print *, 'Level=', NP, ' I=', I, ' FS(I,N)=', gHorzArr%FS(I, NP), ' WS(I, NP)= ', gHorzArr%WS(I, NP), ' PS(I, NP)= ', gHorzArr%PS(I, NP)
+                        notHit = .false.
+                    ENDIF
                 END DO
                 !----------------------------------Lower level strm tendency (with orography):
                 gHorzArr%WS(I, 1) = gHorzArr%WW(I, 1) * gVertArr%DPI(1) * gHorzArr%AKLI(I)
@@ -1539,7 +1635,7 @@ module ModelModule
         !> in gTransArr%G2Zonal (reuse of a transform array) and
         !> the total zonal energy as a function of meridional wavenumber for all N in gTransArr%GZonal.
         SUBROUTINE ComputeZonalSpectrum()
-            use ModelFieldsModule, only: gHorzArr, gVertArr, gTransArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gEnergyArr
             use ModelParamsModule, only: gModRealParams, gModIntParams
             IMPLICIT NONE
 
@@ -1554,12 +1650,13 @@ module ModelModule
             LMAX = gModIntParams%LMAX2
             NMAX = gModIntParams%NLEV
     
-            gTransArr%GZonal = 0.0
-            gTransArr%G2Zonal = 0.0
+            gEnergyArr%ZonalWaveEnergy = 0.0
+            gEnergyArr%ZonalEnergy = 0.0
             RN = gModRealParams%RN
             RN_SQ = RN*RN
    
-            ! Precompute APE weighting factor: A(N)^2 / SIG(N)
+            ! Precompute APE weighting factor: A(N)^2 / SIG(N)  But sig is non-dimensional and is itself scaled by A(N)
+            ! so A(N)/SIG
             APE_WEIGHT(1 : NMAX - 1) = (gVertArr%A(1 : NMAX - 1) * gVertArr%A(1 : NMAX - 1)) / MAX(gVertArr%SIG(1 : NMAX - 1), 1.0E-8)
 
             ! ==========================================
@@ -1578,7 +1675,7 @@ module ModelModule
                     APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(L, N) * gHorzArr%TH(L, N))
                 END DO
 
-                gTransArr%GZonal(L) = gTransArr%GZonal(L) + KE + APE
+                gEnergyArr%ZonalEnergy(L) = gEnergyArr%ZonalEnergy(L) + KE + APE
             END DO
 
             ! ==========================================
@@ -1605,7 +1702,7 @@ module ModelModule
                     DO N = 1, NMAX - 1
                         APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I + 1, N) * gHorzArr%TH(I + 1, N))
                     END DO
-                    gTransArr%G2Zonal(K) = gTransArr%G2Zonal(K) + KE + APE
+                    gEnergyArr%ZonalWaveEnergy(K) = gEnergyArr%ZonalWaveEnergy(K) + KE + APE
                     ! Jump past the (cos, sin) pair
                     I = I + 2
                 END DO

@@ -85,14 +85,15 @@ module ConstantsModule
                                                     ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together
-    integer, parameter :: VERT_CROSS_SEC_AT_LAT = 2    ! Latitude-pressure cross section at a selected 'latitude'
+    integer, parameter :: VERT_CROSS_SEC_AT_LAT = 2 ! Latitude-pressure cross section at a selected 'latitude'
     integer, parameter :: HOV_DIAG_AT_LAT = 3       ! Hovmoller diagram at specified 'latitude' and level
-    integer, parameter :: VERT_CROSS_SEC_AT_LON = 4   ! Longitude-pressure (meridional) cross section at a slected 'longitude'
-    integer, parameter :: HOV_DIAG_AT_LON = 5      ! Hovmoller diagram at specified 'longitude' and level
+    integer, parameter :: VERT_CROSS_SEC_AT_LON = 4 ! Longitude-pressure (meridional) cross section at a slected 'longitude'
+    integer, parameter :: HOV_DIAG_AT_LON = 5       ! Hovmoller diagram at specified 'longitude' and level
     integer, parameter :: PHASE_SPACE = 6           ! Phase space diagram
-    integer, parameter :: WEATHER_STN = 7           ! Time series of a field at a particular point (lat-lon)
-    integer, parameter :: VERT_HOV_AT_WEATHER_STN = 8  ! Hovmoller vertical cross section at the point of the weather station
-    integer, parameter :: NO_PLOT = 9               ! Skip plotting (good for speed)
+    integer, parameter :: ZONAL_WAVE_ENERGY = 7     ! The total energy as a function of zonal wavenumber
+    integer, parameter :: WEATHER_STN = 8           ! Time series of a field at a particular point (lat-lon)
+    integer, parameter :: VERT_HOV_AT_WEATHER_STN = 9  ! Hovmoller vertical cross section at the point of the weather station
+    integer, parameter :: NO_PLOT = 10               ! Skip plotting (good for speed)
     
                                                     ! Display options for variables field1, field2, field3
                                                     ! Also used for the scale factor array 'gPlotScales' below

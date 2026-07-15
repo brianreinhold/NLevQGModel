@@ -1,13 +1,27 @@
 ! The allocation and definition of all arrays used in the model that are resized based upon user parameters
-! will use the following procedure in order to have the dimensions defined at all times in the code. This
-! apporach is necessary in F90+. In F77 could change the shape and dimensions freely at the cost of having
+! will use the following procedures in order to have the dimensions defined at all times in the code. This
+! apporach is necessary in F90+. In F77 one could change the shape and dimensions freely at the cost of having
 ! undetected overwrites and memory issues. Explicitely defining the actual array shapes and sizes in F90+ prevents
 ! These types of errors.
 
-! We will be using the apprach shown below. The interaction coefficient arrays are used as an example since they 
-! have so few members whcih makes the appoach easier to follow. The interaction coefficient arrays are defined in
-    ! their own module InteractionCoeffsModule.f90
-! Define memory array pool
+! In all cases the user has two levels of setting the resolutions
+! A 'base setting' maxZonalWaves, maxMeridWaves, maxLevels in the Settings dialog Module. Memory allocation is based upon
+!   these parameters.
+! A secondary set of resolutions KMAX2, LMAX2, and NLEV which must be equal to or less than the base settings. The arrays
+! can then be 'reset' without deallocation and reallocation and is done so in the 'createXX' methods. If these secondary
+! values exceed the base values, the reshaping will not happen and the user must return to the settings dialog to update
+! the base settings and reallocation will be done.
+! The reason for this complexity is to allow, to the extent possible, a resetting of the resolutions keeping the values
+! of the current resolution and continuing the integration with the new resolution.
+    
+! In all cases there is an ALLOCATE function, a ZeroArrays function, a create function, and a Deallocate function.
+
+! We will be using the approach shown below. The interaction coefficient arrays are used as an example since they 
+! have so few members which makes the appoach easier to follow. The interaction coefficient arrays are defined in
+! their own module InteractionCoeffsModule.f90
+    
+! ----------------------------------------------------- Details:
+! 1. Define memory array pool
 !    real, allocatable, target :: BI(:)     ! Define one array that encompasses all real interaction coefficient arrays
 !    integer, allocatable, target :: IBI(:) ! Define one array that encompasses all integer interaction coefficient arrays
 ! and pointer arrays that can be configured to have changeable dimensions based on user parameters
@@ -15,19 +29,26 @@
 !    INTEGER, POINTER :: I1M(:) => NULL()
 !    INTEGER, POINTER :: JIN(:) => NULL()
 !    INTEGER, POINTER :: KIN(:) => NULL()
+! In this module we place the pointer arrays in a defined 'type' grouping the arrays into those for
+!    a. Vertical arrays (based upon the number of levels) that only involve the levels such as the pressure levels, static stability, etc.
+!    b. Horizontal arrays (based upon the horizontal resolution KMAX, LMAX and NLEV)
+!    c. Transform arrays for the FFTW3 routines used in the transform method as well as creating plots (based upon KMAX and LMAX for horizontal
+!       plot like weather maps but NLEV gets involved when cross sections and vertical hovmollers are created.
+!    d. Energy arrays for computing the energy spectrum
+!    e. Statistics arrays for computing means and variances of the fields
 !
-! Allocate the pool based upon some 'base' parameter determined from user settings
+! 2. Allocate the pool based upon some 'base' parameter determined from user settings
 !    ALLOCATE(BI(gArrayDims%NINTD), STAT = status)
 !    ALLOCATE(IBI(totalSize), STAT = status)
 !
-! Use a create function to define the arrays in the pool. When the user sets new parameters this create function is
-! is simply called again as long as the new parameters do not exceed the base value defining the base memory pool.
+! 3. Use a create function to define the arrays in the pool. When the user sets new parameters this create function is
+!    is simply called again as long as the new parameters do not exceed the base value defining the base memory pool.
 !    gCintArr%Cint(1 : numberOfInteractionCoeffs)  => BI(1 : numberOfInteractionCoeffs)
 !    gCintArr%JIN(1 :  numberOfInteractionCoeffs)  => IBI(1 : numberOfInteractionCoeffs)
 !    gCintArr%KIN(1 :  numberOfInteractionCoeffs)  => IBI(numberOfInteractionCoeffs : 2 * numberOfInteractionCoeffs)
 !    gCintArr%I1M(1 :  ITOT)                       => IBI(2 * numberOfInteractionCoeffs : ITOT)
 !
-! Deallocate if the user parameter exceeds the current base value
+! 4. Deallocate if the user parameter exceeds the current base value
 !
 !    IF (ALLOCATED(BI)) DEALLOCATE(BI)
 !    nullify(gCintArr%CINT)
@@ -36,23 +57,26 @@
 !    Nullify(gCintArr%KIN)
 !    Nullify(gCintArr%I1M)
 !
-! Then the whole allocation and creation process has to be repeated if base value is exceeded with a new base value.
+! Then the whole allocation and creation process has to be repeated if base value is exceeded by declaring a new base value.
 
 MODULE ModelFieldsModule
     IMPLICIT NONE
-    
-    !include 'fftw3.f03'
 
     ! Subroutines and functions
-    public :: AllocateVerticalArrays, DeallocateVerticalArrays
-    public :: AllocateHorizontalArrays, DeallocateHorizontalArrays
+    public :: AllocateVerticalArrays, ZeroVerticalArrays, createVertArr, DeallocateVerticalArrays
+    public :: AllocateHorizontalArrays, ZeroHorzArrays, createHorzArr, DeallocateHorizontalArrays
+    public :: AllocateTransformArrays, ZeroTransArrays, createTransArr, DeallocateTransformArrays
+    public :: AllocateEnergyArrays, ZeroEnergyArrays, createEnergyArr, DeallocateEnergyArrays
+
     public :: AllocateStatsArrays, DeallocateStatsArrays
 
     ! Variables
-    public :: gVertArr, gHorzArr, gStatsArr
-    public :: BV
+    public :: gVertArr, gHorzArr, gTransArr, gEnergyArr, gStatsArr
 
-    !========================== Vertical arrays
+!========================== DECLARATIONS for Vertical arrays
+    
+    REAL, ALLOCATABLE, TARGET :: BV(:)      ! Define one array that encompasses all vertical arrays
+
     !  BV(*) contains all vertical profile arrays in one contiguous block.
     ! Consider a 11-layer model
     !  User specifies PV as follows:
@@ -90,9 +114,8 @@ MODULE ModelFieldsModule
     END TYPE VertArrays
 
     TYPE(VertArrays) :: gVertArr
-    REAL, ALLOCATABLE, TARGET :: BV(:)      ! Define one array that encompasses all vertical arrays
 
-    !=============================== Horizontal arrays
+!=============================== ! DECLARATIONS for Horizontal arrays
         !TYPE :: ChainHorzArrays
         !    LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
         !    REAL, POINTER :: GQ(:),BTA(:),PSB(:),PS(:),TH(:),WW(:),TF(:),FS(:),ADS(:),WS(:),S(:),FT(:),ADT(:),WT(:),T(:),SF(:),ADO(:),TOP(:)
@@ -175,6 +198,9 @@ MODULE ModelFieldsModule
         REAL, POINTER :: PSSAVE(:,:) => NULL()  !  PSSAVE(ITOTD,maxLevels)
     END TYPE HorzArrays
     
+    TYPE(HorzArrays) :: gHorzArr
+    
+!=============================== ! DECLARATIONS for Transform arrays
     type :: TransArrays
         LOGICAL :: allocated = .FALSE.          !  Flag to indicate if arrays are allocated and defined
         LOGICAL :: defined = .FALSE.            !  Flag to indicate if arrays are defined with proper sizes
@@ -191,12 +217,26 @@ MODULE ModelFieldsModule
         REAL, POINTER :: G2Zonal(:) => null()   !  G2Zonal(KX or LY) grid point array for zonal (cosly) transforms
     end type TransArrays
 
-    !TYPE(HorzArraysPool) :: horzArr_pool
-    TYPE(HorzArrays) :: gHorzArr
     type(TransArrays) :: gTransArr
-    !REAL, ALLOCATABLE, TARGET :: BH(:)      ! Define one array that encompasses all real horizontal arrays
-    !INTEGER, ALLOCATABLE, TARGET :: BHI(:)  ! Define one array that encompasses all integer horizontal arrays
-
+    
+! ======================================= DECLARATIONS for Energy arrays
+    
+    REAL, ALLOCATABLE, TARGET :: ZonalWaveEnergy_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: ZonalEnergy_Pool(:)
+    
+    type :: EnergyArrays
+        LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
+        REAL, POINTER :: ZonalWaveEnergy(:)     ! This array holds the energy in the zonal waves as a function of the zonal wavenumber
+                                                    ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
+                                                    ! this array will have KMAX elements.
+        REAL, POINTER :: ZonalEnergy(:)   ! This array holds the energy in each zonal mode as a function of meridional wavenumber. If there
+                                              ! are LMAX meridional modes this array will have LMAX elements
+        REAL :: TotalZonalEnergy              ! This value contains the sum total of all the zonal mode energy in the array ZonalEnergy
+    end type EnergyArrays
+    
+    TYPE(EnergyArrays) :: gEnergyArr
+    
+! ==================================== DECLARATIONS for Statistics arrays (not implemented)
 
     ! PSA: is the time average of the streamfunction at each level PSA(ITOTA,NALA,7)
     ! APE: is the time average available potential energy at each level APE(ITOTA,NALA)
@@ -216,21 +256,64 @@ MODULE ModelFieldsModule
     END TYPE StatsArrays
 
     TYPE(StatsArrays) :: gStatsArr
-
-    type :: EnergyArrays
-        LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
-        REAL, ALLOCATABLE :: ZonalWaveEnergy(:)     ! This array holds the energy in the zonal waves as a function of the zonal wavenumber
-                                                    ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
-                                                    ! this array will have KMAX elements.
-        REAL, ALLOCATABLE :: ZonalEnergy(:)   ! This array holds the energy in each zonal mode as a function of meridional wavenumber. If there
-                                              ! are LMAX meridional modes this array will have LMAX elements
-        REAL :: TotalZonalEnergy              ! This value contains the sum total of all the zonal mode energy in the array ZonalEnergy
-    end type EnergyArrays
     
-    TYPE(EnergyArrays) :: gEnergyArr
-
     CONTAINS
-    ! ================================== Allocate and deallocate Vertical arrays
+
+! ================================== Allocate and deallocate Energy Arrays
+        FUNCTION AllocateEnergyArrays() RESULT(status)
+            use ArrayDimensionsModule
+            use ModelParamsModule, only: gUserSettings
+
+            INTEGER :: status
+
+            ALLOCATE(ZonalWaveEnergy_Pool(gUserSettings%maxZonalWaves), STAT = status)
+            if (status /= 0) RETURN
+            ALLOCATE(ZonalEnergy_Pool(gUserSettings%maxMeridWaves), STAT = status)
+            if (status /= 0) RETURN
+
+            gEnergyArr%allocated = .TRUE. ! Set allocated flag to true
+
+        END FUNCTION AllocateEnergyArrays
+
+        subroutine ZeroEnergyArrays()
+            implicit none
+            ZonalWaveEnergy_Pool = 0.0
+            ZonalEnergy_Pool = 0.0
+        end subroutine ZeroEnergyArrays
+
+        function createEnergyArr(kmax, lmax) RESULT(status)
+
+            implicit none
+
+            integer, intent(in) :: kmax, lmax
+
+            integer :: status
+
+            status = 0
+            if (.not. gEnergyArr%allocated) then
+                status = 1
+                return
+            end if
+
+            gEnergyArr%ZonalWaveEnergy(1 : kmax)  => ZonalWaveEnergy_Pool(1 : kmax)
+            gEnergyArr%ZonalEnergy(1 : lmax)  => ZonalEnergy_Pool(1 : lmax)
+            
+            gVertArr%defined = .TRUE. ! Set defined flag to true
+        end function createEnergyArr
+
+        function DeallocateEnergyArrays() result(statusErr)
+            integer statusErr
+            
+            IF (ALLOCATED(ZonalWaveEnergy_Pool)) DEALLOCATE(ZonalWaveEnergy_Pool, STAT = statusErr)
+            IF (ALLOCATED(ZonalEnergy_Pool)) DEALLOCATE(ZonalEnergy_Pool, STAT = statusErr)
+            NULLIFY(gEnergyArr%ZonalWaveEnergy)
+            NULLIFY(gEnergyArr%ZonalEnergy)
+
+            gEnergyArr%allocated = .FALSE. ! Set allocated flag to false
+        end function DeallocateEnergyArrays
+
+! ================================== Allocate and deallocate Vertical arrays
+! 1. Allocate
         FUNCTION AllocateVerticalArrays() RESULT(status)
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings
@@ -245,11 +328,13 @@ MODULE ModelFieldsModule
 
         END FUNCTION AllocateVerticalArrays
 
+! 2. Zero 
         subroutine ZeroVerticalArrays()
             implicit none
             BV = 0.0
         end subroutine ZeroVerticalArrays
 
+! 3. Create
         function createVertArr(levels) RESULT(status)
 
             implicit none
@@ -284,6 +369,7 @@ MODULE ModelFieldsModule
             gVertArr%defined = .TRUE. ! Set defined flag to true
         end function createVertArr
 
+! 4. Deallocate
         function DeallocateVerticalArrays() result(statusErr)
             integer statusErr
             
@@ -309,7 +395,7 @@ MODULE ModelFieldsModule
 
         end function DeallocateVerticalArrays
 
-    ! ================================== Allocate and deallocate Horizontal arrays
+! ================================== Allocate and deallocate Horizontal arrays
         !> This function allocates the horizontal arrays used in the model. 
         !> Upon success, the gHorzArr%allocated flag is set to .TRUE.
         !>
@@ -354,43 +440,6 @@ MODULE ModelFieldsModule
             gHorzArr%ALLOCATED = .TRUE.
         END FUNCTION AllocateHorizontalArrays
 
-        FUNCTION AllocateTransformArrays() RESULT(status)
-            USE ISO_FORTRAN_ENV
-            use ArrayDimensionsModule, only: gArrayDims
-            use ModelParamsModule, only: gUserSettings
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-
-            IMPLICIT NONE
-
-            INTEGER :: status, maxSize, mk, ml
-
-            status = 0
-
-            ! Sometimes the vertical levels LVS is greater than either KX or LY
-            ! so we need to find the largest combination needed. We have
-            ! KX*LY, KX*LVS, LY*LVS
-            maxSize = MAX(gArrayDims%KX * gArrayDims%LY, gArrayDims%KX * gArrayDims%LVS, gArrayDims%LY * gArrayDims%LVS)
-            mk = max(gArrayDims%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
-            ml = max(gArrayDims%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
-
-            allocate(Gc_pool((gArrayDims%IXMAX/2 + 1) * gArrayDims%IYMAX),     &
-                    G1_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
-                    G2_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
-                    G3_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
-                    G4_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
-                    plot_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),            &
-                    plotFull_pool(maxSize),                                    &
-                    GZonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),            &
-                    G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),           &
-                    GcZ_pool(max(gArrayDims%KX, gArrayDims%LY)),               &
-                    STAT = status)
-
-            IF (status /= 0) RETURN
-            ! Zero everything
-            CALL ZeroTransArrays()
-            gTransArr%ALLOCATED = .TRUE.
-        END FUNCTION AllocateTransformArrays
-
         !> This subroutine zeros all horizontal arrays in the horzArr_pool type
         SUBROUTINE ZeroHorzArrays(skipSettings)
             use ModelParamsModule, only: gModIntParams
@@ -429,22 +478,6 @@ MODULE ModelFieldsModule
             RL_pool = 0.0
             TOP_pool = 0.0
         end subroutine ZeroHorzArrays
-        
-        subroutine ZeroTransArrays()
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-
-            implicit none
-            Gc_pool = (0.0, 0.0)
-            G1_pool = 0.0
-            G2_pool = 0.0
-            G3_pool = 0.0
-            G4_pool = 0.0
-            plot_pool = 0.0
-            plotFull_pool = 0.0
-            GcZ_pool = (0.0, 0.0)
-            GZonal_pool = 0.0
-            G2Zonal_pool = 0.0
-        end subroutine ZeroTransArrays
 
         !> This function creates the horizontal arrays by associating the pointers in the gHorzArr type
         !> This function needs to be called after the AllocateHorizontalArrays() method when first allocating
@@ -523,42 +556,6 @@ MODULE ModelFieldsModule
 
         end function createHorzArr
         
-        function createTransArr(arraySizes) result(status)
-            use ArrayDimensionsModule
-            use ModelParamsModule, only: gUserSettings
-            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
-            
-            implicit none
-            type(Dims), intent(in) :: arraySizes
-            
-            integer :: status, mx, mk, ml, mc
-
-            status = 0
-            if (.not. gTransArr%allocated) then
-                status = 1
-                return
-            end if
-            mk = max(arraySizes%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
-            ml = max(arraySizes%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
-            ! Transform arrays
-            mc = max(arraySizes%KX, arraySizes%LY)
-            mx = max(arraySizes%KX, arraySizes%LY, arraySizes%LVS)
-            gTransArr%Gc(1 : arraySizes%IXMAX/2 + 1, 1 : arraySizes%IYMAX) => Gc_pool(1 : (arraySizes%IXMAX/2 + 1) * arraySizes%IYMAX)
-            gTransArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gTransArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gTransArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gTransArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            ! Plot array
-            gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
-            gTransArr%plotFull(1: arraySizes%KX, 1 : ml) => plotFull_pool(1 : arraySizes%KX * ml)
-            gTransArr%plotFullY(1: arraySizes%LY, 1 : mk) => plotFull_pool(1 : arraySizes%LY * mk)
-            gTransArr%GcZ(1 : mc) => GcZ_pool(1 : mc)
-            gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
-            gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)
-
-            call ZeroTransArrays()
-        end function createTransArr
-
         !> This function deallocates the horizontal arrays allocated by the AllocateHorizontalArrays method.
         !! @return statusErr An integer status code. 0 on success, non-zero on failure.
         function DeallocateHorizontalArrays() result(statusErr)
@@ -620,6 +617,97 @@ MODULE ModelFieldsModule
             gHorzArr%defined = .FALSE.
         END function DeallocateHorizontalArrays
         
+! ======================= Allocate and Deallocate Transform arrays
+        FUNCTION AllocateTransformArrays() RESULT(status)
+            USE ISO_FORTRAN_ENV
+            use ArrayDimensionsModule, only: gArrayDims
+            use ModelParamsModule, only: gUserSettings
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+
+            IMPLICIT NONE
+
+            INTEGER :: status, maxSize, mk, ml
+
+            status = 0
+
+            ! Sometimes the vertical levels LVS is greater than either KX or LY
+            ! so we need to find the largest combination needed. We have
+            ! KX*LY, KX*LVS, LY*LVS
+            maxSize = MAX(gArrayDims%KX * gArrayDims%LY, gArrayDims%KX * gArrayDims%LVS, gArrayDims%LY * gArrayDims%LVS)
+            mk = max(gArrayDims%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+            ml = max(gArrayDims%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+
+            allocate(Gc_pool((gArrayDims%IXMAX/2 + 1) * gArrayDims%IYMAX),     &
+                    G1_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
+                    G2_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
+                    G3_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
+                    G4_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),              &
+                    plot_pool(gArrayDims%IXMAX * gArrayDims%IYMAX),            &
+                    plotFull_pool(maxSize),                                    &
+                    GZonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),            &
+                    G2Zonal_pool(max(gArrayDims%KX, gArrayDims%LY, gArrayDims%LVS)),           &
+                    GcZ_pool(max(gArrayDims%KX, gArrayDims%LY)),               &
+                    STAT = status)
+
+            IF (status /= 0) RETURN
+            ! Zero everything
+            CALL ZeroTransArrays()
+            gTransArr%ALLOCATED = .TRUE.
+        END FUNCTION AllocateTransformArrays
+        
+        subroutine ZeroTransArrays()
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+
+            implicit none
+            Gc_pool = (0.0, 0.0)
+            G1_pool = 0.0
+            G2_pool = 0.0
+            G3_pool = 0.0
+            G4_pool = 0.0
+            plot_pool = 0.0
+            plotFull_pool = 0.0
+            GcZ_pool = (0.0, 0.0)
+            GZonal_pool = 0.0
+            G2Zonal_pool = 0.0
+        end subroutine ZeroTransArrays
+        
+        function createTransArr(arraySizes) result(status)
+            use ArrayDimensionsModule
+            use ModelParamsModule, only: gUserSettings
+            use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
+            
+            implicit none
+            type(Dims), intent(in) :: arraySizes
+            
+            integer :: status, mx, mk, ml, mc
+
+            status = 0
+            if (.not. gTransArr%allocated) then
+                status = 1
+                return
+            end if
+            mk = max(arraySizes%KX, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+            ml = max(arraySizes%LY, gArrayDims%LVS) ! Vertical cross sections where LEVS might exceed the horizonal
+            ! Transform arrays
+            mc = max(arraySizes%KX, arraySizes%LY)
+            mx = max(arraySizes%KX, arraySizes%LY, arraySizes%LVS)
+            gTransArr%Gc(1 : arraySizes%IXMAX/2 + 1, 1 : arraySizes%IYMAX) => Gc_pool(1 : (arraySizes%IXMAX/2 + 1) * arraySizes%IYMAX)
+            gTransArr%G1(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G1_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G2(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G2_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G3(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G3_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%G4(1 : arraySizes%IXMAX, 1 : arraySizes%IYMAX) => G4_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            ! Plot array
+            gTransArr%plot(1: arraySizes%IXMAX, 1 : arraySizes%IYMAX) => plot_pool(1 : arraySizes%IXMAX * arraySizes%IYMAX)
+            gTransArr%plotFull(1: arraySizes%KX, 1 : ml) => plotFull_pool(1 : arraySizes%KX * ml)
+            gTransArr%plotFullY(1: arraySizes%LY, 1 : mk) => plotFull_pool(1 : arraySizes%LY * mk)
+            gTransArr%GcZ(1 : mc) => GcZ_pool(1 : mc)
+            gTransArr%GZonal(1 : mx) => GZonal_pool(1 : mx)
+            gTransArr%G2Zonal(1 : mx) => G2Zonal_pool(1 : mx)
+
+            call ZeroTransArrays()
+        end function createTransArr
+
+        
         function DeallocateTransformArrays() result(statusErr)
             use, intrinsic :: iso_c_binding, only : C_FLOAT_COMPLEX
             implicit none
@@ -652,7 +740,8 @@ MODULE ModelFieldsModule
             gTransArr%defined = .FALSE.
         END function DeallocateTransformArrays
 
-    ! ================================== Allocate and deallocate Statistics arrays
+! ================================== Allocate and deallocate Statistics arrays
+! TODO: This is not in function and needs to be fixed. Might completely change with the Welford approach as in WeatherRegimes
         !> This function allocates the statistics arrays used in the model and sets sizes in the gArrayDims.
         !> Before calling this function the SetDimensions() and the AllocateHorizontalArrays() must
         !> have been called. The AllocateStatsArrays() method sets the %ITOTA, %KXLYA, %NALA, %KXV, %LYV, KXLYA

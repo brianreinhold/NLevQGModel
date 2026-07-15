@@ -424,8 +424,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ifwin       ! For GetCurrentThreadId
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
-    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, NO_PLOT, &
-                               VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, DEGREES_TO_RAD
+    use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
+                               ZONAL_WAVE_ENERGY, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -943,6 +943,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (HEIGHT);      write(buf, '("Heights ", F10.2, " m")') val
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
                 case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/hr")') val
+                case (TOT_HGT_TEND); write(buf, '("Tot height tend ", F10.2, " m/day")') val
                 case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
                 case (ADV_BETA_HGT_TEND); write(buf, '("Adv height ", F10.2, " m/day")') val
                 case default;       buf = ""

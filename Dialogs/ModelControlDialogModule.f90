@@ -546,6 +546,7 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Cross section along longitude'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Hovmoller diagram along longitude'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Phase space plot'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Total zonal wave energy spectrum'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Weather station time series'//char(0)))                    
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Vertical Hovmoller at weather station'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Skip plot for speed'//char(0)))

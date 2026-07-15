@@ -155,9 +155,9 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
-            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, &
-                       createHorzArr, createTransArr, createVertArr, &
-                       DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, DeallocateStatsArrays
+            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, AllocateEnergyArrays, &
+                       createHorzArr, createTransArr, createVertArr, createEnergyArr, &
+                       DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, DeallocateEnergyArrays, DeallocateStatsArrays
             use InteractionCoefficientsModule, only: AllocateCintArrays, computeInteractionCoefficients, createCintArr, gCintArr, DeallocateCintArrays
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams
 
@@ -178,6 +178,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (error .NE. 0) return
             error = createTransArr(gCurrentDims)
             if (error .NE. 0) return
+            
             error = DeallocateVerticalArrays()
             error = AllocateVerticalArrays()
             if (error .NE. 0) return
@@ -185,7 +186,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             if (error .NE. 0) return
             call DFDIAB(.true.)  ! Subroutine 1ocated in this file
             call CreatePerturbation() ! Subroutine 1ocated in this file
-            ! TODO fix to be consistent with the others
+            
+            error = DeallocateEnergyArrays()
+            error = AllocateEnergyArrays()
+            if (error .NE. 0) return
+            error = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
+            if (error .NE. 0) return
+            
             error = DeallocateStatsArrays()
             error = AllocateStatsArrays()
             if (error .NE. 0) return
@@ -499,9 +506,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         function CheckUserSettingsChanges() result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
             use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams, gModRealParams
-            use ModelFieldsModule, only: DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, &
-                createHorzArr, createTransArr, createVertArr, &
-                AllocateHorizontalArrays, AllocateVerticalArrays, AllocateTransformArrays, gVertArr, gHorzArr, gTransArr
+            use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, AllocateEnergyArrays, &
+                       createHorzArr, createTransArr, createVertArr, createEnergyArr, &
+                       DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, DeallocateEnergyArrays, DeallocateStatsArrays, &
+                       gVertArr, gHorzArr, gTransArr, gEnergyArr, gStatsArr
             use InteractionCoefficientsModule, only: DeallocateCintArrays, AllocateCintArrays, computeInteractionCoefficients, gCintArr
             use Fftw3HelpersModule, only: setup_fftw_plans
 
@@ -560,6 +568,15 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = createTransArr(gCurrentDims)
                 if(errorCode .NE. 0) return
                 if (boolHorzResult) call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
+                
+                ! Handle energy arrays
+                if (gEnergyArr%allocated) errorCode = DeallocateEnergyArrays()  ! Deallocate transform arrays if allocated
+
+                errorCode = AllocateEnergyArrays()    ! Reallocate transform arrays
+                if(errorCode .NE. 0) return
+
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
+                if(errorCode .NE. 0) return
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
                                                     (boolCoeffResult .OR.     & ! We have switched to interaction coefficients or
@@ -1548,7 +1565,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine NonDimensionalizeVerticalParams
         
         subroutine DimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1569,6 +1586,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 end do
             end do
             gHorzArr%PS = gPlotScales(HEIGHT)  * gHorzArr%PS ! Convert to dimensional heights all at once
+            gHorzArr%WW = gPlotScales(VERTICAL_WIND)  * gHorzArr%WW
             gHorzArr%FS = gPlotScales(TOT_HGT_TEND) * gHorzArr%FS 
             gHorzArr%ADS = gPlotScales(ADV_BETA_HGT_TEND) * gHorzArr%ADS 
             gHorzArr%SF = gPlotScales(HGT_FORCING) * gHorzArr%SF ! Convert to dimensional heights
@@ -1585,7 +1603,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine DimensionalizeHorizontalParams
 
         subroutine NonDimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1606,6 +1624,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 end do
             end do
             gHorzArr%FS = gHorzArr%FS / gPlotScales(TOT_HGT_TEND)
+            gHorzArr%WW = gHorzArr%WW / gPlotScales(VERTICAL_WIND)
             gHorzArr%ADS = gHorzArr%ADS / gPlotScales(ADV_BETA_HGT_TEND)
             gHorzArr%PS = gHorzArr%PS / gPlotScales(HEIGHT) ! Convert to nondimensional 
             gHorzArr%SF = gHorzArr%SF / gPlotScales(HGT_FORCING)! Convert to nondimensional 

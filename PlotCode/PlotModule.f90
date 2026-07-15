@@ -848,7 +848,7 @@ module PlotModule
         !> or a set of ensemble files
         subroutine outputPlot()
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LON, &
-                HOV_DIAG_AT_LON, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY, wp
+                HOV_DIAG_AT_LON, PHASE_SPACE, ZONAL_WAVE_ENERGY, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
@@ -881,45 +881,42 @@ module PlotModule
                 call labelPlotsAndDisplayTime(.true.)
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
-            end if
 
     ! WEATHER STATION ----------------------
-            if (gModIntParams%plotType == WEATHER_STN) then
+            elseif (gModIntParams%plotType == WEATHER_STN) then
                 call plotTimeSeries()
-            endif
-            
+
     ! VERTICAL HOV AT WEATHER STATION ----------------------
-            if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+            elseif (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotVertHovmoller(gVertHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotVertHovmoller(gVertHovmoller2, .TRUE.)
-            endif
 
     ! HOVMOLLER LAT ----------------------
-            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+            elseif (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLatHovmoller(gLatHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLatHovmoller(gLatHovmoller2, .TRUE.)
-            endif
     
     ! HOVMOLLER LON ----------------------
-            if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+            elseif (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonHovmoller(gLonHovmoller2, .TRUE.)
-            endif
-            
+
     ! LAT CROSS SECTION----------------------
-            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
+            elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLatVertCrossSec(gLatVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLatVertCrossSec(gLatVertCrossSec2, .TRUE.)
-            endif
 
     ! LON CROSS SECTION----------------------
-            if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) then
+            elseif (gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) then
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec1, gModIntParams%field2 == PLOTTING_OFF)
                 if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotLonVertCrossSec(gLonVertCrossSec2, .TRUE.)
-            endif
+                
+    ! ZONAL WAVE ENERGY----------------------
+            elseif (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                call plotZonalWaveEnergySpecturm()
 
     ! WEATHER MAP ----------------------
-            if (gModIntParams%plotType == WEATHER_MAP) then
+            elseif (gModIntParams%plotType == WEATHER_MAP) then
                 ! We do not force the screen to update if gModIntParams%field2 is a plot.
                 ! In that case gModIntParams%field1 gets plotted first and then
                 ! a second call to plotWeatherMap for gModIntParams%field2 is made.
@@ -929,9 +926,9 @@ module PlotModule
                 call plotWeatherMap((gModIntParams%field2 == PLOTTING_OFF), gWeatherMap1)
                 ! This will always plot unless gModIntParams%field2 = PLOTTING_OFF.
                 call plotWeatherMap(.true., gWeatherMap2)
-            endif
+
     ! WEATHER MAP and PHASE SPACE ----------------------
-            if (gModIntParams%plotType == PHASE_AND_MAP) then
+            elseif (gModIntParams%plotType == PHASE_AND_MAP) then
                 call plotWeatherMap((gModIntParams%field2 == PLOTTING_OFF), gWeatherMap1)
                 call plotWeatherMap(.true., gWeatherMap2)
                 if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == PLOTTING_OFF)
@@ -2947,6 +2944,14 @@ module PlotModule
             call labelPlotsAndDisplayTime(.false.)
             call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
         end subroutine plotVertHovmoller
+
+! PLOT ZONAL WAVE ENERGY SPECTRUM -------------------------------------------
+        subroutine plotZonalWaveEnergySpecturm()
+            use ModelFieldsModule, only: gEnergyArr
+            implicit none
+            
+            
+        end subroutine plotZonalWaveEnergySpecturm
 
 ! PLOT WEATHER MAP -------------------------------------------
         ! @param Y: the spectral components array

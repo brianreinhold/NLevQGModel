@@ -298,6 +298,7 @@ module ModelParamsModule
             gFieldLabels(HEIGHT)%s =  "Height in meters"
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
             gFieldLabels(VERTICAL_WIND)%s = "Omega mb/hr"
+            gFieldLabels(TOT_HGT_TEND)%s = "meters/day"
             gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ß m/day"
             gFieldLabels(DIABATIC_HGT_TEND)%s = "Diab hgt tend m/day"
             gFieldLabels(DIABATIC_TEMP_TEND)%s = "Diab temp tend "//ACHAR(176)//"day"
