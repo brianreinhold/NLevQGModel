@@ -123,17 +123,19 @@ module PlotModule
     end type WeatherMap                     ! The trig table will never be used or created in this case.
 
     type, extends(BaseMap) :: Hovmoller
-        integer :: row = 0          ! row on the screen to draw the hovmoller. I think this can be used for both lat and lon
+        integer :: rowColumn = 0            ! row on the screen to draw the hovmoller. I think this can be used for both lat and lon
     end type Hovmoller
 
     type, extends(BaseMap) :: VertCrossSection
         real, allocatable :: tempScales(:)   ! The scaling factors needed to make temperature dimensional which depends upon level.
     end type VertCrossSection
     
-    type, extends(BaseMap) :: VertHovmoller
+    type, extends(Hovmoller) :: VertHovmoller
         real, allocatable :: tempScales(:)   ! The scaling factors needed to make temperature dimensional which depends upon level.
-        integer :: column = 0                ! column on the screen to draw the hovmoller.
     end type VertHovmoller
+    
+    type, extends(Hovmoller) :: EnergyHovmoller   ! There will be several fields will we not use here
+    end type EnergyHovmoller
 
     type, extends(TrigTable) :: WeatherStation
         LOGICAL :: isInitialized = .FALSE.  ! Indicates that this structure has been initialized and is ready to use when true
@@ -150,10 +152,7 @@ module PlotModule
         real :: range               ! The range of the graph in y. Since the origin is in the middle, the range will be from -range to +range.
                                     ! This is used to scale the plot to fit in the screen.
         character(:), allocatable :: units  ! Units of the variable being plotted to be displayed in the graph legend
-        !REAL, ALLOCATABLE :: siny(:)    ! Array of precomputed sinLy values for constant y
-        !REAL, ALLOCATABLE :: cosy(:)    ! Array of precomputed cosLy values for constant y
-        !REAL, ALLOCATABLE :: cosx(:)    ! Array of precomputed cosKnxy values for constant x
-        !REAL, ALLOCATABLE :: sinx(:)    ! Array of precomputed sinKnxy values for constant x
+
         integer :: field = PLOTTING_OFF ! The field being plotted. Field ranges from 1 (VORTICITY) to 16 (OROGRAPHY) and PLOTTING_OFF (17)
     end type WeatherStation
 
@@ -183,6 +182,8 @@ module PlotModule
     type(VertHovmoller) :: gVertHovmoller2
     type(WeatherStation) :: gWeatherStation1
     type(WeatherStation) :: gWeatherStation2
+    
+    type(EnergyHovmoller) :: gEnergyHovmoller1 ! Only one so far
 
     type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer
     type(TimeSeriesBuffer) :: gTempStatsTimeSeriesBuffer
@@ -303,7 +304,7 @@ module PlotModule
         ! running that could require that this routine be called again.
         subroutine initializePlot()
             use ConstantsModule, only: PHASE_SPACE, WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PHASE_AND_MAP, WEATHER_MAP, &
-                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, VERT_HOV_AT_WEATHER_STN, &
+                                       VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, VERT_HOV_AT_WEATHER_STN, ZONAL_WAVE_ENERGY, &
                                        LATITUDE, LONGITUDE, LAT_LON, SQRT2, PLOTTING_OFF, ONE, TWO
             use ModelParamsModule, only: gModIntParams, gPlotScales, gIsTemperature
             IMPLICIT NONE
@@ -434,6 +435,10 @@ module PlotModule
                 if (gModIntParams%field2 < PLOTTING_OFF) then
                     call initializeHovmollerType(gModIntParams%field2, gLonHovmoller2, gModIntParams%field1 == PLOTTING_OFF, LONGITUDE)
                 endif
+
+! ------ HOVMOLLER ENERGY---------------------------------
+            else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                call initializeEnergyHovmollerType(gEnergyHovmoller1)
             endif 
 
 ! ------ WEATHER MAP & COMBO -----------------------------
@@ -626,6 +631,10 @@ module PlotModule
             endif
         end subroutine initializeTrigTablesType
         
+        !! This routine populates an array 'gPressure' with pressure values interpolated from the vertical levels
+        !! in gVertArr%LVS to the screen height. This array will give the pressure level corresponding to the  
+        !! screen position y (well, one has to compenstate for the fact y=0 is at the top and that is the last
+        !! element in 'gPressure'. We need this array since the levels may not be evenly spaced.
         subroutine interpolateVerticalCoordinate()
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gVertArr
@@ -693,7 +702,7 @@ module PlotModule
                     vertHovmollerType%tempScales(plotLevel) = vertHovmollerType%scale / interpolateTemperatureScale(plotLevel)
                 end do
             end if
-            vertHovmollerType%column = 0
+            vertHovmollerType%rowColumn = 0
             vertHovmollerType%isInitialized = .true.
 
         end subroutine initializeVertHovmollerType
@@ -785,7 +794,7 @@ module PlotModule
 
             call initializeBaseMapType(field, hovmollerType, useSolidColor)
             call initializeTrigTablesType(latLon, hovmollerType, gModRealParams%hovLat, gModRealParams%hovLon)
-            hovmollerType%row = 0
+            hovmollerType%rowColumn = 0
             hovmollerType%isInitialized = .true.
         end subroutine initializeHovmollerType
 
@@ -841,6 +850,21 @@ module PlotModule
             weatherStnType%isInitialized = .true.
 
         end subroutine initializeWeatherStationType
+
+        subroutine initializeEnergyHovmollerType(energyHovmollerType)
+            use ConstantsModule, only: HEIGHT
+            use ModelParamsModule, only: gModRealParams, gContourIntervals
+            IMPLICIT NONE
+
+            type(EnergyHovmoller), intent(inout) :: energyHovmollerType
+
+            energyHovmollerType%useSolidColor = .true.
+            energyHovmollerType%rowColumn = 0
+            energyHovmollerType%scale = 1.
+
+            energyHovmollerType%contourIntervalInv = 60.0 / REAL(gContourIntervals%Contours(HEIGHT))
+            energyHovmollerType%isInitialized = .true.
+    end subroutine initializeEnergyHovmollerType
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -913,7 +937,7 @@ module PlotModule
                 
     ! ZONAL WAVE ENERGY----------------------
             elseif (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
-                call plotZonalWaveEnergySpecturm()
+                call plotZonalWaveEnergySpectrum(gEnergyHovmoller1, .true.)
 
     ! WEATHER MAP ----------------------
             elseif (gModIntParams%plotType == WEATHER_MAP) then
@@ -1513,16 +1537,16 @@ module PlotModule
             else if (gModIntParams%plotType == PHASE_SPACE) then
                 call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
-                gLatHovmoller1%row = 0
-                gLatHovmoller2%row = 0
+                gLatHovmoller1%rowColumn = 0
+                gLatHovmoller2%rowColumn = 0
                 call DrawVerticalLines(.false.)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
-                gLonHovmoller1%row = 0
-                gLonHovmoller2%row = 0
+                gLonHovmoller1%rowColumn = 0
+                gLonHovmoller2%rowColumn = 0
                 !call DrawHorizontalLines(.false., .true., .false., #00323232) ! 'isHeight' parameter is not used in this case
             else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
-                gVertHovmoller1%column = 0
-                gVertHovmoller2%column = 0
+                gVertHovmoller1%rowColumn = 0
+                gVertHovmoller2%rowColumn = 0
             else if (gModIntParams%plotType == WEATHER_MAP) then
                 call DrawGridLines(.false., .false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
@@ -2159,7 +2183,7 @@ module PlotModule
                 Xptr => X_Overlay
             endif
 
-            currentRow = mod(latHovmoller%row, 3) + 1 
+            currentRow = mod(latHovmoller%rowColumn, 3) + 1 
             call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IXMAX + 1, 1, gBitMapInfo%width, .true., Xptr(:, currentRow)) ! is periodic
 
             if (latHovmoller%useSolidColor) then
@@ -2181,7 +2205,7 @@ module PlotModule
                 ! 2. Calculate memory address for the desired row 'targetY'
                 ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
                 baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
-                targetAddr = baseAddr + (int(latHovmoller%row, c_intptr_t) * bytesPerRow)
+                targetAddr = baseAddr + (int(latHovmoller%rowColumn, c_intptr_t) * bytesPerRow)
             
                 ! 3. Get the address of your source array
                 ! Pixels must have the TARGET attribute
@@ -2216,9 +2240,9 @@ module PlotModule
                         end if
                         ! J=1 is the top row of the pixelArray
 
-                        dibArray(K, latHovmoller%row + 1) = colorToDraw
+                        dibArray(K, latHovmoller%rowColumn + 1) = colorToDraw
                     end if
-                    if (iVal /= iValUp .AND. latHovmoller%row > 0) then
+                    if (iVal /= iValUp .AND. latHovmoller%rowColumn > 0) then
                         colorIdx = max(iVal, iValUp)    ! reuse colorIdx for the max level
                         if (colorIdx > 0) then
                             colorToDraw = z'00DD0077' ! Reddish-pink
@@ -2229,13 +2253,13 @@ module PlotModule
                         end if
                         ! J=1 is the top row of the pixelArray
 
-                        dibArray(K, latHovmoller%row + 1) = colorToDraw
+                        dibArray(K, latHovmoller%rowColumn + 1) = colorToDraw
                     end if
                     
                 end do
             endif
 
-            latHovmoller%row = mod(latHovmoller%row + 1, gBitMapInfo%height)
+            latHovmoller%rowColumn = mod(latHovmoller%rowColumn + 1, gBitMapInfo%height)
             call labelPlotsAndDisplayTime(.false.)
             call DrawVerticalLines(invalidate) ! True invalidates window and forces redraw
         
@@ -2484,10 +2508,6 @@ module PlotModule
 
 ! PLOT HOVMOLLER AT LONGITUDE -------------------------------------------
         subroutine plotLonHovmoller(lonHovmoller, invalidate)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
@@ -2499,95 +2519,18 @@ module PlotModule
                                                             ! However, row is really the column
             LOGICAL, intent(in) :: invalidate
 
-            LOGICAL(BOOL) :: bret
-            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:, :)
-            integer(RGB32), pointer :: dibArray(:,:)
-
-            integer(RGB32), target :: Pixels(gBitMapInfo%height)
-            integer ::  iVal, iValDown, iValLeft, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
+            type(InterpolationBounds) b
 
             call loadLonValues(lonHovmoller, gModIntParams%LEVP, 1.0) ! Returns loaded values along a longitude in gTransArr%GZonal including polar value at boundary
-            
-            if (lonHovmoller%useSolidColor) then
-                if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%height, 3))
-                Xptr => X_Overlay
-            endif
 
-            currentColumn = MOD(lonHovmoller%row, 3) + 1
-            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IYMAX, 1, gBitMapInfo%height, .false., Xptr(:, currentColumn)) ! is NOT periodic
-            
-            ! Get access to the DIBSection 
-            call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
-            if (lonHovmoller%useSolidColor) then
-                ! Turn X into an integer array of 32-pixel values
-                do K = 1, gBitMapInfo%height
-                    ! Calculate value based on the contour interval
-                    iVal = FLOOR(Xptr(K, currentColumn) * lonHovmoller%contourIntervalInv) + NUM_RAM_COLORS / 2
-                    ! Cycle through the colorRam if iVal exceeds its size
-                    ! Use ABS to handle negative iVal if necessary
-                    ! Modulo keeps the recylcing postive versus mod which does not
-                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+            b%IL = 1
+            b%IU = gCurrentDims%IYMAX
+            b%KL = 1
+            b%KU = gBitMapInfo%height
+            b%isPeriodicX = .FALSE.
+            call plotHovmollerToScreen(lonHovmoller, b, gTransArr%GZonal)
 
-                    Pixels(K) = RAM_COLORS(colorIdx)
-                end do
-
-
-                ! 2. Loop through 'Pixels' array (height) 
-                ! and place each pixel into the DIBSection row-by-row
-                do K = gBitMapInfo%height, 1, -1
-                    dibArray(lonHovmoller%row + 1, gBitMapInfo%height - K + 1) = Pixels(K)
-                end do
-            else
-                ! 2. Calculate borders by comparing current pixel to its neighbors.
-                ! We stop at Height-1 to prevent "out of bounds" on the iVal checks.
-                prevColumn = currentColumn - 1
-                if (prevColumn < 1) prevColumn = 3
-                do K = 1, gBitMapInfo%height - 1
-        
-                    ! J_data maps Screen Top (J=1) to Array North (Height)
-                    L = gBitMapInfo%height - K + 1
-                    ! J_next is the row physically below J on the screen (one step South in data)
-
-                    ! Calculate interval bins
-                    iVal      = floor(X_Overlay(L, currentColumn) * lonHovmoller%contourIntervalInv)
-                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * lonHovmoller%contourIntervalInv)
-                    iValLeft  = floor(X_Overlay(L, prevColumn) * lonHovmoller%contourIntervalInv)
-        
-                    ! Detect boundary
-                    if (iVal /= iValDown) then
-                        colorIdx = max(iVal, iValDown)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
-                            
-                        ! J=1 is the top row of the pixelArray
-                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
-                    end if
-                    if (iVal /= iValLeft .AND. lonHovmoller%row > 0) then
-                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
-                        ! J=1 is the top row of the pixelArray
-
-                        dibArray(lonHovmoller%row + 1, K) = colorToDraw
-                    end if
-                end do
-            endif
-
-            lonHovmoller%row = mod(lonHovmoller%row + 1, gBitMapInfo%width)
+            lonHovmoller%rowColumn = mod(lonHovmoller%rowColumn + 1, gBitMapInfo%width)
             call labelPlotsAndDisplayTime(.false.)
             call DrawHorizontalLines(.true., .true., Z'00000000') ! True invalidates window and forces redraw #00646464
 
@@ -2827,10 +2770,6 @@ module PlotModule
 
 ! PLOT VERTICAL HOVMOLLER AT WEATHER STN -------------------------------------------
         subroutine plotVertHovmoller(vertHovmollerType, invalidate)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
@@ -2841,19 +2780,14 @@ module PlotModule
             type(VertHovmoller), intent(inout) :: vertHovmollerType  ! Need the out as the 'column' is kept track of here.
             LOGICAL, intent(in) :: invalidate
 
-            LOGICAL(BOOL) :: bret
-            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:, :)
-            integer(RGB32), pointer :: dibArray(:,:)
-
-            integer(RGB32), target :: Pixels(gBitMapInfo%height)
-            integer ::  iVal, iValDown, iValLeft, K, L, offset, colorIdx, colorToDraw, KMAX, LMAX, currentColumn, prevColumn
+            integer :: N
+            type(InterpolationBounds) b
 
             gTransArr%GZonal = 0.0
-            do K = 1, gCurrentDims%LVS
-                ! Places the current field to be plotted at level K in value which has size ITOT
-                call loadFields(vertHovmollerType%value, vertHovmollerType%field, K, vertHovmollerType%interpArrSelection)
-                gTransArr%GZonal(K) = computeValue(vertHovmollerType, vertHovmollerType%value)
+            do N = 1, gCurrentDims%LVS
+                ! Places the current field to be plotted at level N in value which has size ITOT
+                call loadFields(vertHovmollerType%value, vertHovmollerType%field, N, vertHovmollerType%interpArrSelection)
+                gTransArr%GZonal(N) = computeValue(vertHovmollerType, vertHovmollerType%value)
             end do
             !! scale the fields to their dimensional values
             if (gIsTemperature(vertHovmollerType%field)) then
@@ -2861,25 +2795,91 @@ module PlotModule
             else
                 gTransArr%GZonal = gTransArr%GZonal * vertHovmollerType%scale
             endif
-            
-            if (vertHovmollerType%useSolidColor) then
-                if (.not. allocated(X)) allocate(X(gBitMapInfo%height, 3))
+
+            b%IL = 1
+            b%IU = gCurrentDims%LVS
+            b%KL = 1
+            b%KU = gBitMapInfo%height
+            b%isPeriodicX = .FALSE.
+            call plotHovmollerToScreen(vertHovmollerType, b, gTransArr%GZonal)
+
+            vertHovmollerType%rowColumn = mod(vertHovmollerType%rowColumn + 1, gBitMapInfo%width)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
+        end subroutine plotVertHovmoller
+
+! PLOT ZONAL WAVE ENERGY SPECTRUM -------------------------------------------
+        subroutine plotZonalWaveEnergySpectrum(energyHovmollerType, invalidate)
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModIntParams
+            use ModelFieldsModule, only: gEnergyArr
+
+            IMPLICIT NONE
+
+            type(EnergyHovmoller), intent(inout) :: energyHovmollerType  ! Need the out as the 'column' is kept track of here.
+            LOGICAL, intent(in) :: invalidate
+
+            real, dimension(gModIntParams%KMAX2) :: totalEnergy
+            type(InterpolationBounds) b
+
+            totalEnergy = gEnergyArr%ZonalWaveKE + 1.0
+            totalEnergy = LOG10(totalEnergy)
+            b%IL = 1
+            b%IU = gModIntParams%KMAX2
+            b%KL = 1
+            b%KU = gBitMapInfo%height
+            b%isPeriodicX = .FALSE.
+            call plotHovmollerToScreen(energyHovmollerType, b, totalEnergy)
+
+            energyHovmollerType%rowColumn = mod(energyHovmollerType%rowColumn + 1, gBitMapInfo%width)
+            call labelPlotsAndDisplayTime(.false.)
+            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
+
+        end subroutine plotZonalWaveEnergySpectrum
+        
+        !> @Param: hovmollerType variable of the class type Hovmoller containing predefined features of the Hovmoller plot
+        !> @Param: b the InterpolationBounts type giving the input dimensions of the data array and the output size of the in the DIBSection
+        !> @Param: inArray the 1d data array to be interpolated to the screen as either a column or row.
+        subroutine plotHovmollerToScreen(hovmollerType, b, inArray)
+            USE IFWIN
+            USE GDI32
+            USE USER32
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModIntParams
+
+            IMPLICIT NONE
+
+            class(Hovmoller), intent(inout) :: hovmollerType  ! Need the out as the 'column' is kept track of here.
+            type(InterpolationBounds), intent(in) :: b
+            real, intent(in) :: inArray(:)
+
+            LOGICAL(BOOL) :: bret
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
+            REAL, POINTER :: Xptr(:, :)
+            integer(RGB32), pointer :: dibArray(:,:)
+
+            integer(RGB32), target :: Pixels(b%KU)
+            integer ::  iVal, iValDown, iValLeft, K, L, colorIdx, colorToDraw, currentColumn, prevColumn
+
+            if (hovmollerType%useSolidColor) then
+                if (.not. allocated(X)) allocate(X(b%KU, 3))
                 Xptr => X        ! Note the pointer and not the equals! Not like C!
             else
-                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%height, 3))
+                if (.not. allocated(X_Overlay)) allocate(X_Overlay(b%KU, 3))
                 Xptr => X_Overlay
             endif
 
-            currentColumn = MOD(vertHovmollerType%column, 3) + 1
-            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%LVS, 1, gBitMapInfo%height, .false., Xptr(:, currentColumn)) ! is NOT periodic
+            currentColumn = MOD(hovmollerType%rowColumn, 3) + 1
+            call Interpolate1D(inArray, b%IL, b%IU, b%KL, b%KU, b%isPeriodicX, Xptr(:, currentColumn)) ! is NOT periodic
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
-            if (vertHovmollerType%useSolidColor) then
+            if (hovmollerType%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
                 do K = 1, gBitMapInfo%height
                     ! Calculate value based on the contour interval
-                    iVal = FLOOR(Xptr(K, currentColumn) * vertHovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                    iVal = FLOOR(Xptr(K, currentColumn) * hovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
                     ! Cycle through the colorRam if iVal exceeds its size
                     ! Use ABS to handle negative iVal if necessary
                     ! Modulo keeps the recylcing postive versus mod which does not
@@ -2892,7 +2892,7 @@ module PlotModule
                 ! 2. Loop through 'Pixels' array (height) 
                 ! and place each pixel into the DIBSection row-by-row
                 do K = gBitMapInfo%height, 1, -1
-                    dibArray(vertHovmollerType%column + 1, gBitMapInfo%height - K + 1) = Pixels(K)
+                    dibArray(hovmollerType%rowColumn + 1, gBitMapInfo%height - K + 1) = Pixels(K)
                 end do
             else
                 ! 2. Calculate borders by comparing current pixel to its neighbors.
@@ -2906,9 +2906,9 @@ module PlotModule
                     ! J_next is the row physically below J on the screen (one step South in data)
 
                     ! Calculate interval bins
-                    iVal      = floor(X_Overlay(L, currentColumn) * vertHovmollerType%contourIntervalInv)
-                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * vertHovmollerType%contourIntervalInv)
-                    iValLeft  = floor(X_Overlay(L, prevColumn) * vertHovmollerType%contourIntervalInv)
+                    iVal      = floor(X_Overlay(L, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValLeft  = floor(X_Overlay(L, prevColumn) * hovmollerType%contourIntervalInv)
         
                     ! Detect boundary
                     if (iVal /= iValDown) then
@@ -2922,9 +2922,9 @@ module PlotModule
                         end if
                             
                         ! J=1 is the leftmost column of the pixelArray
-                        dibArray(vertHovmollerType%column + 1, K) = colorToDraw
+                        dibArray(hovmollerType%rowColumn + 1, K) = colorToDraw
                     end if
-                    if (iVal /= iValLeft .AND. vertHovmollerType%column > 0) then
+                    if (iVal /= iValLeft .AND. hovmollerType%rowColumn > 0) then
                         colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
                         if (colorIdx > 0) then
                             colorToDraw = z'00DD0077' ! Reddish-pink
@@ -2935,23 +2935,12 @@ module PlotModule
                         end if
                         ! J=1 is the top row of the pixelArray
 
-                        dibArray(vertHovmollerType%column + 1, K) = colorToDraw
+                        dibArray(hovmollerType%rowColumn + 1, K) = colorToDraw
                     end if
                 end do
             endif
+        end subroutine plotHovmollerToScreen
 
-            vertHovmollerType%column = mod(vertHovmollerType%column + 1, gBitMapInfo%width)
-            call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
-        end subroutine plotVertHovmoller
-
-! PLOT ZONAL WAVE ENERGY SPECTRUM -------------------------------------------
-        subroutine plotZonalWaveEnergySpecturm()
-            use ModelFieldsModule, only: gEnergyArr
-            implicit none
-            
-            
-        end subroutine plotZonalWaveEnergySpecturm
 
 ! PLOT WEATHER MAP -------------------------------------------
         ! @param Y: the spectral components array

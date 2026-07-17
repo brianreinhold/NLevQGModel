@@ -272,7 +272,7 @@ module ModelModule
                             end do
                             !---------------------------------------------- Selecting when to output data:
                             if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
-                                !call ComputeZonalSpectrum()
+                                call ComputeZonalSpectrum()
                                 call outputPlot()
                                 gHorzArr%FS = 0.0
                             endif
@@ -545,7 +545,7 @@ module ModelModule
 
             !---------------------------------------------Compute temperature advection:
             BLOCK
-                REAL :: del_p, del_pi, w_n, w_np1, w_shear
+                REAL :: del_p, del_pi, w_n, w_np1 !, w_shear
                 INTEGER :: N
             
                 DO N = 1, gModIntParams%NLEV - 1
@@ -554,8 +554,8 @@ module ModelModule
                     del_pi = 1.0 / del_p
             
                     ! 2. Calculate linear interpolation weights for the mean streamfunction interface PP(N+1)
-                    w_n   = (gVertArr%PP(N+1) - gVertArr%PV(N+1)) * del_pi
-                    w_np1 = (gVertArr%PV(N)   - gVertArr%PP(N+1)) * del_pi
+                    w_n   = (gVertArr%PP(N + 1) - gVertArr%PV(N + 1)) * del_pi
+                    w_np1 = (gVertArr%PV(N)   - gVertArr%PP(N + 1)) * del_pi
             
                     ! 3. Correctly weighted mean streamfunction at the temperature interface
                     buffer(1:ITOT) = w_n   * gHorzArr%PS(1:ITOT, N) + &
@@ -563,7 +563,8 @@ module ModelModule
             
                     ! 4. Calculate the normalized vertical shear weighting factor.
                     ! If layers are uniform, (DP(N)+DP(N+1))/2 equals del_p, making w_shear = 1.0
-                    w_shear = 0.5 * (gVertArr%DP(N) + gVertArr%DP(N+1)) * del_pi
+                    ! Using this caused numerical instability, so we have removed this weighting.
+                    !w_shear = 0.5 * (gVertArr%DP(N) + gVertArr%DP(N+1)) * del_pi
 
                     ! 5. Nondimensional Temperature (Shear) weighted properly for variable spacing
                     gHorzArr%TH(1:ITOT, N) = (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) !* w_shear
@@ -573,6 +574,7 @@ module ModelModule
                 END DO
             END BLOCK
 
+            ! Completely unweighted version of the above code, which is not really correct for non-uniform layers:
             !DO N = 1,  gModIntParams%NLEV - 1
             !    !-----------------------------------Compute strm and temp at temperature level:
             !    buffer(1:ITOT) = (gHorzArr%PS(1:ITOT, N) + gHorzArr%PS(1:ITOT, N + 1)) / 2. ! Mean streamfunction at temperature interface
@@ -652,6 +654,7 @@ module ModelModule
                 END DO
 
                 !!------------------------------------Upper boundary to compute WW(NLEV-1):
+                !! This smoother version did not work so well but it did stop numerical instability
                 !gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
                 !
                 !!------------------------------------Compute raw WW(N) via Back-Substitution
@@ -705,8 +708,6 @@ module ModelModule
                 !    gHorzArr%WT(I, N) = gVertArr%SIG(N) * gHorzArr%WW(I, N)
                 !    gHorzArr%FT(I, N) = -gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
                 !END DO
-
-
 
                 !------------------------------------Upper boundary to compute WW(NLEV-1):
                 gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
@@ -1635,57 +1636,73 @@ module ModelModule
         !> in gTransArr%G2Zonal (reuse of a transform array) and
         !> the total zonal energy as a function of meridional wavenumber for all N in gTransArr%GZonal.
         SUBROUTINE ComputeZonalSpectrum()
+            use ConstantsModule, only: HEIGHT, TEMPERATURE
             use ModelFieldsModule, only: gHorzArr, gVertArr, gEnergyArr
-            use ModelParamsModule, only: gModRealParams, gModIntParams
+            use ModelParamsModule, only: gModRealParams, gModIntParams, gPlotScales
             IMPLICIT NONE
 
 
             ! Locals
             integer :: KMAX, LMAX, NMAX
-            INTEGER :: I, N, K, L, BIN_IDX
-            REAL :: K_PHYS_SQ, L_SQ, K_TOTAL, KE, APE, RN_SQ, RN, DELTA_K_INV
-            REAL, DIMENSION(gModIntParams%NLEV - 1) :: APE_WEIGHT
+            INTEGER :: I, I_Next, N, K, L, BIN_IDX
+            REAL :: K_PHYS_SQ, L_SQ, K_TOTAL, KE, APE, RN_SQ, RN, DELTA_K_INV, pMeanInv
+            REAL, DIMENSION(gModIntParams%NLEV) :: local_KE_W
+            REAL, DIMENSION(gModIntParams%NLEV - 1) :: local_APE_W
 
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
             NMAX = gModIntParams%NLEV
     
-            gEnergyArr%ZonalWaveEnergy = 0.0
-            gEnergyArr%ZonalEnergy = 0.0
+            gEnergyArr%ZonalWaveKE = 0.0
+            gEnergyArr%ZonalWaveAPE = 0.0
+            gEnergyArr%ZonalKE = 0.0
+            gEnergyArr%ZonalAPE = 0.0
             RN = gModRealParams%RN
             RN_SQ = RN*RN
    
             ! Precompute APE weighting factor: A(N)^2 / SIG(N)  But sig is non-dimensional and is itself scaled by A(N)
             ! so A(N)/SIG
-            APE_WEIGHT(1 : NMAX - 1) = (gVertArr%A(1 : NMAX - 1) * gVertArr%A(1 : NMAX - 1)) / MAX(gVertArr%SIG(1 : NMAX - 1), 1.0E-8)
+            !APE_WEIGHT(1 : NMAX - 1) = (gVertArr%A(1 : NMAX - 1) * gVertArr%A(1 : NMAX - 1)) / MAX(gVertArr%SIG(1 : NMAX - 1), 1.0E-8)
 
             ! ==========================================
             ! STEP 1: PROCESS ZONAL MEAN FLOW (K = 0)
             ! ==========================================
-            DO L = 1, LMAX
-                L_SQ = REAL(L * L)
-                ! Zonal Kinetic Energy across all layers
-                KE = 0.0
-                DO N = 1, NMAX
-                    KE = KE + 0.5 * L_SQ * (gHorzArr%PS(L, N) * gHorzArr%PS(L, N))
-                END DO
-                ! Zonal Available Potential Energy directly from temperature coefficients
-                APE = 0.0
-                DO N = 1, NMAX - 1
-                    APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(L, N) * gHorzArr%TH(L, N))
-                END DO
-
-                gEnergyArr%ZonalEnergy(L) = gEnergyArr%ZonalEnergy(L) + KE + APE
-            END DO
+            !DO L = 1, LMAX
+            !    L_SQ = REAL(L * L)
+            !    ! Zonal Kinetic Energy across all layers
+            !    KE = 0.0
+            !    DO N = 1, NMAX
+            !        KE = KE + 0.5 * L_SQ * (gHorzArr%PS(L, N) * gHorzArr%PS(L, N))
+            !    END DO
+            !    ! Zonal Available Potential Energy directly from temperature coefficients
+            !    APE = 0.0
+            !    DO N = 1, NMAX - 1
+            !        APE = APE + 0.5 * (gHorzArr%TH(L, N) * gHorzArr%TH(L, N)) / gVertArr%SIG(N)
+            !    END DO
+            !
+            !    gEnergyArr%ZonalKE(L) = gEnergyArr%ZonalKE(L) + KE
+            !    gEnergyArr%ZonalAPE(L) = gEnergyArr%ZonalAPE(L) + APE
+            !END DO
 
             ! ==========================================
             ! STEP 2: PROCESS WAVE COMPONENTS (K > 0)
             ! ==========================================
             I = LMAX + 1
-            K_PHYS_SQ = 0.0 
+            K_PHYS_SQ = 0.0
+            pMeanInv = REAL(NMAX) / REAL(gVertArr%PP(1) - gVertArr%PP(NMAX + 1))
+            ! Pre compute arrays for weighting
+            DO N = 1, NMAX
+                local_KE_W(N) = 0.5 * gVertArr%DP(N) * pMeanInv * gPlotScales(HEIGHT) * gPlotScales(HEIGHT)
+            END DO
+
+            DO N = 1, NMAX - 1
+                local_APE_W(N) = 0.25 * (gVertArr%DP(N) + gVertArr%DP(N + 1)) * pMeanInv * gPlotScales(TEMPERATURE) * gPlotScales(TEMPERATURE) / &
+                            (gVertArr%SIG(N) * gVertArr%A(N))
+            END DO
             DO K = 1, KMAX
                 ! Scale the zonal wavenumber by the aspect ratio 'n'
                 K_PHYS_SQ = REAL(K * K) * RN_SQ
+                I_next = I + 1 ! Eliminates repetitive integer additions in the loops
 
                 DO L = 1, LMAX
                     L_SQ = REAL(L * L)
@@ -1695,14 +1712,16 @@ module ModelModule
 
                     ! Sum KE over layers using scaled total wavenumber
                     DO N = 1, NMAX
-                        KE = KE + 0.5 * (K_PHYS_SQ + L_SQ) * (gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I + 1, N) * gHorzArr%PS(I + 1, N))
+                        KE = KE + local_KE_W(N) * (gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I_next, N) * gHorzArr%PS(I_next, N))
                     END DO
+                    KE = KE * (K_PHYS_SQ + L_SQ)
 
                     ! Sum APE over interfaces directly from TH wave pairs
                     DO N = 1, NMAX - 1
-                        APE = APE + 0.5 * APE_WEIGHT(N) * (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I + 1, N) * gHorzArr%TH(I + 1, N))
+                        APE = APE + (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I_next, N) * gHorzArr%TH(I_next, N)) * local_APE_W(N)
                     END DO
-                    gEnergyArr%ZonalWaveEnergy(K) = gEnergyArr%ZonalWaveEnergy(K) + KE + APE
+                    gEnergyArr%ZonalWaveKE(K) = gEnergyArr%ZonalWaveKE(K) + KE
+                    gEnergyArr%ZonalWaveAPE(K) = gEnergyArr%ZonalWaveAPE(K) + APE
                     ! Jump past the (cos, sin) pair
                     I = I + 2
                 END DO

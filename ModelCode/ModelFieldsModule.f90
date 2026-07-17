@@ -221,17 +221,22 @@ MODULE ModelFieldsModule
     
 ! ======================================= DECLARATIONS for Energy arrays
     
-    REAL, ALLOCATABLE, TARGET :: ZonalWaveEnergy_Pool(:)
-    REAL, ALLOCATABLE, TARGET :: ZonalEnergy_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: ZonalWaveKE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: ZonalWaveAPE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: ZonalKE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: ZonalAPE_Pool(:)
     
     type :: EnergyArrays
         LOGICAL :: allocated = .FALSE. ! Flag to indicate if arrays are allocated
-        REAL, POINTER :: ZonalWaveEnergy(:)     ! This array holds the energy in the zonal waves as a function of the zonal wavenumber
-                                                    ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
-                                                    ! this array will have KMAX elements.
-        REAL, POINTER :: ZonalEnergy(:)   ! This array holds the energy in each zonal mode as a function of meridional wavenumber. If there
-                                              ! are LMAX meridional modes this array will have LMAX elements
-        REAL :: TotalZonalEnergy              ! This value contains the sum total of all the zonal mode energy in the array ZonalEnergy
+        REAL, POINTER :: ZonalWaveKE(:) ! This array holds the kinetic energy in the zonal waves as a function of the zonal wavenumber
+                                            ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
+                                            ! this array will have KMAX elements.
+        REAL, POINTER :: ZonalWaveAPE(:) ! This array holds the APE in the zonal waves as a function of the zonal wavenumber
+
+        REAL, POINTER :: ZonalKE(:)     ! This array holds the kinetic energy in each zonal mode as a function of meridional wavenumber. If there
+                                            ! are LMAX meridional modes this array will have LMAX elements
+        REAL, POINTER :: ZonalAPE(:)     ! This array holds the available potential energy in each zonal mode as a function of meridional wavenumber
+
     end type EnergyArrays
     
     TYPE(EnergyArrays) :: gEnergyArr
@@ -266,9 +271,13 @@ MODULE ModelFieldsModule
 
             INTEGER :: status
 
-            ALLOCATE(ZonalWaveEnergy_Pool(gUserSettings%maxZonalWaves), STAT = status)
+            ALLOCATE(ZonalWaveKE_Pool(gUserSettings%maxZonalWaves), STAT = status)
             if (status /= 0) RETURN
-            ALLOCATE(ZonalEnergy_Pool(gUserSettings%maxMeridWaves), STAT = status)
+            ALLOCATE(ZonalWaveAPE_Pool(gUserSettings%maxZonalWaves), STAT = status)
+            if (status /= 0) RETURN
+            ALLOCATE(ZonalKE_Pool(gUserSettings%maxMeridWaves), STAT = status)
+            if (status /= 0) RETURN
+            ALLOCATE(ZonalAPE_Pool(gUserSettings%maxMeridWaves), STAT = status)
             if (status /= 0) RETURN
 
             gEnergyArr%allocated = .TRUE. ! Set allocated flag to true
@@ -277,8 +286,10 @@ MODULE ModelFieldsModule
 
         subroutine ZeroEnergyArrays()
             implicit none
-            ZonalWaveEnergy_Pool = 0.0
-            ZonalEnergy_Pool = 0.0
+            ZonalWaveKE_Pool = 0.0
+            ZonalWaveAPE_Pool = 0.0
+            ZonalKE_Pool = 0.0
+            ZonalAPE_Pool = 0.0
         end subroutine ZeroEnergyArrays
 
         function createEnergyArr(kmax, lmax) RESULT(status)
@@ -295,8 +306,10 @@ MODULE ModelFieldsModule
                 return
             end if
 
-            gEnergyArr%ZonalWaveEnergy(1 : kmax)  => ZonalWaveEnergy_Pool(1 : kmax)
-            gEnergyArr%ZonalEnergy(1 : lmax)  => ZonalEnergy_Pool(1 : lmax)
+            gEnergyArr%ZonalWaveKE(1 : kmax)  => ZonalWaveKE_Pool(1 : kmax)
+            gEnergyArr%ZonalWaveAPE(1 : kmax)  => ZonalWaveAPE_Pool(1 : kmax)
+            gEnergyArr%ZonalKE(1 : lmax)  => ZonalKE_Pool(1 : lmax)
+            gEnergyArr%ZonalAPE(1 : lmax)  => ZonalAPE_Pool(1 : lmax)
             
             gVertArr%defined = .TRUE. ! Set defined flag to true
         end function createEnergyArr
@@ -304,10 +317,14 @@ MODULE ModelFieldsModule
         function DeallocateEnergyArrays() result(statusErr)
             integer statusErr
             
-            IF (ALLOCATED(ZonalWaveEnergy_Pool)) DEALLOCATE(ZonalWaveEnergy_Pool, STAT = statusErr)
-            IF (ALLOCATED(ZonalEnergy_Pool)) DEALLOCATE(ZonalEnergy_Pool, STAT = statusErr)
-            NULLIFY(gEnergyArr%ZonalWaveEnergy)
-            NULLIFY(gEnergyArr%ZonalEnergy)
+            IF (ALLOCATED(ZonalWaveKE_Pool)) DEALLOCATE(ZonalWaveKE_Pool, STAT = statusErr)
+            IF (ALLOCATED(ZonalWaveAPE_Pool)) DEALLOCATE(ZonalWaveAPE_Pool, STAT = statusErr)
+            IF (ALLOCATED(ZonalKE_Pool)) DEALLOCATE(ZonalKE_Pool, STAT = statusErr)
+            IF (ALLOCATED(ZonalAPE_Pool)) DEALLOCATE(ZonalAPE_Pool, STAT = statusErr)
+            NULLIFY(gEnergyArr%ZonalWaveKE)
+            NULLIFY(gEnergyArr%ZonalWaveAPE)
+            NULLIFY(gEnergyArr%ZonalKE)
+            NULLIFY(gEnergyArr%ZonalAPE)
 
             gEnergyArr%allocated = .FALSE. ! Set allocated flag to false
         end function DeallocateEnergyArrays
