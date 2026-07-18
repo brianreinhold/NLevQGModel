@@ -425,7 +425,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
-                               ZONAL_WAVE_ENERGY, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD
+                               ZONAL_WAVE_ENERGY, PHASE_SPACE, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -751,9 +751,11 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ! GetKeyState returns a negative value if the high-order bit is set
                     if (GetKeyState(VK_SHIFT) < 0) then
                         gModIntParams%plotType = gModIntParams%plotType - 1
+                        if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModIntParams%KMAX2 < 3) gModIntParams%plotType = PHASE_SPACE
                         if (gModIntParams%plotType .LT. WEATHER_MAP) gModIntParams%plotType = NO_PLOT
                     else
                         gModIntParams%plotType = gModIntParams%plotType + 1
+                        if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModINtParams%KMAX2 < 3) gModIntParams%plotType = WEATHER_STN
                         if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAP
                     end if
                     if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X and a new one wont be created

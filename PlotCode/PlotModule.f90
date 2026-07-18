@@ -937,7 +937,11 @@ module PlotModule
                 
     ! ZONAL WAVE ENERGY----------------------
             elseif (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
-                call plotZonalWaveEnergySpectrum(gEnergyHovmoller1, .true.)
+                if (gModIntParams%KMAX2 > 2) then
+                    call plotZonalWaveEnergySpectrum(gEnergyHovmoller1, .true.)
+                else
+                    gModIntParams%plotType = WEATHER_STN
+                endif
 
     ! WEATHER MAP ----------------------
             elseif (gModIntParams%plotType == WEATHER_MAP) then
