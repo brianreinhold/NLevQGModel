@@ -255,6 +255,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ModelParamsModule, only: gUserSettings, gModIntParams, gModRealParams, gModSensParams, gUserSettingsPrev, FileStruct
             use ModelFieldsModule, only: gVertArr
             use NLevQGModelGlobals, only: LogMessage
+            use Fftw3HelpersModule, only: setup_fftw_plans
             use kernel32            ! For windows system calls like GetLastError
             use ISO_C_BINDING       ! Also for the 'GetLastError' windows system function
 
@@ -303,6 +304,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 call LogMessage('Could not read the data arrays from file ' // trim(fileData%fileName))
                 return
             end if
+            call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
         !------------------------------------------Check PV profile:
         ! This makes sure that the pressure level decreases as one goes up.
             DO I = 1, gModIntParams%NLEV - 1

@@ -946,6 +946,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
                 case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/hr")') val
                 case (TOT_HGT_TEND); write(buf, '("Tot height tend ", F10.2, " m/day")') val
+                case (TOT_TEMP_TEND); write(buf, '("Tot temp tend ", F10.2, A, "C/day")') val, char(176)
                 case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
                 case (ADV_BETA_HGT_TEND); write(buf, '("Adv height ", F10.2, " m/day")') val
                 case default;       buf = ""
