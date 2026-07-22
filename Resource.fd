@@ -13,6 +13,7 @@
       integer, parameter :: IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE = 1081
       integer, parameter :: IDC_COMBO_LEVEL = 1073
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
+      integer, parameter :: IDC_STATIC_VIEW_HTG_TEND_INFO2 = 1102
       integer, parameter :: IDC_CHECK_BOMB_ADD = 1081
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
@@ -107,6 +108,7 @@
       integer, parameter :: IDC_LIST_TEMPERATURES = 1047
       integer, parameter :: IDC_EDIT_BOMB_PHASE_DIFF = 1050
       integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
+      integer, parameter :: IDC_STATIC_VIEW_HTG_TEND_INFO = 1101
       integer, parameter :: IDC_BUTTON_MODEL_CONTROL = 1019
       integer, parameter :: IDC_BUTTON_EXIT_SETTINGS = 1051
       integer, parameter :: IDC_LIST_INIT_STRM = 1062
@@ -125,6 +127,7 @@
       integer, parameter :: IDC_LIST_LEVELS = 1043
       integer, parameter :: IDC_BUTTON_INIT_FLOW_VARIABLES = 1043
       integer, parameter :: IDC_CHECK1 = 1081
+      integer, parameter :: IDC_STATIC_VIEW_TEMP_TEND_INFO = 1102
       integer, parameter :: IDC_COMBO1 = 1073
       integer, parameter :: IDC_EDIT_BOMB_STRM_AMP = 1048
       integer, parameter :: IDC_STATIC_BOMB_EXPONENT = 1095

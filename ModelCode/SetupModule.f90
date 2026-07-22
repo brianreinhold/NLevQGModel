@@ -791,7 +791,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS, STATS_OPT_NONE
             use ModelParamsModule, only: gModIntParams, gModRealParams, gUserSettings, gScaleFactors
             use InteractionCoefficientsModule, only: gCintArr, createCintArr, computeInteractionCoefficients
-            use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr, createTransArr
+            use ModelFieldsModule, only: gHorzArr, PS_pool, PSSave_pool, TOP_pool, createHorzArr, createVertArr, createTransArr, createEnergyArr
             use ArrayDimensionsModule, only: gCurrentDims
             use Fftw3HelpersModule, only: setup_fftw_plans
 
@@ -848,6 +848,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 errorCode = createTransArr(gCurrentDims)
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
                 gHorzArr%TF = 0.0
                 gHorzArr%SF = 0.0
                 do N = 1, min(gModIntParams%NLEV, prevLevels)
@@ -1567,7 +1568,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine NonDimensionalizeVerticalParams
         
         subroutine DimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND, &
+                TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1585,13 +1587,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 do Index = 1, gCurrentDims%ITOT
                     gHorzArr%TH(Index, N) = tempScale * gHorzArr%TH(Index, N)
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
+                    gHorzArr%FT(Index, N) = gPlotScales(TOT_TEMP_TEND) * gHorzArr%FT(Index, N) / gVertArr%A(N) ! Deg C/day
+                    gHorzArr%ADT(Index, N) = gPlotScales(ADV_TEMP_TEND) * gHorzArr%ADT(Index, N) / gVertArr%A(N) ! Deg C/day
+                    gHorzArr%WT(Index, N) = gPlotScales(OMEGA_TEMP_TEND) * gHorzArr%WT(Index, N) / gVertArr%A(N) ! Deg C/day
+                    gHorzArr%T(Index, N) = gPlotScales(DIABATIC_TEMP_TEND) * gHorzArr%T(Index, N) / gVertArr%A(N) ! Deg C/day
                 end do
             end do
             gHorzArr%PS = gPlotScales(HEIGHT)  * gHorzArr%PS ! Convert to dimensional heights all at once
-            gHorzArr%WW = gPlotScales(VERTICAL_WIND)  * gHorzArr%WW
-            gHorzArr%FS = gPlotScales(TOT_HGT_TEND) * gHorzArr%FS 
+            gHorzArr%WW = gPlotScales(VERTICAL_WIND)  * gHorzArr%WW     ! mb/hr
+            gHorzArr%FS = gPlotScales(TOT_HGT_TEND) * gHorzArr%FS       ! meters/ day
             gHorzArr%ADS = gPlotScales(ADV_BETA_HGT_TEND) * gHorzArr%ADS 
             gHorzArr%SF = gPlotScales(HGT_FORCING) * gHorzArr%SF ! Convert to dimensional heights
+            gHorzArr%S = gPlotScales(DIABATIC_HGT_TEND) * gHorzArr%S ! Convert to dimensional heights
 
             ! The height of a 'standard' pressure level PP(n) is given by z = (R*T/g)ln(PP(1)/PP(N))
             ! T is the virtual temperature of the column in K which is given by (THS(1) + THS(2))/2
@@ -1605,7 +1612,8 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end subroutine DimensionalizeHorizontalParams
 
         subroutine NonDimensionalizeHorizontalParams()
-            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND
+            use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND, &
+                                       TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1623,13 +1631,18 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 do Index = 1, gCurrentDims%ITOT
                     gHorzArr%TH(Index, N) = tempScale * gHorzArr%TH(Index, N)
                     gHorzArr%TF(Index, N) = tempScale * gHorzArr%TF(Index, N)
+                    gHorzArr%FT(Index, N) = gVertArr%A(N) * gHorzArr%FT(Index, N) / gPlotScales(TOT_TEMP_TEND)
+                    gHorzArr%ADT(Index, N) = gVertArr%A(N) * gHorzArr%ADT(Index, N) / gPlotScales(ADV_TEMP_TEND)
+                    gHorzArr%WT(Index, N) = gVertArr%A(N) * gHorzArr%WT(Index, N) / gPlotScales(OMEGA_TEMP_TEND)
+                    gHorzArr%T(Index, N) = gVertArr%A(N) * gHorzArr%T(Index, N) / gPlotScales(DIABATIC_TEMP_TEND)
                 end do
             end do
             gHorzArr%FS = gHorzArr%FS / gPlotScales(TOT_HGT_TEND)
             gHorzArr%WW = gHorzArr%WW / gPlotScales(VERTICAL_WIND)
             gHorzArr%ADS = gHorzArr%ADS / gPlotScales(ADV_BETA_HGT_TEND)
             gHorzArr%PS = gHorzArr%PS / gPlotScales(HEIGHT) ! Convert to nondimensional 
-            gHorzArr%SF = gHorzArr%SF / gPlotScales(HGT_FORCING)! Convert to nondimensional 
+            gHorzArr%SF = gHorzArr%SF / gPlotScales(HGT_FORCING)! Convert to nondimensional
+            gHorzArr%S = gHorzArr%S / gPlotScales(DIABATIC_HGT_TEND)
 
             if (gModIntParams%NLEV > 1) then
                 topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))

@@ -248,7 +248,7 @@ module ModelParamsModule
             gPlotScales(HEIGHT) = gScaleFactors%heights
             !---------------------------Temperature in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMPERATURE) = gScaleFactors%temperatureScale
-            !---------------------------Vertical velocity (omega) in mb/hr or mm/sec
+            !---------------------------Vertical velocity (omega) in mb/hr
             gPlotScales(VERTICAL_WIND) = 1000. * gScaleFactors%CORIOLIS * 3600. ! 371.2480 scaling is P*f*w' = w
             !---------------------------Temperature forcing in deg C-Needs 'A(n)' factor:
             gPlotScales(TEMP_FORCING) = gScaleFactors%temperatureScale
@@ -298,10 +298,19 @@ module ModelParamsModule
             gFieldLabels(HEIGHT)%s =  "Height in meters"
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
             gFieldLabels(VERTICAL_WIND)%s = "Omega mb/hr"
-            gFieldLabels(TOT_HGT_TEND)%s = "meters/day"
+            gFieldLabels(TOT_HGT_TEND)%s = "Tot hgt tend m/day"
             gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ß m/day"
             gFieldLabels(DIABATIC_HGT_TEND)%s = "Diab hgt tend m/day"
-            gFieldLabels(DIABATIC_TEMP_TEND)%s = "Diab temp tend "//ACHAR(176)//"day"
+            gFieldLabels(OMEGA_HGT_TEND)%s = "Omega hgt tend m/day"
+            gFieldLabels(TEMP_FORCING)%s = "Temperature driving "//ACHAR(176)//"C"
+            gFieldLabels(TOT_TEMP_TEND)%s = "Tot temp tend "//ACHAR(176)//"C/day"
+            gFieldLabels(ADV_TEMP_TEND)%s = "Adv temp tend "//ACHAR(176)//"C/day"
+            gFieldLabels(DIABATIC_TEMP_TEND)%s = "Diab temp tend "//ACHAR(176)//"C/day"
+            gFieldLabels(OMEGA_TEMP_TEND)%s = "Omega temp tend "//ACHAR(176)//"C/day"
+            gFieldLabels(HGT_FORCING)%s = "Height driving meters"
+            gFieldLabels(OROG_HGT_TEND)%s = "Orog hgt tend m/day"
+            gFieldLabels(OROGRAPHY)%s = "Orographic height meters"
+            gFieldLabels(PLOTTING_OFF)%s = " Plot off "
 
         end subroutine initConstants
     

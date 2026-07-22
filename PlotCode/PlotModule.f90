@@ -1693,9 +1693,14 @@ module PlotModule
 
                 case(OROG_HGT_TEND)         ! Height tendencies from ororgraphy in m/day
                     isTempField = .FALSE.
+                    ptr => gHorzArr%ADO(:)
+                    return
 
                 case(OROGRAPHY)             ! Height of ororgraphy in m
                     ptr => gHorzArr%TOP(:) 
+                    return
+                    
+                case(PLOTTING_OFF)
                     return
             end select
 

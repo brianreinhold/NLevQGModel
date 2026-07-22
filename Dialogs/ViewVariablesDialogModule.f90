@@ -198,12 +198,12 @@ module ViewVariablesDialogModule
                               "Component         ", &
                               "Heights meters    ", &
                               "Temperature "//ACHAR(176)//"C    ", &
-                              "Omega mb/hr      ", &
+                              "Omega mb/hr       ", &
                               "Temp Driving      ", &
-                              "Total Hght tend   ", &
-                              "Adv-beta hght tend", &
-                              "Omega hght tend   ", &
-                              "Diabatic hght tend", &
+                              "Total hgt tend    ", &
+                              "Adv-beta hgt tend ", &
+                              "Omega hgt tend    ", &
+                              "Diabatic hgt tend ", &
                               "Total Temp tend   ", &
                               "Adv temp tend     ", &
                               "Omega temp tend   ", &

@@ -171,6 +171,7 @@ module ConstantsModule
     integer, parameter :: DEFAULT_PROFILE          = 1  ! Uses Petri Raisanen radiation model results and user pressure levels
     integer, parameter :: DEFAULT_WITH_USER_LEVELS = 2  ! Uses Petri Raisanen radiation model results and default pressure levels (user specified number of levels)
     integer, parameter :: STRATOSPHERIC_WARMING_32 = 3  ! Vertical profile matching the Sudden Stratospheric Warmings study. Note - 32 levels.
+    integer, parameter :: STRATOSPHERIC_WARMING_32_V2 = 4 ! As above but without the SQRT2
 
 
     

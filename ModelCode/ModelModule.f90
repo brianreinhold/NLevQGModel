@@ -254,7 +254,7 @@ module ModelModule
                             ! In all cases, the timeStepsToDelay is set to its negative so it does not get called 
                             ! again until the user resets it.
                             if (gModIntParams%timeStepsToDelay == KSTEP) then
-                                if (KSTEP > 1) call CreateBomb()
+                                if (KSTEPT > 1) call CreateBomb()
                                 gModIntParams%timeStepsToDelay = -gModIntParams%timeStepsToDelay ! Have to reset to repeat
                             endif
                             !---------------------------------------KSTEPT=Total # of current time steps:

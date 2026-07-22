@@ -111,7 +111,7 @@ module KeyboardHooksModule
 
                     IF (wParam == VK_F4 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         call LogMessage('User pressed F4 key in Settings Dialog')
-                        bret = PostMessage(ghModelControlDlg, WM_APP + 104, 0, 0) 
+                        bret = PostMessage(ghSettingsDlg, WM_APP + 104, 0, 0) 
                         KeyboardForDlgSettingsProc = 1  ! Swallow the key
                         RETURN
                     END IF

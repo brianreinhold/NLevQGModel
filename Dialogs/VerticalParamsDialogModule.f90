@@ -26,7 +26,7 @@ module VerticalParamsDialogModule
             use NLevQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
-            use ConstantsModule, only: REAL_TO_ASCII, SQRT2, STRATOSPHERIC_WARMING_32
+            use ConstantsModule, only: REAL_TO_ASCII, SQRT2, STRATOSPHERIC_WARMING_32, STRATOSPHERIC_WARMING_32_V2
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit, GetComboIndex
@@ -51,6 +51,7 @@ module VerticalParamsDialogModule
             integer(KIND=4) :: lData
             integer(kind=4) :: iData
             integer(kind=4) :: iret
+            integer(kind=4), save :: profile = 0
             integer(BOOL) ::   bret
             integer(HANDLE), save :: hHook
 
@@ -175,9 +176,10 @@ module VerticalParamsDialogModule
                     select case (IAND(wParam, Z'FFFF'))
 
                         case (IDC_COMBO_VERT_PROFILES)
-                            iret = GetComboIndex(hDlg, IDC_COMBO_VERT_PROFILES)
-                            if (iret == 0) return
-                            if (iret == STRATOSPHERIC_WARMING_32) then
+                            bret = GetComboIndex(hDlg, IDC_COMBO_VERT_PROFILES)
+                            if (bret == profile) return
+                            profile = bret
+                            if (profile == STRATOSPHERIC_WARMING_32) then
                                 if (gModIntParams%NLEV .NE. 32) then
                                     bret = MessageBox (hDlg, &
                                         "This profile needs to have the model configured to 32 levels."C, &
@@ -186,7 +188,7 @@ module VerticalParamsDialogModule
                                     return
                                 endif
                             endif
-                            call generateVerticalProfile(iret)
+                            call generateVerticalProfile(profile)
                             call initializeFields()
                             bret = MessageBox (hDlg, &
                                 "The selected profile has been set."C, &
@@ -307,7 +309,8 @@ module VerticalParamsDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile and default levels'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile with user levels'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming'//char(0)))
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(0, UINT_PTR), 0)
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming no SQRT2'//char(0)))
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(profile, UINT_PTR), 0)
                     
                     call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer", gModIntParams%NLEV)
                     call handleIntListControl(hDlg, IDC_LIST_TEMPERATURES, ["Layer", ACHAR(176)//"K"], gVertArr%THS, "Layer", gModIntParams%NLEV)
@@ -523,135 +526,131 @@ module VerticalParamsDialogModule
                     end if
                 end function getRowClickedFromId
 
+            subroutine handleIntListControl(hDlg, id, labels, vertArr, description, levels)
+                use DialogHelpersModule, only: EnsureListViewColumns
+                implicit none
+            
+                include '../resource.fd'
+
+                integer(HANDLE), intent(in) :: hDlg
+                integer, intent(in) :: id
+                character(len=*), intent(in) :: labels(:)
+                REAL, intent(in) :: vertArr(:)
+                character(len=*), intent(in) :: description
+                integer, intent(in) :: levels
+
+                integer(HANDLE) :: hList 
+                integer(bool) :: bret
+                integer :: widths(2), dlgHeight
+                type(T_RECT) :: rc
+                type(T_POINT) :: pt
+            
+                hList = GetDlgItem(hDlg, id)
+                bret = SendMessage(hList, LVM_DELETEALLITEMS, 0, 0) ! Clear first
+                ! Load everything into the int list view
+                bret = GetClientRect(hList, rc)
+                widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
+                widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
+                call EnsureListViewColumns(hList, labels, widths)
+                call loadLevelsValsIntoListView(hList, vertArr, description, levels)
+                bret = UpdateWindow(hList)
+
+                ! Check that we have enough room to resize. If not we dont and we scroll.
+                bret = GetClientRect(hDlg, rc)
+                dlgHeight = rc%bottom   ! Note that rc%top and rc%left are both 0
+                ! Getting the current position and width of the ListView control in the dialog
+                bret = GetWindowRect(hList, rc) ! Gets the ListView rectangle coordinates (this is screen coordinates)
+                pt%x = rc%left  ! A T_POINT struct is needed to convert the screen coordinates to dlg coordinates
+                pt%y = rc%top
+                bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
+                ! The makes the height sized to encompass the actual number of rows added
+                call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
+            end subroutine handleIntListControl
+
+            subroutine loadLevelsValsIntoListView(hList, vertArr, description, nlevs) 
+                use DialogHelpersModule, only : AddListViewRowReal
+            
+                implicit none
+
+                integer(HANDLE), intent(in) :: hList
+                REAL, intent(in) :: vertArr(:)
+                character(len=*), intent(in) :: description
+                integer, intent(in) :: nlevs
+
+                integer :: i
+                character(len=16) :: levels
+                real :: zonalFactor
+
+                zonalFactor = 1.0
+                if ((GetDlgCtrlID(hList) == IDC_LIST_THERMAL_DRIVING) .AND. gHorzArr%isDimensionalized) zonalFactor = SQRT2
+                !    if (profile .EQ. STRATOSPHERIC_WARMING_32_V2) then
+                !        zonalFactor = 1.0 / SQRT2
+                !    else
+                !        zonalFactor = SQRT2
+                !    endif
+                !endif
+
+                do i = 1, nlevs
+                    write(levels, '(A, I0)') trim(description)//" ", i
+                    call AddListViewRowReal(hList, levels, [zonalFactor * vertArr(i)], '(F8.3)') ! The 'trim' is done in the called subroutine
+                end do
+            end subroutine loadLevelsValsIntoListView
+        
+            ! Just to simplify code parsing in the dialog procedure. The user has clicked on
+            ! one of the real parameters and this method gets the real value and converts it
+            ! to a string to load into the edit box. The routine that actually does the work
+            ! is RealToAsciiToReal. All this does is pick the correct real parameter to convert.
+            !function getStringFromRealForEditBox(vertValue) result(str)
+            !    use ModelParamsModule, only: gModRealParams
+            !    use ConstantsModule, only: REAL_TO_ASCII
+            !    use UtilitiesModule, only: LENGTH, RealToAsciiToReal
+            !    
+            !    implicit none
+            !
+            !    real, intent(inout) :: vertValue
+            !
+            !    character(len=LENGTH) :: str
+            !    integer :: ios
+            !
+            !    ios = RealToAsciiToReal(REAL_TO_ASCII, vertValue, str)
+            !
+            !end function getStringFromRealForEditBox
+
+            ! Just to simplify code parsing in the dialog procedure. The user has edit
+            ! a real parameter. This loads the edited value into the correct field
+            function readRealDataFromEditBox(str, rowClicked, vertArr, is_thermal) result(ios)
+                !use ConstantsModule, only: SQRT2
+                !use ModelFieldsModule, only: gHorzArr
+            
+                implicit none
+            
+                CHARACTER(:), ALLOCATABLE, intent(inout) :: str
+                integer, intent(in) :: rowClicked
+                REAL, intent(inout) :: vertArr(:)
+                logical, intent(in) :: is_thermal
+
+                integer :: ios
+                real :: val
+
+                ios = 0
+                read(str, *, iostat = ios) val
+                if (is_thermal .and. gHorzArr%isDimensionalized) then
+                    val = val / SQRT2
+                endif
+                vertArr(rowClicked + 1) = val
+
+            end function readRealDataFromEditBox
         end function VerticalParamsDlgProc
-
-
-        subroutine handleIntListControl(hDlg, id, labels, vertArr, description, levels)
-            use ifwinty
-            use ifwin
-            use DialogHelpersModule, only: EnsureListViewColumns, ResizeListViewToFitItems
-            implicit none
-            
-            include '../resource.fd'
-
-            integer(HANDLE), intent(in) :: hDlg
-            integer, intent(in) :: id
-            character(len=*), intent(in) :: labels(:)
-            REAL, intent(in) :: vertArr(:)
-            character(len=*), intent(in) :: description
-            integer, intent(in) :: levels
-
-            integer(HANDLE) :: hList 
-            integer(bool) :: bret
-            integer :: widths(2), dlgHeight
-            type(T_RECT) :: rc
-            type(T_POINT) :: pt
-            
-            hList = GetDlgItem(hDlg, id)
-            bret = SendMessage(hList, LVM_DELETEALLITEMS, 0, 0) ! Clear first
-            ! Load everything into the int list view
-            bret = GetClientRect(hList, rc)
-            widths(1) = 96  ! This is a hard coded width for the first column. It will only contain 'Level n'.
-            widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
-            call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsValsIntoListView(hList, vertArr, description, levels)
-            bret = UpdateWindow(hList)
-
-            ! Check that we have enough room to resize. If not we dont and we scroll.
-            bret = GetClientRect(hDlg, rc)
-            dlgHeight = rc%bottom   ! Note that rc%top and rc%left are both 0
-            ! Getting the current position and width of the ListView control in the dialog
-            bret = GetWindowRect(hList, rc) ! Gets the ListView rectangle coordinates (this is screen coordinates)
-            pt%x = rc%left  ! A T_POINT struct is needed to convert the screen coordinates to dlg coordinates
-            pt%y = rc%top
-            bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
-            ! The makes the height sized to encompass the actual number of rows added
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
-        end subroutine handleIntListControl
-
-        subroutine loadLevelsValsIntoListView(hList, vertArr, description, nlevs) 
-            use IFWINTY, only: HANDLE
-            use IFWIN, only: GetDlgCtrlID
-            use ConstantsModule, only: SQRT2
-            use ModelFieldsModule, only: gHorzArr
-            use DialogHelpersModule, only : AddListViewRowReal
-            
-            implicit none
-            
-            include 'resource.fd'
-        
-            integer(HANDLE), intent(in) :: hList
-            REAL, intent(in) :: vertArr(:)
-            character(len=*), intent(in) :: description
-            integer, intent(in) :: nlevs
-
-            integer :: i
-            character(len=16) :: levels
-            real :: zonalFactor
-
-            zonalFactor = 1.0
-            if ((GetDlgCtrlID(hList) == IDC_LIST_THERMAL_DRIVING) .AND. gHorzArr%isDimensionalized) zonalFactor = SQRT2
-
-            do i = 1, nlevs
-                write(levels, '(A, I0)') trim(description)//" ", i
-                call AddListViewRowReal(hList, levels, [zonalFactor * vertArr(i)], '(F8.3)') ! The 'trim' is done in the called subroutine
-            end do
-        end subroutine loadLevelsValsIntoListView
-        
-        ! Just to simplify code parsing in the dialog procedure. The user has clicked on
-        ! one of the real parameters and this method gets the real value and converts it
-        ! to a string to load into the edit box. The routine that actually does the work
-        ! is RealToAsciiToReal. All this does is pick the correct real parameter to convert.
-        !function getStringFromRealForEditBox(vertValue) result(str)
-        !    use ModelParamsModule, only: gModRealParams
-        !    use ConstantsModule, only: REAL_TO_ASCII
-        !    use UtilitiesModule, only: LENGTH, RealToAsciiToReal
-        !    
-        !    implicit none
-        !
-        !    real, intent(inout) :: vertValue
-        !
-        !    character(len=LENGTH) :: str
-        !    integer :: ios
-        !
-        !    ios = RealToAsciiToReal(REAL_TO_ASCII, vertValue, str)
-        !
-        !end function getStringFromRealForEditBox
-
-        ! Just to simplify code parsing in the dialog procedure. The user has edit
-        ! a real parameter. This loads the edited value into the correct field
-        function readRealDataFromEditBox(str, rowClicked, vertArr, is_thermal) result(ios)
-            use ConstantsModule, only: SQRT2
-            use ModelFieldsModule, only: gHorzArr
-            
-            implicit none
-            
-            CHARACTER(:), ALLOCATABLE, intent(inout) :: str
-            integer, intent(in) :: rowClicked
-            REAL, intent(inout) :: vertArr(:)
-            logical, intent(in) :: is_thermal
-
-            integer :: ios
-            real :: val
-
-            ios = 0
-            read(str, *, iostat = ios) val
-            if (is_thermal .and. gHorzArr%isDimensionalized) then
-                val = val / SQRT2
-            endif
-            vertArr(rowClicked + 1) = val
-
-        end function readRealDataFromEditBox
         
         subroutine generateVerticalProfile(profile)
-            use ConstantsModule, only: DEFAULT_PROFILE, DEFAULT_WITH_USER_LEVELS, STRATOSPHERIC_WARMING_32, TEMPERATURE
+            use ConstantsModule, only: DEFAULT_PROFILE, DEFAULT_WITH_USER_LEVELS, STRATOSPHERIC_WARMING_32, STRATOSPHERIC_WARMING_32_V2, SQRT2, TEMPERATURE
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use SetupModule, only: DFDIAB, DimensionalizeVerticalParams, DimensionalizeHorizontalParams
 
             implicit none
 
-            integer, intent(in) :: profile
+            integer(kind=4), intent(in) :: profile
             
             integer :: n
 
@@ -668,7 +667,8 @@ module VerticalParamsDialogModule
                     end do
                     
                 endif
-            elseif (gModIntParams%NLEV == 32 .AND. profile == STRATOSPHERIC_WARMING_32) then
+            elseif (gModIntParams%NLEV == 32 .AND. &
+                     (profile == STRATOSPHERIC_WARMING_32 .OR. profile == STRATOSPHERIC_WARMING_32_V2 )) then ! For this case we do not multiply by SQRT2 when loading into list view
 
                 gVertArr%PV = [ &
                     960.0,  900.0,  840.0,  780.0,  720.0,  660.0,  600.0,  540.0, &
@@ -682,10 +682,10 @@ module VerticalParamsDialogModule
                     410.06, 428.53, 451.46, 481.19, 522.44, 586.64, 715.19, 979.07  ]
                 ! These arrays are of length 31
                 gVertArr%FK = [ &
-                    0.1,  5.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  &
+                    0.07,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  &
                     0.0,  0.0,  0.0,  0.0,  0.0,  50.0, 50.0, 50.0, &
                     50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 50.0, &
-                    50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 40.0,  4.0  ]
+                    50.0, 50.0, 50.0, 50.0, 50.0, 50.0, 40.0,  10.0  ]
                 gVertArr%FJ = [ &
                     20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
                     20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
@@ -695,14 +695,15 @@ module VerticalParamsDialogModule
                     43.0,  46.0,  48.0,  50.0,  51.0,  52.0,  52.0,  51.0,  50.0,  44.0,  43.0,  42.0,  41.0,  41.0,  41.0,  43.0, &
                     52.0,  67.0,  100.0, 126.0, 152.0, 150.0, 151.0, 155.0, 165.0, 176.0, 190.0, 200.0, 211.0, 227.0, 271.0        ]
                 gVertArr%H = [ &
-                    1.0,    6.0,  40.0,  40.0,  39.0,  39.0,  40.0,  40.0,  39.0,  37.0,  40.0,  42.0,  42.0,  45.0,  49.0,  50.0, &
-                    60.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  70.0,  50.0,  25.0,  13.0         ]
+                    4.0,    41.0,  40.0,  40.0,  39.0,  39.0,  40.0,  40.0,  39.0,  37.0,  40.0,  42.0,  42.0,  45.0,  49.0,  50.0, &
+                    50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  50.0,  25.0,  13.0         ]
                 ! This array is only of size 30
                 gVertArr%g = [ &
-                    0.5, 1.0, 1.5, 1.8, 2.1, 2.6, 3.1, 3.7, &
+                    1.0, 1.2, 1.5, 1.8, 2.1, 2.6, 3.1, 3.7, &
                     4.5, 5.4, 6.5, 7.9, 8.2, 8.6, 20.0, 20.0, &
                     20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, 20.0, &
                     20.0, 20.0, 20.0, 20.0, 20.0, 20.0               ]
+                if (profile == STRATOSPHERIC_WARMING_32_V2) gHorzArr%TF(1, :) = gHorzArr%TF(1, :) / SQRT2
             endif
         end subroutine generateVerticalProfile
 

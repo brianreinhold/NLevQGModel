@@ -425,7 +425,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use user32
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
-                               ZONAL_WAVE_ENERGY, PHASE_SPACE, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD
+                               ZONAL_WAVE_ENERGY, PHASE_SPACE, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD, &
+                               VORTICITY, PLOTTING_OFF
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -466,7 +467,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     integer, save :: mouse_x, mouse_y   ! Location of the mouse cursor
     logical :: maps, graphs             ! Mousing over a map or a graph? Need both since both can be present on the screen
     real, save :: current_val1, current_val2 ! Value at moused over location of field1 and field2
-    character*32 :: textbuffer
+    character*96 :: textbuffer
     character*32, save :: valueStringField1, valueStringField2
     INTEGER(4) :: textLen
     TYPE(T_SIZE) :: sz
@@ -774,6 +775,34 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (VK_F3)
                     call ClearScreen()
                     call LogMessage("User cleared screen")
+    ! F4: Change Field 1 -----------------------
+                case (VK_F4)
+                    if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
+                        if (GetKeyState(VK_SHIFT) < 0) then
+                            gModIntParams%field1 = gModIntParams%field1 - 1
+                            if (gModIntParams%field1 .LT. VORTICITY) gModIntParams%field1 = PLOTTING_OFF
+                        else
+                            gModIntParams%field1 = gModIntParams%field1 + 1
+                            if (gModIntParams%field1 .GT. PLOTTING_OFF) gModIntParams%field1 = VORTICITY
+                        endif
+                        call initializePlot()
+                        call ClearScreen()                        
+                        call LogMessage("User changed field 1")
+                    endif
+    ! F5: Change Field 1 -----------------------
+                case (VK_F5)
+                    if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
+                        if (GetKeyState(VK_SHIFT) < 0) then
+                            gModIntParams%field2 = gModIntParams%field2 - 1
+                            if (gModIntParams%field1 .LT. VORTICITY) gModIntParams%field1 = PLOTTING_OFF
+                        else
+                            gModIntParams%field2 = gModIntParams%field2 + 1
+                            if (gModIntParams%field2 .GT. PLOTTING_OFF) gModIntParams%field2 = VORTICITY
+                        endif
+                        call initializePlot()
+                        call ClearScreen()                        
+                        call LogMessage("User changed field 1")
+                    endif
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
@@ -945,10 +974,19 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (HEIGHT);      write(buf, '("Heights ", F10.2, " m")') val
                 case (TEMPERATURE); write(buf, '("Temps ",F10.2, A, "C")') val, char(176)
                 case (VERTICAL_WIND); write(buf, '("Omega ",F10.2, " mb/hr")') val
+                case (HGT_FORCING); write(buf, '("Height driving ", F10.2, " m")') val
                 case (TOT_HGT_TEND); write(buf, '("Tot height tend ", F10.2, " m/day")') val
+                case (ADV_BETA_HGT_TEND); write(buf, '("Adv-beta height tend ", F10.2, " m/day")') val
+                case (DIABATIC_HGT_TEND); write(buf, '("Diab height tend ", F10.2, " m/day")') val
+                case (OMEGA_HGT_TEND); write(buf, '("Omega height tend ", F10.2, " m/day")') val
                 case (TOT_TEMP_TEND); write(buf, '("Tot temp tend ", F10.2, A, "C/day")') val, char(176)
+                case (TEMP_FORCING); write(buf, '("Temp driving ", F10.2, A, "C")') val, char(176)
+                case (ADV_TEMP_TEND); write(buf, '("Adv temp tend ", F10.2, A, "C/day")') val, char(176)
+                case (DIABATIC_TEMP_TEND); write(buf, '("Diab temp tend ", F10.2, A, "C/day")') val, char(176)
+                case (OMEGA_TEMP_TEND); write(buf, '("Omega temp tend ", F10.2, A, "C/day")') val, char(176)
                 case (OROGRAPHY); write(buf, '("Orog ", F10.2, " m")') val
-                case (ADV_BETA_HGT_TEND); write(buf, '("Adv height ", F10.2, " m/day")') val
+                case (OROG_HGT_TEND); write(buf, '("Orog hgt tend ", F10.2, " m/day")') val
+                case (PLOTTING_OFF); write(buf, '("plotting off")')
                 case default;       buf = ""
             end select
         end subroutine
