@@ -81,7 +81,8 @@ module ConstantsModule
     integer, parameter :: LATITUDE = 1              ! Hovmoller is along a latitude. Precompute the sinLy and cosLy for constant y (at a given latitude)
     integer, parameter :: LONGITUDE = 2             ! Hovmoller is along a longitude. Precompute the coskx and sinky for constant x (at a given longitude)
     integer, parameter :: LAT_LON = 3               ! Hovmoller is at a point and along the vertical. Precompute coskxsinly, sinknxsinly for constant x,y (a given point)
-    
+    integer, parameter :: VERTICAL = 4              ! Draw a vertical line
+    integer, parameter :: HORIZONTAL = 5            ! Draw a horizontal line
                                                     ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
     integer, parameter :: PHASE_AND_MAP = 1         ! Both weather map and phase space diagram together

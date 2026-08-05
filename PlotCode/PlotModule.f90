@@ -286,6 +286,12 @@ module PlotModule
             type(WeatherStation), optional, intent(in) :: weatherStn
         END SUBROUTINE DrawHorizontalLines
     END INTERFACE
+    
+    INTERFACE
+        module subroutine DrawLineOnScreen(rowColumn, direction)
+            integer, intent(in) :: rowColumn, direction
+        end subroutine DrawLineOnScreen
+    END INTERFACE
 
 ! ----------------------- Plot Routines submodule interfaces
     
@@ -2178,6 +2184,7 @@ module PlotModule
             USE GDI32
             USE USER32
             USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use ConstantsModule, only: HORIZONTAL
             use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ModelFieldsModule, only: gHorzArr, gTransArr
@@ -2288,6 +2295,7 @@ module PlotModule
             endif
 
             latHovmoller%rowColumn = mod(latHovmoller%rowColumn + 1, gBitMapInfo%height)
+            call DrawLineOnScreen(latHovmoller%rowColumn, HORIZONTAL)
             call labelPlotsAndDisplayTime(.false.)
             call DrawVerticalLines(invalidate) ! True invalidates window and forces redraw
         
@@ -2536,6 +2544,7 @@ module PlotModule
 
 ! PLOT HOVMOLLER AT LONGITUDE -------------------------------------------
         subroutine plotLonHovmoller(lonHovmoller, invalidate)
+            use ConstantsModule, only: VERTICAL
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
@@ -2561,6 +2570,7 @@ module PlotModule
             call plotHovmollerToScreen(lonHovmoller, b, gTransArr%GZonal)
 
             lonHovmoller%rowColumn = mod(lonHovmoller%rowColumn + 1, gBitMapInfo%width)
+            call DrawLineOnScreen(lonHovmoller%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
             call DrawHorizontalLines(.true., .true., Z'00000000') ! True invalidates window and forces redraw #00646464
 
@@ -2800,6 +2810,7 @@ module PlotModule
 
 ! PLOT VERTICAL HOVMOLLER AT WEATHER STN -------------------------------------------
         subroutine plotVertHovmoller(vertHovmollerType, invalidate)
+            use ConstantsModule, only: VERTICAL
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gTransArr
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
@@ -2836,12 +2847,14 @@ module PlotModule
             call plotHovmollerToScreen(vertHovmollerType, b, gTransArr%GZonal)
 
             vertHovmollerType%rowColumn = mod(vertHovmollerType%rowColumn + 1, gBitMapInfo%width)
+            call DrawLineOnScreen(vertHovmollerType%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
             call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
         end subroutine plotVertHovmoller
 
 ! PLOT ZONAL WAVE ENERGY SPECTRUM -------------------------------------------
         subroutine plotZonalWaveEnergySpectrum(energyHovmollerType, invalidate)
+            use ConstantsModule, only: VERTICAL
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gEnergyArr
@@ -2872,6 +2885,7 @@ module PlotModule
             call plotHovmollerToScreen(energyHovmollerType, b, totalEnergy)
 
             energyHovmollerType%rowColumn = mod(energyHovmollerType%rowColumn + 1, gBitMapInfo%width)
+            call DrawLineOnScreen(energyHovmollerType%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
             call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
 
