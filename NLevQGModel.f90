@@ -7,6 +7,7 @@
 ! NLevQGModelGlobals: None
 ! ArrayDimensionsModule: None
 ! ConstantsModule: None
+! WelfordModule: None
 ! fftw3HelpersModule: None if test code is excluded. Otherwise: ArrayDimensionsModule, ModelParamsModule, NLevQGModelGlobals
 ! ModelParamsModule: ConstantsModule
 ! InteractionCoefficientsModule: ConstantsModule, ModelParamsModule
@@ -15,16 +16,19 @@
 ! SetupModule: ConstantsModule, ArrayDimensionsModule, NLevQGModelGlobals, fftwsHelpersModule, ModelParamsModule, ModelFieldsModule,
 !              InteractionCoefficientsModule, UtilitiesModule
 ! ModelModule: ConstantsModule, ArrayDimensionsModule, ModelFieldsModule, ModelParamsModule, InteractionCoefficientsModule, SetupModule,
-!              NLevQGModelGlobals, fftw3HelpersModule, UtilitiesModule,
+!              NLevQGModelGlobals, fftw3HelpersModule, UtilitiesModule, WelfordModule
+! BombDialogModule: NLevQGModelGlobals, SetupModule, ModelParamsModule, KeyboardHooksModule,
 ! DialogHelpers Module: None
 ! DialogProcInterfacesModule: None
 ! InitVariablesDialogModule: NLevQGModelGlobals, ArrayDimensionsModule, ConstantsModule, UtilitiesModule, DialogHelpersModule, 
 !                            ModelParamsModule, KeyboardHooksModule, ModelFieldsModule, SetUpModule
+! ViewVariablesDialogModule: NLevQGModelGlobals, ArrayDimensionsModule, ConstantsModule, DialogHelpersModule, KeyboardHooksModule,
+!                            ModelParamsModule, ModelFieldsModule, SetUpModule
 ! VerticalParamsDialogModule: NLevQGModelGlobals, ConstantsModule, UtilitiesModule, DialogHelpersModule, ModelParamsModule, 
 !                             KeyboardHooksModule, ModelFieldsModule, SetUpModule
 ! KeyboardHooksModule: NLevQGModelGlobals, DlgProcInterfacesModule, SetUpModule, ModelModule, ModelParamsModule, DialogHelpersModule
 ! ModelControlDlgProc: NLevQGModelGlobals, ModelParamsModule, SetUpModule, ConstantsModule, KeyboardHooksModule, ModelModule, 
-!                      DialogHelpersModule, VerticalParamsDialogModule, InitVariablesDialogModule, UtilitiesModule
+!                      DialogHelpersModule, VerticalParamsDialogModule, InitVariablesDialogModule, UtilitiesModule, BombModule
 ! SettingsDialogModule: NLevQGModelGlobals, DialogHelpersModule, ModelParamsModule, ModelControlDialogModule, KeyboardHooksModule
 ! NLevQGModel: NLevQGModelGlobals, DlgProcInterfacesModule, ModelParamsModule, UtilitiesModule
 !
@@ -748,6 +752,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
     ! F2: Change Plot type -----------------------
                 case (VK_F2)
+                    if (gModelState%runState .NE. RUNNING) return
                     ! Check if the SHIFT key is pressed
                     ! GetKeyState returns a negative value if the high-order bit is set
                     if (GetKeyState(VK_SHIFT) < 0) then
@@ -777,6 +782,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User cleared screen")
     ! F4: Change Field 1 -----------------------
                 case (VK_F4)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
                         if (GetKeyState(VK_SHIFT) < 0) then
                             gModIntParams%field1 = gModIntParams%field1 - 1
@@ -791,6 +797,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
     ! F5: Change Field 1 -----------------------
                 case (VK_F5)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
                         if (GetKeyState(VK_SHIFT) < 0) then
                             gModIntParams%field2 = gModIntParams%field2 - 1
@@ -805,6 +812,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
@@ -828,6 +836,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call initializePlot()
                     call ClearScreen()
                 case (VK_DOWN)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
@@ -855,6 +864,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 ! Hovmoller at latitude moves latitude EQUATORWARD
                 ! Hovmoller at longitude moves longitude WESTWARD
                 case (VK_LEFT)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%latPoint = gModRealParams%latPoint - 5.0 * DEGREES_TO_RAD
@@ -886,6 +896,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 ! Hovmoller at latitude moves latitude POLEWARD
                 ! Hovmoller at longitude moves longitude EASTWARD
                 case (VK_RIGHT)
+                    if (gModelState%runState .NE. RUNNING) return
                     if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%latPoint = gModRealParams%latPoint + 5.0 * DEGREES_TO_RAD

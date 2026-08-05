@@ -338,6 +338,19 @@ module ViewVariablesDialogModule
                         factor = waveFactor
                     endif
                     ! 1. Select the correct 2D array data based on column 'c'
+                    !          "Heights meters    "
+                    !          "Temperature "//ACHAR(176)//"C    "
+                    !          "Omega mb/hr       "
+                    !          "Temp Driving      "
+                    !          "Total hgt tend    "
+                    !          "Adv-beta hgt tend "
+                    !          "Omega hgt tend    "
+                    !          "Diabatic hgt tend "
+                    !          "Total Temp tend   "
+                    !          "Adv temp tend     "
+                    !          "Omega temp tend   "
+                    !          "Diabatic temp tend"
+                    !          "Height Driving    "
                     select case(M)
                         case(1)
                             write(description, '(F11.6)') factor * gHorzArr%PS(I, level)

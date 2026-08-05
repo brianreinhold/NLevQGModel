@@ -123,6 +123,7 @@ module PlotModule
     end type WeatherMap                     ! The trig table will never be used or created in this case.
 
     type, extends(BaseMap) :: Hovmoller
+        real, allocatable :: hovMap(:, :)   ! Place to store hovmoller records so we can get values when using the F1 view/mouseover
         integer :: rowColumn = 0            ! row on the screen to draw the hovmoller. I think this can be used for both lat and lon
     end type Hovmoller
 
@@ -676,6 +677,7 @@ module PlotModule
             use ConstantsModule, only: LAT_LON
             use ModelParamsModule, only: gPlotScales,  gIsTemperature, gModIntParams, gModRealParams
             use ModelFieldsModule, only: gVertArr
+            use NLevQGModelglobals, only: gBitMapInfo
             IMPLICIT NONE
 
             type(VertHovmoller), intent(inout) :: vertHovmollerType
@@ -702,6 +704,9 @@ module PlotModule
                     vertHovmollerType%tempScales(plotLevel) = vertHovmollerType%scale / interpolateTemperatureScale(plotLevel)
                 end do
             end if
+            if (allocated(vertHovmollerType%hovMap)) deallocate(vertHovmollerType%hovMap)
+            allocate(vertHovmollerType%hovMap(gBitMapInfo%width, totalLevels))
+            vertHovmollerType%hovMap = 0.0
             vertHovmollerType%rowColumn = 0
             vertHovmollerType%isInitialized = .true.
 
@@ -784,6 +789,9 @@ module PlotModule
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
         subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latLon)
+            use ConstantsModule, only: LATITUDE
+            use ArrayDimensionsModule, only: gCurrentDims
+            use NLevQGModelglobals, only: gBitMapInfo
             use ModelParamsModule, only: gModRealParams
             IMPLICIT NONE
 
@@ -796,8 +804,19 @@ module PlotModule
             call initializeTrigTablesType(latLon, hovmollerType, gModRealParams%hovLat, gModRealParams%hovLon)
             hovmollerType%rowColumn = 0
             hovmollerType%isInitialized = .true.
+            if (allocated(hovmollerType%hovMap)) deallocate(hovmollerType%hovMap)
+            if (latLon == LATITUDE) then
+                allocate(hovmollerType%hovMap(gCurrentDims%IXMAX + 1, gBitMapInfo%height)) ! This will be periodic
+            else
+                allocate(hovmollerType%hovMap(gBitMapInfo%width, gCurrentDims%IYMAX))
+            endif
+            hovmollerType%hovMap = 0.0
         end subroutine initializeHovmollerType
 
+        !! Initializes all the parameters for a weather station that do not depend upon the newly generated values
+        !> @param field: This is the quantity being plotted, such as HEIGHT, TEMPERATURE, etc.
+        !> @param weatherStnType: This is the WeatherStation type that is being populated.
+        !> @param color: color of the line or points
         subroutine initializeWeatherStationType(field, weatherStnType, color)
             USE IFWINTY
 
@@ -2532,6 +2551,8 @@ module PlotModule
 
             call loadLonValues(lonHovmoller, gModIntParams%LEVP, 1.0) ! Returns loaded values along a longitude in gTransArr%GZonal including polar value at boundary
 
+            lonHovmoller%hovMap(lonHovmoller%rowColumn + 1, 1 : gCurrentDims%IYMAX) = gTransArr%GZonal(1 : gCurrentDims%IYMAX)
+            
             b%IL = 1
             b%IU = gCurrentDims%IYMAX
             b%KL = 1
@@ -2804,6 +2825,8 @@ module PlotModule
             else
                 gTransArr%GZonal = gTransArr%GZonal * vertHovmollerType%scale
             endif
+            
+            vertHovmollerType%hovMap(vertHovmollerType%rowColumn + 1, 1 : gCurrentDims%LVS) = gTransArr%GZonal(1 : gCurrentDims%LVS)
 
             b%IL = 1
             b%IU = gCurrentDims%LVS
@@ -2829,10 +2852,18 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
 
             real, dimension(gModIntParams%KMAX2) :: totalEnergy
+            real :: lowestValue
             type(InterpolationBounds) b
+            integer :: i
 
-            totalEnergy = gEnergyArr%ZonalWaveKE + 1.0
+
+            !totalEnergy = gEnergyArr%ZonalWaveKE + 1.0
+            do i = 1, gModIntParams%KMAX2
+                totalEnergy(i) = gEnergyArr%WelfordKE(i)%mean
+            end do
             totalEnergy = LOG10(totalEnergy)
+            lowestValue = totalEnergy(gModIntParams%KMAX2)
+            totalEnergy = totalEnergy - lowestValue
             b%IL = 1
             b%IU = gModIntParams%KMAX2
             b%KL = 1

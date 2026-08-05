@@ -77,10 +77,10 @@ module ConstantsModule
     integer, parameter :: MAP_OVERLAY_1 = 1
     integer, parameter :: MAP_OVERLAY_2 = 2
     integer, parameter :: MAP_OVERLAY_3 = 3
-    
-    integer, parameter :: LATITUDE = 1
-    integer, parameter :: LONGITUDE = 2
-    integer, parameter :: LAT_LON = 3
+                                                    ! Precomputed trig arrays flags for Hovmollers
+    integer, parameter :: LATITUDE = 1              ! Hovmoller is along a latitude. Precompute the sinLy and cosLy for constant y (at a given latitude)
+    integer, parameter :: LONGITUDE = 2             ! Hovmoller is along a longitude. Precompute the coskx and sinky for constant x (at a given longitude)
+    integer, parameter :: LAT_LON = 3               ! Hovmoller is at a point and along the vertical. Precompute coskxsinly, sinknxsinly for constant x,y (a given point)
     
                                                     ! Options for the types of displays for variable plotType
     integer, parameter :: WEATHER_MAP = 0           ! Classic weather maps at various levels
@@ -172,6 +172,8 @@ module ConstantsModule
     integer, parameter :: DEFAULT_WITH_USER_LEVELS = 2  ! Uses Petri Raisanen radiation model results and default pressure levels (user specified number of levels)
     integer, parameter :: STRATOSPHERIC_WARMING_32 = 3  ! Vertical profile matching the Sudden Stratospheric Warmings study. Note - 32 levels.
     integer, parameter :: STRATOSPHERIC_WARMING_32_V2 = 4 ! As above but without the SQRT2
+    integer, parameter :: SAVE_CURRENT_PROFILE = 5      ! Saves the current vertical profile to a file for later use.
+    integer, parameter :: LOAD_SAVED_PROFILE = 6        ! Loads a previously saved vertical profile from a file.
 
 
     

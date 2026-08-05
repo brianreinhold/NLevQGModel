@@ -190,7 +190,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             error = DeallocateEnergyArrays()
             error = AllocateEnergyArrays()
             if (error .NE. 0) return
-            error = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
+            error = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
             if (error .NE. 0) return
             
             error = DeallocateStatsArrays()
@@ -577,7 +577,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = AllocateEnergyArrays()    ! Reallocate transform arrays
                 if(errorCode .NE. 0) return
 
-                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
                 if(errorCode .NE. 0) return
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
@@ -784,7 +784,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         end function CheckModParams 
 
         !! The parameters passed will be updated if needed. The parmeter prevRN should always be non dimensional
-        function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN) result(errorCode)
+        function CheckModelControlChanges(prevZonalWaves, prevMeridWaves, prevLevels, prevRN, reshuffle) result(errorCode)
             use ifwinty
             use ifwin
             use NLevQGModelGlobals, only: ghModelControlDlg
@@ -796,6 +796,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             use Fftw3HelpersModule, only: setup_fftw_plans
 
             integer, intent(inout) :: prevZonalWaves, prevMeridWaves, prevLevels
+            logical, intent(in) :: reshuffle
             real, intent(inout) :: prevRN  ! nondimensional
 
             integer :: errorCode, I, N
@@ -848,7 +849,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 errorCode = createTransArr(gCurrentDims)
-                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2)
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
                 gHorzArr%TF = 0.0
                 gHorzArr%SF = 0.0
                 do N = 1, min(gModIntParams%NLEV, prevLevels)
@@ -856,11 +857,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                     gHorzArr%SF(1, N) = DAT(2, N)
                 end do
                 call setup_fftw_plans(gCurrentDims%IXMAX, gCurrentDims%IYMAX)
-                call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
-                
+                if (reshuffle) then
+                    call ReshuffleArrays(gHorzArr%PS, DAT, PS_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
+
                 ! Cant reshuffle TF and SF arrays as they will get overwritten by the first call when the resolution increases that much.
-                CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
-                CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, prevZonalWaves, prevMeridWaves, 1, gModIntParams%KMAX2, gModIntParams%LMAX2, 1, itot_old)
+                    CALL ReshuffleArrays(gHorzArr%PSSAVE, DAT, PSSave_pool, prevZonalWaves, prevMeridWaves, prevLevels, gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, totOld)
+                    CALL ReshuffleArrays(gHorzArr%TOP, DAT, TOP_pool, prevZonalWaves, prevMeridWaves, 1, gModIntParams%KMAX2, gModIntParams%LMAX2, 1, itot_old)
+                endif
                 
                 ! Zero out the dissipative terms in case we are going inviscid. All other field tendencies are calculated every time step
                 ! and their initial values are inconsequential. These will not get reset since the dissipative routines are skipped.
@@ -1569,7 +1572,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         
         subroutine DimensionalizeHorizontalParams()
             use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND, &
-                TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
+                OMEGA_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1599,6 +1602,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gHorzArr%ADS = gPlotScales(ADV_BETA_HGT_TEND) * gHorzArr%ADS 
             gHorzArr%SF = gPlotScales(HGT_FORCING) * gHorzArr%SF ! Convert to dimensional heights
             gHorzArr%S = gPlotScales(DIABATIC_HGT_TEND) * gHorzArr%S ! Convert to dimensional heights
+            gHorzArr%WS = gPlotScales(OMEGA_HGT_TEND) * gHorzArr%WS ! Convert to dimensional heights
 
             ! The height of a 'standard' pressure level PP(n) is given by z = (R*T/g)ln(PP(1)/PP(N))
             ! T is the virtual temperature of the column in K which is given by (THS(1) + THS(2))/2
@@ -1613,7 +1617,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
         subroutine NonDimensionalizeHorizontalParams()
             use ConstantsModule, only: GRAVITY, GAS_CONSTANT_R, HEIGHT, TEMPERATURE, TOT_HGT_TEND, ADV_BETA_HGT_TEND, HGT_FORCING, VERTICAL_WIND, &
-                                       TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
+                                       OMEGA_HGT_TEND, TOT_TEMP_TEND, ADV_TEMP_TEND, OMEGA_TEMP_TEND, DIABATIC_TEMP_TEND, DIABATIC_HGT_TEND
             use ModelFieldsModule, only: gHorzArr, gVertArr
             use ModelParamsModule, only: gModIntParams, gPlotScales
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1643,6 +1647,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             gHorzArr%PS = gHorzArr%PS / gPlotScales(HEIGHT) ! Convert to nondimensional 
             gHorzArr%SF = gHorzArr%SF / gPlotScales(HGT_FORCING)! Convert to nondimensional
             gHorzArr%S = gHorzArr%S / gPlotScales(DIABATIC_HGT_TEND)
+            gHorzArr%WS = gHorzArr%WS / gPlotScales(OMEGA_HGT_TEND)
 
             if (gModIntParams%NLEV > 1) then
                 topScale = (2.0 * GRAVITY) /(GAS_CONSTANT_R * (gVertArr%THS(1) + gVertArr%THS(2)) * LOG(gVertArr%PP(1) / gVertArr%PP(2)))

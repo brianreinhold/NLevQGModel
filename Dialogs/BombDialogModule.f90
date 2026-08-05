@@ -2,7 +2,6 @@
 ! Nessecary ugliness for the SHCreateDirectoryEx function used to create the ensemble directory. Somehow this
 ! tells the compiler where to find the object code for the function. Who could of ever figured that out?
 module BombDialogModule
-    !use UtilitiesModule, only: gObsBaseFile
     implicit none
     
     public BombDlgProc

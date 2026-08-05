@@ -361,7 +361,7 @@ module ModelControlDialogModule
                         case (IDC_BUTTON_VERTICAL_PARAMS)
                             ! In case they are sill open with focus
                             call cleanUpEditBoxes()
-                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .true.)
                             if (ret /= 0) then
                                 call initializeDialog()
                                 return
@@ -374,7 +374,7 @@ module ModelControlDialogModule
                         case (IDC_BUTTON_INIT_FLOW_VARIABLES)
                             ! In case they are sill open with focus
                             call cleanUpEditBoxes()
-                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .true.)
                             if (ret /= 0) then
                                 call initializeDialog()
                                 return
@@ -391,6 +391,7 @@ module ModelControlDialogModule
 ! ---- F5:  Load Saved Flow
                         case (IDC_BUTTON_LOAD_SAVED_FLOW)
                             call loadSavedFlow()
+                            ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .false.)
                             ghModelControlDlg = hDlg
 
 ! ---- F7:  EditContours
@@ -421,7 +422,7 @@ module ModelControlDialogModule
                     ! could not be handled.
                     if (paramChange%zonalWaves > 0) then
                         ! We have to call this here in case the user sets a parameter but then just returns to the main menu.
-                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .true.)
                         call SetModRealParamsDimensionalState(.false.) ! Method checks if already non-dimensionalized
                     endif
                     bret = EnableWindow(ghSettingsDlg, .TRUE.)
@@ -434,7 +435,7 @@ module ModelControlDialogModule
 
                 subroutine checkForResolutionChange()
                     if (paramChange%levels .NE. gModIntParams%NLEV) then
-                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                        ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .true.)
                         call initializeDialog()                        
                     endif 
                 end subroutine checkForResolutionChange
@@ -469,6 +470,7 @@ module ModelControlDialogModule
                 !-------- F1: run model
                 subroutine setupAndRunModel()
                     use ConstantsModule, only: ERR_NUMERIC_INSTABILITY
+                    use ModelFieldsModule, only: ZeroEnergyArrays
                     implicit none
 
                     call cleanUpEditBoxes()
@@ -478,11 +480,12 @@ module ModelControlDialogModule
                     ! accrodingly to those changes so there is no need to do so on return.
                     ! The method will non dimensionalize the ModRealParams that need it if necessary and restore the state
                     ! to whatever it was on the call. So there is no need to handle that either in the caller.
-                    ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN)
+                    ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .true.)
                     if (ret /= 0) then
                         call initializeDialog()
                         return
                     endif
+                    call ZeroEnergyArrays()
                     call SetModRealParamsDimensionalState(.false.)
                     ret = InitModelWithModelControlVals()
                     bret = EnableWindow(hDlg, .FALSE.)

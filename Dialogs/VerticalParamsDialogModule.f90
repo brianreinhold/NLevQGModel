@@ -26,7 +26,8 @@ module VerticalParamsDialogModule
             use NLevQGModelGlobals, only: ghVerticalParamsDlg, CenterWindow, LogMessage
             use iso_c_binding
 
-            use ConstantsModule, only: REAL_TO_ASCII, SQRT2, STRATOSPHERIC_WARMING_32, STRATOSPHERIC_WARMING_32_V2
+            use ConstantsModule, only: REAL_TO_ASCII, SQRT2, STRATOSPHERIC_WARMING_32, STRATOSPHERIC_WARMING_32_V2, &
+                                       SAVE_CURRENT_PROFILE, LOAD_SAVED_PROFILE
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit, GetComboIndex
@@ -65,7 +66,7 @@ module VerticalParamsDialogModule
             integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo
             integer, save :: pvRowClicked, thsRowClicked, fkRowClicked, fjRowClicked
             integer, save :: hRowClicked, gRowClicked, tfRowClicked
-            integer :: id
+            integer :: id, ios
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
@@ -179,6 +180,18 @@ module VerticalParamsDialogModule
                             bret = GetComboIndex(hDlg, IDC_COMBO_VERT_PROFILES)
                             if (bret == profile) return
                             profile = bret
+                            if (profile == SAVE_CURRENT_PROFILE) then
+                                call saveFile(hDlg)
+                                return
+                            endif
+                            if (profile == LOAD_SAVED_PROFILE) then
+                                call loadSavedFile(hDlg)
+                                call initializeFields()
+                                return
+                            endif
+                            if (profile == LOAD_SAVED_PROFILE) then
+
+                            endif
                             if (profile == STRATOSPHERIC_WARMING_32) then
                                 if (gModIntParams%NLEV .NE. 32) then
                                     bret = MessageBox (hDlg, &
@@ -194,6 +207,11 @@ module VerticalParamsDialogModule
                                 "The selected profile has been set."C, &
                                 "Vertical Profile set"C, &
                                 IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
+                            
+                        case (IDC_EDIT_VERT_TROPOPAUSE)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            bret = GetDlgItemText(hDlg, IDC_EDIT_VERT_TROPOPAUSE, buffer, LEN(buffer))
+                            read(buffer, *, iostat=ios) gVertArr%tropopauseLevel
 
 !  F10  Exit --------------------------------------------
                         case (IDC_BUTTON_EXIT_VERTICAL)
@@ -302,6 +320,10 @@ module VerticalParamsDialogModule
         
                 subroutine initializeFields()
                     implicit none
+
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_VERT_TROPOPAUSE)
+                    write(buffer, '(F10.4)', iostat=ios) gVertArr%tropopauseLevel
+                    if (ios == 0) iret = SetDlgItemText(hDlg, IDC_EDIT_VERT_TROPOPAUSE, adjustl(trim(buffer)) // char(0))
                     
                     hCombo = GetDlgItem(hDlg, IDC_COMBO_VERT_PROFILES)
                     bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0)
@@ -310,6 +332,8 @@ module VerticalParamsDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Default profile with user levels'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming'//char(0)))
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('32-level Sudden Stratospheric Warming no SQRT2'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Save current profiles to a file'//char(0)))
+                    bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Load profile from a file'//char(0)))
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(profile, UINT_PTR), 0)
                     
                     call handleIntListControl(hDlg, IDC_LIST_LEVELS, ["Layers", "mb"], gVertArr%PV, "Layer", gModIntParams%NLEV)
@@ -706,6 +730,113 @@ module VerticalParamsDialogModule
                 if (profile == STRATOSPHERIC_WARMING_32_V2) gHorzArr%TF(1, :) = gHorzArr%TF(1, :) / SQRT2
             endif
         end subroutine generateVerticalProfile
+        
+        subroutine saveFile(hDlg)
+            use ifwinty
+            use ifwin
+            use DialogHelpersModule, only: GetUserSelectedSaveName
+            use ModelParamsModule, only: FileStruct, gModIntParams
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            
+            implicit none
+            
+            integer(HANDLE), intent(in) :: hDlg
 
+            type(FileStruct) :: fileInfo
+            integer(bool) :: bret
+            integer :: ios, n
+            character(len=256) :: iomsg_text
+            
+            bret = GetUserSelectedSaveName(hDlg, fileInfo, 'profile')
+            open(newunit = fileInfo%fileHandle, &
+                    file = trim(fileInfo%fileName), &  ! Adjust based on your actual fileInfo structure
+                    form = 'formatted', &
+                    status = 'replace', &          ! Overwrites existing file; use 'new' to fail if it exists
+                    action = 'write', &
+                    iostat = ios, &
+                    iomsg = iomsg_text)
+            if (ios /= 0) then
+                ! Handle open error using iomsg_text
+                bret = MessageBox (hDlg, &
+                    trim(iomsg_text) // char(0), &
+                    "Error opening file"C, &
+                    IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
+                return
+            end if
+            
+            write(fileInfo%fileHandle, '(A6, X, I5)') 'Levels', gModIntParams%NLEV
+            write(fileInfo%fileHandle, '(A16, X, F17.4)') 'Tropopause Level', gVertArr%tropopauseLevel
+
+            ! Write a descriptive header line
+            write(fileInfo%fileHandle, '(A5, 10X, A17, X, A17, X, A17, X, A17, X, A17, X, A17, X, A17)') 'Level', &
+                   'Pressure         ','Temp Profile     ','Ekman dissipation','Turbulent mixing ','Newtonian cooling', &
+                   'Temp mixing      ','Thermal forcing  '
+
+            ! Loop through NLEV to write fixed-width columns
+            do n = 1, gModIntParams%NLEV
+                write(fileInfo%fileHandle, '(I5, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4)') &
+                    n, gVertArr%PV(n), gVertArr%THS(n), gVertArr%FK(n), gVertArr%FJ(n), gVertArr%H(n), gVertArr%G(n), gHorzArr%TF(1, n)
+            end do
+
+            ! Always close the unit when finished
+            close(fileInfo%fileHandle)
+        end subroutine saveFile
+
+        subroutine loadSavedFile(hDlg)
+            use ifwinty
+            use ifwin
+            use DialogHelpersModule, only: GetNameOfUserSelectedFile
+            use ModelParamsModule, only: FileStruct, gModIntParams
+            use ModelFieldsModule, only: gVertArr, gHorzArr
+            
+            implicit none
+            
+            integer(HANDLE), intent(in) :: hDlg
+
+            type(FileStruct) :: fileInfo
+            integer(bool) :: bret
+            integer :: ios, n, levels
+            character(len=256) :: iomsg_text
+            
+            bret = GetNameOfUserSelectedFile(hDlg, fileInfo, 'profile')
+            open(newunit = fileInfo%fileHandle, &
+                    file = trim(fileInfo%fileName), &  ! Adjust based on your actual fileInfo structure
+                    form = 'formatted', &
+                    status = 'old', &          ! File must exist
+                    action = 'read', &
+                    iostat = ios, &
+                    iomsg = iomsg_text)
+            if (ios /= 0) then
+                ! Handle open error using iomsg_text
+                bret = MessageBox (hDlg, &
+                    trim(iomsg_text) // char(0), &
+                    "Error opening file"C, &
+                    IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
+                return
+            end if
+            
+            read(fileInfo%fileHandle, '(7X, I5)') levels
+            if (levels .NE. gModIntParams%NLEV) then
+                bret = MessageBox (hDlg, &
+                    "The number of levels in the file does not match the current model configuration." // char(0), &
+                    "Cannot load these parameters"C, &
+                    IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONINFORMATION)))
+                close(fileInfo%fileHandle)
+                return
+            end if
+            read(fileInfo%fileHandle, '(17X, F17.4)') gVertArr%tropopauseLevel
+
+            ! Write a descriptive header line
+            read(fileInfo%fileHandle, *) ! Skip line
+
+            ! Loop through NLEV to write fixed-width columns
+            do n = 1, gModIntParams%NLEV
+                read(fileInfo%fileHandle, '(I5, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4, X, F17.4)') &
+                    levels, gVertArr%PV(n), gVertArr%THS(n), gVertArr%FK(n), gVertArr%FJ(n), gVertArr%H(n), gVertArr%G(n), gHorzArr%TF(1, n)
+            end do
+
+            ! Always close the unit when finished
+            close(fileInfo%fileHandle)
+        end subroutine loadSavedFile
 
 end module VerticalParamsDialogModule

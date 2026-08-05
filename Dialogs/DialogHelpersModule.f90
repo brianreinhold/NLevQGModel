@@ -443,7 +443,7 @@ module DialogHelpersModule
         END function GetComboIndex
 
 ! =============================== WINDOWS FILE ROUTINES
-        function GetUserSelectedSaveName(hDlg, fileInfo) result(bres)
+        function GetUserSelectedSaveName(hDlg, fileInfo, suffix) result(bres)
             use ifwinty    ! or equivalent win32 module
             use ifwin      ! for GetSaveFileName and constants
             use ModelParamsModule, only: FileStruct
@@ -452,6 +452,7 @@ module DialogHelpersModule
             
             integer(HANDLE), intent(in) :: hDlg
             type(FileStruct), intent(inout) :: fileInfo
+            character(*), optional, intent(in) :: suffix
             
             type(T_OPENFILENAME) :: ofn
             character(270)       :: szFile = ""C  ! Uses the C-string extension to null the buffer
@@ -461,6 +462,10 @@ module DialogHelpersModule
             LOGICAL :: bres
 
             bres = .true.
+            
+            if (present(suffix)) then
+                szFilter    = "Vertical Profile Files (*.profile)"C// "*.profile"C // ""C
+            endif
 
             ! Clear and set structure size
             ofn%lpstrCustomFilter = 0
@@ -482,7 +487,11 @@ module DialogHelpersModule
             ofn%lpstrFileTitle = 0
             ofn%nMaxFileTitle = 0
             ofn%lpstrInitialDir = 0
-            ofn%lpstrDefExt = loc("sav"C)
+            if (present(suffix)) then
+                ofn%lpstrDefExt = loc(trim(suffix)//"C")
+            else
+                ofn%lpstrDefExt = loc("sav"C)
+            endif
             ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
             
             if (GetSaveFileName(ofn)) then
@@ -493,7 +502,7 @@ module DialogHelpersModule
             endif
         end function GetUserSelectedSaveName
     
-        function GetNameOfUserSelectedFile(hDlg, fileInfo) result(bres)
+        function GetNameOfUserSelectedFile(hDlg, fileInfo, suffix) result(bres)
             use ifwinty    ! or equivalent win32 module
             use ifwin      ! for GetSaveFileName and constants
             use ModelParamsModule, only: FileStruct
@@ -502,15 +511,20 @@ module DialogHelpersModule
             
             integer(HANDLE), intent(in) :: hDlg
             type(FileStruct), intent(inout) :: fileInfo
+            character(*), optional, intent(in) :: suffix
             
             type(T_OPENFILENAME) :: ofn
             character(270)       :: szFile = ""C  ! Uses the C-string extension to null the buffer 
             character(100)       :: szFilter    = "Model Save Files (*.sav)"C// "*.sav"C // ""C
-
+            
             LOGICAL :: bres
             integer :: ires
 
             bres = .true.
+            
+            if (present(suffix)) then
+                szFilter    = "Vertical Profile Files (*.profile)"C// "*.profile"C // ""C
+            endif
 
             ! Clear and set structure size
             ofn%lpstrCustomFilter = 0
@@ -532,7 +546,11 @@ module DialogHelpersModule
             ofn%lpstrFileTitle = 0
             ofn%nMaxFileTitle = 0
             ofn%lpstrInitialDir = 0
-            ofn%lpstrDefExt = loc("sav"C)
+            if (present(suffix)) then
+                ofn%lpstrDefExt = loc(trim(suffix)//"C")
+            else
+                ofn%lpstrDefExt = loc("sav"C)
+            endif
             ofn%Flags = IANY([OFN_EXPLORER, OFN_OVERWRITEPROMPT, OFN_PATHMUSTEXIST, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
             !ofn%Flags = IANY([OFN_FILEMUSTEXIST, OFN_HIDEREADONLY, OFN_NOCHANGEDIR]) ! Modern way of ORing several parameters
             if (GetOpenFileName(ofn)) then

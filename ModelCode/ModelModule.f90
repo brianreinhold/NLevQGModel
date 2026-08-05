@@ -74,7 +74,8 @@ module ModelModule
             use ConstantsModule, only: ADV_BETA_HGT_TEND, RUNNING, SENS_STATIC_LAPSE_RATE, STATS_OPT_NONE, STATS_OPT_VAR, &
                 ZONAL_MEAN_FLOW, BAROCLINIC_STRUCTS, STOPPED, PAUSED, ERR_NUMERIC_INSTABILITY
             use ArrayDimensionsModule
-            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, gContourIntervals
+            use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, &
+                gContourIntervals
             use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
             use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation, CreateBomb, DFDIAB
             use InteractionCoefficientsModule
@@ -82,6 +83,7 @@ module ModelModule
             use iso_c_binding
             use UtilitiesModule, only: openModelFile
             use PlotModule, only: outputPlot, PumpMessages
+            use WelfordModule, only: updateRunStats, gWelford
             use, intrinsic :: ieee_arithmetic
 
             implicit none
@@ -273,6 +275,10 @@ module ModelModule
                             !---------------------------------------------- Selecting when to output data:
                             if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
                                 call ComputeZonalSpectrum()
+                                call ComputeStructures()
+                                !do N = 1, gModIntParams%NLEV
+                                !    call updateRunStats(gEnergyArr%GQ(:, N), gWelford)
+                                !end do
                                 call outputPlot()
                                 gHorzArr%FS = 0.0
                             endif
@@ -1268,7 +1274,7 @@ module ModelModule
                 gHorzArr%T(1:ITOT, N) = gVertArr%H(N) * (gHorzArr%TF(1:ITOT, N) - gHorzArr%TH(1:ITOT, N))
                 if (N > 1) gHorzArr%T(1:ITOT, N) = gHorzArr%T(1:ITOT, N) &
                     + R_Upper(N) * (gHorzArr%TH(1:ITOT, N + 1) * gVertArr%AU(N) - gHorzArr%TH(1:ITOT, N)) & ! Cut the upper transfer in half
-                    + R_Lower(N) * (gHorzArr%TH(1:ITOT, N - 1) / gVertArr%AU(N - 1) - gHorzArr%TH(1:ITOT, N))
+                    + R_Lower(N) * ((gHorzArr%TH(1:ITOT, N - 1) / gVertArr%AU(N - 1)) - gHorzArr%TH(1:ITOT, N))
             END DO
         END subroutine TTERMS
 
@@ -1639,6 +1645,7 @@ module ModelModule
             use ConstantsModule, only: HEIGHT, TEMPERATURE
             use ModelFieldsModule, only: gHorzArr, gVertArr, gEnergyArr
             use ModelParamsModule, only: gModRealParams, gModIntParams, gPlotScales
+            use WelfordModule, only: updateRunStats
             IMPLICIT NONE
 
 
@@ -1648,6 +1655,7 @@ module ModelModule
             REAL :: K_PHYS_SQ, L_SQ, K_TOTAL, KE, APE, RN_SQ, RN, DELTA_K_INV, pMeanInv
             REAL, DIMENSION(gModIntParams%NLEV) :: local_KE_W
             REAL, DIMENSION(gModIntParams%NLEV - 1) :: local_APE_W
+            REAL, DIMENSION(gModIntParams%KMAX2) :: totalKE
 
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
@@ -1699,6 +1707,7 @@ module ModelModule
                 local_APE_W(N) = 0.25 * (gVertArr%DP(N) + gVertArr%DP(N + 1)) * pMeanInv * gPlotScales(TEMPERATURE) * gPlotScales(TEMPERATURE) / &
                             (gVertArr%SIG(N) * gVertArr%A(N))
             END DO
+            totalKE = 0.0
             DO K = 1, KMAX
                 ! Scale the zonal wavenumber by the aspect ratio 'n'
                 K_PHYS_SQ = REAL(K * K) * RN_SQ
@@ -1720,6 +1729,7 @@ module ModelModule
                     DO N = 1, NMAX - 1
                         APE = APE + (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I_next, N) * gHorzArr%TH(I_next, N)) * local_APE_W(N)
                     END DO
+                    totalKE(K) = totalKE(K) + KE
                     gEnergyArr%ZonalWaveKE(K) = gEnergyArr%ZonalWaveKE(K) + KE
                     gEnergyArr%ZonalWaveAPE(K) = gEnergyArr%ZonalWaveAPE(K) + APE
                     ! Jump past the (cos, sin) pair
@@ -1727,6 +1737,42 @@ module ModelModule
                 END DO
             END DO
 
+            call updateRunStats(totalKE, gEnergyArr%WelfordKE)
+
+
         END SUBROUTINE ComputeZonalSpectrum
+        
+        SUBROUTINE ComputeStructures()
+            use ConstantsModule, only: RAD_TO_DEGREES
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, gEnergyArr
+            use ModelParamsModule, only: gModIntParams, gModRealParams
+            use WelfordModule, only: updateRunStats
+            implicit none
+            
+            integer :: I, N
+            integer :: KMAX, LMAX, NMAX, ITOT
+            REAL :: phase, amplitude
+            
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+            NMAX = gModIntParams%NLEV
+            ITOT = gCurrentDims%ITOT
+            
+            ! To compute the structure we get the phase and amplitude of the streamfunction at layer
+            ! n and compute the phase difference with respect to the phase of the streamfunction at
+            ! the layer n-1.
+            
+            do N = 1, NMAX
+                do I = LMAX + 1, ITOT - 1, 2
+                    ! Compute phase difference between layer N and N-1
+                    phase = atan2(gHorzArr%PS(I + 1, N), gHorzArr%PS(I, N)) * RAD_TO_DEGREES  ! phase = atan2(imaginary, real)
+                    amplitude = sqrt(gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I + 1, N) * gHorzArr%PS(I + 1, N))
+                    gEnergyArr%AMP_PHASE(I, N) = amplitude
+                    gEnergyArr%AMP_PHASE(I + 1, N) = phase - gEnergyArr%AMP_PHASE(I + 1, 1)
+                end do
+                call updateRunStats(gEnergyArr%AMP_PHASE(:, N), gEnergyArr%WelfordAMP_PHASE(:, N))
+            end do
+        end subroutine ComputeStructures
 
     end module ModelModule
