@@ -470,7 +470,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     ! Variables used for mousing over maps and graphs to display the values at that point
     integer, save :: mouse_x, mouse_y   ! Location of the mouse cursor
     logical :: maps, graphs, hovs             ! Mousing over a map or a graph or a hovmoller?
-    real, save :: current_val1, current_val2 ! Value at moused over location of field1 and field2
+    real, save :: current_val1, current_val2, current_time ! Value and time (homoller) at moused over location of field1 and field2
     character*96 :: textbuffer
     character*32, save :: valueStringField1, valueStringField2
     INTEGER(4) :: textLen
@@ -601,6 +601,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     MainWndProc = 0
                     return
                 endif
+                !-- VERTICAL CROSS SECTIONS
                 if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                     ! Anyone of the vertical plot initializations types will have the same correct pressure field
                     rlat = gPressure(gBitMapInfo%height - REAL(mouse_y))
@@ -610,16 +611,18 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     rlon = gPressure(gBitMapInfo%height - REAL(mouse_y))
                     rlat = REAL(mouse_x * 90) / REAL(gBitMapInfo%width)
                     write(textBuffer, '(F5.1, A, F6.1, A)') rlat, " lat ", rlon, " mb"
+                !-- HOVMOLLERS
                 else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                     rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
-                    write(textBuffer, '(F5.1, A)') rlon, " lon "                    
+                    write(textBuffer, '(F5.1, A, F6.1, A)') rlon, " lon ", current_time, " days"
                 else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                     rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
-                    write(textBuffer, '(F5.1, A)') rlat, " lat "
+                    write(textBuffer, '(F5.1, A, F6.1, A)') rlat, " lat ", current_time, " days"
                 else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                     rlon = gPressure(gBitMapInfo%height - REAL(mouse_y))
-                    write(textBuffer, '(F6.1, A)') rlon, " mb"
+                    write(textBuffer, '(F6.1, A, F6.1, A)') rlon, " mb", current_time, " days"
                 else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                !-- WEATHER MAPS
                 else
                     rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
                     rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
@@ -702,6 +705,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 else if (hovs .AND. mouse_y >= 0 .and. mouse_y < gBitMapInfo%height) then
                     current_val1 = getHovValue(mouse_x + 1, gBitMapInfo%height - mouse_y, ONE)
                     current_val2 = getHovValue(mouse_x + 1, gBitMapInfo%height - mouse_y, TWO)
+                    current_time = getHovTime(mouse_x + 1, gBitMapInfo%height - mouse_y, ONE)
+                    if (current_time == 0.0) current_time = getHovTime(mouse_x + 1, gBitMapInfo%height - mouse_y, TWO)
                     ret = InvalidateRect(hWnd, NULL, .FALSE.)
                 else if (graphs) then
                     i = gModIntParams%outputInterval * (mouse_x - (gBitMapInfo%width - 1)) + gElapsedTime%timeSteps
@@ -1079,6 +1084,61 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             endif
 
         end function getHovValue
+        
+        function getHovTime(x, y, fieldNumber) result(val)
+            use ConstantsModule, only: ONE, TWO
+            use ModelParamsModule, only: gScaleFactors
+            use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
+                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1
+
+            implicit none
+            
+            integer, intent(in) :: x, y, fieldNumber
+            
+            real :: val, yAdj
+            integer :: rowColumn
+            
+            rowColumn = -9999
+            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gLatHovmoller1.hovMap)) rowColumn = gLatHovmoller1%rowColumn
+                else
+                    if (ALLOCATED(gLatHovmoller2.hovMap)) rowColumn = gLatHovmoller2%rowColumn
+                endif
+
+                if ((gBitMapInfo%height - y) .LE. rowColumn) then 
+                    val = gElapsedTime%dimensionalTime * REAL(gModIntParams%outputInterval * (gBitMapInfo%height - y))
+                else
+                    val = gElapsedTime%dimensionalTime * REAL(-gModIntParams%outputInterval * y)
+                endif
+                return
+            else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gLonHovmoller1.hovMap)) rowColumn = gLonHovmoller1%rowColumn
+                else
+                    if (ALLOCATED(gLonHovmoller2.hovMap)) rowColumn = gLonHovmoller2%rowColumn
+                endif
+            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gVertHovmoller1.hovMap)) rowColumn = gVertHovmoller1%rowColumn
+                else
+                    if (ALLOCATED(gVertHovmoller2.hovMap)) rowColumn = gVertHovmoller2%rowColumn
+                endif
+            else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                if (ALLOCATED(gEnergyHovmoller1.hovMap)) rowColumn = gEnergyHovmoller1%rowColumn
+            endif
+            if (rowColumn == -9999) then
+                !val = ieee_value(val, ieee_quiet_nan)
+                val = 0.0
+                return
+            endif
+            if (x .LE. rowColumn) then 
+                val = gElapsedTime%dimensionalTime * REAL(gModIntParams%outputInterval * x)
+            else
+                val = gElapsedTime%dimensionalTime * REAL(gModIntParams%outputInterval * (x - gBitMapInfo%width))
+            endif
+
+        end function getHovTime
 
 end function MainWndProc
 
