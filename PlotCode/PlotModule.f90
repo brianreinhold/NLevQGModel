@@ -317,6 +317,14 @@ module PlotModule
             IMPLICIT NONE
             
             integer(4) :: leadColor, color
+            
+            ! Deallocating screen arrays
+            call deallocateScreenArrays(gLatHovmoller1)
+            call deallocateScreenArrays(gLatHovmoller2)
+            call deallocateScreenArrays(gLonHovmoller1)
+            call deallocateScreenArrays(gLonHovmoller2)
+            call deallocateScreenArrays(gVertHovmoller1)
+            call deallocateScreenArrays(gVertHovmoller2)
 
 ! ------ PHASE SPACE -----------------------------
             if (gModIntParams%plotType == PHASE_SPACE .OR. gModIntParams%plotType == PHASE_AND_MAP) then
@@ -462,9 +470,15 @@ module PlotModule
                 endif
                 if (gModIntParams%plotType == PHASE_AND_MAP) call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             endif
-        
         end subroutine initializePlot
-        
+
+        subroutine deallocateScreenArrays(hovmollerType)
+            implicit none
+            class (Hovmoller), intent(inout) :: hovmollerType
+                
+            if (allocated(hovmollerType%hovMap)) deallocate(hovmollerType%hovMap)
+        end subroutine deallocateScreenArrays
+
         !! Initializes all the parameters for a phase space plot that do not depend upon the newly generated values
         !! from the integration of the model. It speeds up the calculation and makes the routine much simpler.
         !> @param field: This is the quantity being plotted, such as HEIGHT, TEMPERATURE, etc.
@@ -711,7 +725,7 @@ module PlotModule
                 end do
             end if
             if (allocated(vertHovmollerType%hovMap)) deallocate(vertHovmollerType%hovMap)
-            allocate(vertHovmollerType%hovMap(gBitMapInfo%width, totalLevels))
+            allocate(vertHovmollerType%hovMap(gBitMapInfo%width, gBitMapInfo%height))
             vertHovmollerType%hovMap = 0.0
             vertHovmollerType%rowColumn = 0
             vertHovmollerType%isInitialized = .true.
@@ -809,14 +823,10 @@ module PlotModule
             call initializeBaseMapType(field, hovmollerType, useSolidColor)
             call initializeTrigTablesType(latLon, hovmollerType, gModRealParams%hovLat, gModRealParams%hovLon)
             hovmollerType%rowColumn = 0
-            hovmollerType%isInitialized = .true.
             if (allocated(hovmollerType%hovMap)) deallocate(hovmollerType%hovMap)
-            if (latLon == LATITUDE) then
-                allocate(hovmollerType%hovMap(gCurrentDims%IXMAX + 1, gBitMapInfo%height)) ! This will be periodic
-            else
-                allocate(hovmollerType%hovMap(gBitMapInfo%width, gCurrentDims%IYMAX))
-            endif
+            allocate(hovmollerType%hovMap(gBitMapInfo%width, gBitMapInfo%height))
             hovmollerType%hovMap = 0.0
+            hovmollerType%isInitialized = .true.
         end subroutine initializeHovmollerType
 
         !! Initializes all the parameters for a weather station that do not depend upon the newly generated values
@@ -2220,6 +2230,7 @@ module PlotModule
 
             currentRow = mod(latHovmoller%rowColumn, 3) + 1 
             call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IXMAX + 1, 1, gBitMapInfo%width, .true., Xptr(:, currentRow)) ! is periodic
+            latHovmoller%hovMap(:, latHovmoller%rowColumn + 1) = Xptr(:, currentRow)
 
             if (latHovmoller%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
@@ -2560,8 +2571,6 @@ module PlotModule
 
             call loadLonValues(lonHovmoller, gModIntParams%LEVP, 1.0) ! Returns loaded values along a longitude in gTransArr%GZonal including polar value at boundary
 
-            lonHovmoller%hovMap(lonHovmoller%rowColumn + 1, 1 : gCurrentDims%IYMAX) = gTransArr%GZonal(1 : gCurrentDims%IYMAX)
-            
             b%IL = 1
             b%IU = gCurrentDims%IYMAX
             b%KL = 1
@@ -2836,8 +2845,6 @@ module PlotModule
             else
                 gTransArr%GZonal = gTransArr%GZonal * vertHovmollerType%scale
             endif
-            
-            vertHovmollerType%hovMap(vertHovmollerType%rowColumn + 1, 1 : gCurrentDims%LVS) = gTransArr%GZonal(1 : gCurrentDims%LVS)
 
             b%IL = 1
             b%IU = gCurrentDims%LVS
@@ -2926,6 +2933,7 @@ module PlotModule
 
             currentColumn = MOD(hovmollerType%rowColumn, 3) + 1
             call Interpolate1D(inArray, b%IL, b%IU, b%KL, b%KU, b%isPeriodicX, Xptr(:, currentColumn)) ! is NOT periodic
+            hovmollerType%hovMap(hovmollerType%rowColumn + 1, :) = Xptr(:, currentColumn)
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])

@@ -430,7 +430,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
                                ZONAL_WAVE_ENERGY, PHASE_SPACE, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD, &
-                               VORTICITY, PLOTTING_OFF
+                               VORTICITY, PLOTTING_OFF, ONE, TWO
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -469,7 +469,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
     ! Variables used for mousing over maps and graphs to display the values at that point
     integer, save :: mouse_x, mouse_y   ! Location of the mouse cursor
-    logical :: maps, graphs             ! Mousing over a map or a graph? Need both since both can be present on the screen
+    logical :: maps, graphs, hovs             ! Mousing over a map or a graph or a hovmoller?
     real, save :: current_val1, current_val2 ! Value at moused over location of field1 and field2
     character*96 :: textbuffer
     character*32, save :: valueStringField1, valueStringField2
@@ -569,23 +569,32 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     gModIntParams%plotType == PHASE_AND_MAP .OR. &
                     gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
                     gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+            hovs = (gModIntParams%plotType == HOV_DIAG_AT_LAT .OR.  &
+                    gModIntParams%plotType == HOV_DIAG_AT_LON .OR. &
+                    gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. &
+                    gModIntParams%plotType == ZONAL_WAVE_ENERGY)
             graphs = (gModIntParams%plotType == WEATHER_STN)
 
             ! Early exit 
-            if ((gModelState%runState == RUNNING) .OR. &
-               (.NOT. (maps .OR. graphs)) .OR. &
-               (maps .AND. .NOT. (ALLOCATED(X) .OR. ALLOCATED(X_Overlay)))) then
+            if (gModelState%runState .NE. PAUSED) then
                 lret = EndPaint(hWnd, ps)
                 MainWndProc = 0
                 return
             endif
+            !if ((gModelState%runState == RUNNING) .OR. &
+            !   (.NOT. (maps .OR. graphs .OR. hovs)) .OR. &
+            !   (maps .AND. .NOT. (ALLOCATED(X) .OR. ALLOCATED(X_Overlay)))) then
+            !    lret = EndPaint(hWnd, ps)
+            !    MainWndProc = 0
+            !    return
+            !endif
             
             ! --- 2. Calculate Content (The "What") This is the lat-lon for maps and the time for time series graphs
             !        The values of the two field are printed above and below this line
             textBuffer = ""
-            if (maps) then
+            if (maps .OR. hovs) then
                 screenHeight = gBitMapInfo%height / 2
-                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. hovs .OR. &
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) screenHeight = gBitMapInfo%height
                 if (mouse_y >= screenHeight) then
                     lret = EndPaint(hWnd, ps)
@@ -601,6 +610,16 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     rlon = gPressure(gBitMapInfo%height - REAL(mouse_y))
                     rlat = REAL(mouse_x * 90) / REAL(gBitMapInfo%width)
                     write(textBuffer, '(F5.1, A, F6.1, A)') rlat, " lat ", rlon, " mb"
+                else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                    rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
+                    write(textBuffer, '(F5.1, A)') rlon, " lon "                    
+                else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+                    rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
+                    write(textBuffer, '(F5.1, A)') rlat, " lat "
+                else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                    rlon = gPressure(gBitMapInfo%height - REAL(mouse_y))
+                    write(textBuffer, '(F6.1, A)') rlon, " mb"
+                else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
                 else
                     rlat = REAL(screenHeight - mouse_y) * 180.0 / REAL(gBitMapInfo%height)
                     rLon = REAL(mouse_x * 360) / REAL(gBitMapInfo%width)
@@ -635,7 +654,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 call QuickText(draw_x, mouse_y, textBuffer) ! Center Row
                 call QuickText(draw_x, mouse_y - 14, valueStringField1)
                 call QuickText(draw_x, mouse_y + 14, valueStringField2)
-            else if (maps) then
+            else if (maps .OR. hovs) then
                 ret = MSFWIN$SetTextColor(hDC, RGB(10, 10, 10))
                 call QuickText(draw_x, mouse_y, textBuffer) ! Center Row
                 call FormatField(textBuffer, gModIntParams%field1, current_val1)
@@ -658,6 +677,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         gModIntParams%plotType == PHASE_AND_MAP .OR. &
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+                hovs = (gModIntParams%plotType == HOV_DIAG_AT_LAT .OR.  &
+                    gModIntParams%plotType == HOV_DIAG_AT_LON .OR. &
+                    gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. &
+                    gModIntParams%plotType == ZONAL_WAVE_ENERGY)
                 graphs = (gModIntParams%plotType == WEATHER_STN)
                 if (maps) then
                     screenHeight = gBitMapInfo%height / 2
@@ -676,7 +699,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         if (ALLOCATED(X_Overlay)) current_val2 = X_Overlay(mouse_x + 1, screenHeight - mouse_y)
                         ret = InvalidateRect(hWnd, NULL, .FALSE.)
                     end if
-            
+                else if (hovs .AND. mouse_y >= 0 .and. mouse_y < gBitMapInfo%height) then
+                    current_val1 = getHovValue(mouse_x + 1, gBitMapInfo%height - mouse_y, ONE)
+                    current_val2 = getHovValue(mouse_x + 1, gBitMapInfo%height - mouse_y, TWO)
+                    ret = InvalidateRect(hWnd, NULL, .FALSE.)
                 else if (graphs) then
                     i = gModIntParams%outputInterval * (mouse_x - (gBitMapInfo%width - 1)) + gElapsedTime%timeSteps
                     current_val1 = REAL(i) * gElapsedTime%dimensionalTime
@@ -1018,6 +1044,41 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
             call populateInterpolatedGrid(X, field)
         end subroutine
+        
+        function getHovValue(x, y, fieldNumber) result(val)
+            use ConstantsModule, only: ONE, TWO
+            use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
+                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1
+
+            implicit none
+            
+            integer, intent(in) :: x, y, fieldNumber
+            
+            real :: val
+            
+            if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gLatHovmoller1.hovMap)) val = gLatHovmoller1%hovMap(x, gBitMapInfo%height - y + 1)
+                else
+                    if (ALLOCATED(gLatHovmoller2.hovMap)) val = gLatHovmoller2%hovMap(x, y)
+                endif
+            else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gLonHovmoller1.hovMap)) val = gLonHovmoller1%hovMap(x, y)
+                else
+                    if (ALLOCATED(gLonHovmoller2.hovMap)) val = gLonHovmoller2%hovMap(x, y)
+                endif
+            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                if (fieldNumber == ONE) then
+                    if (ALLOCATED(gVertHovmoller1.hovMap)) val = gVertHovmoller1%hovMap(x, y)
+                else
+                    if (ALLOCATED(gVertHovmoller2.hovMap)) val = gVertHovmoller2%hovMap(x, y)
+                endif
+            else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                if (ALLOCATED(gEnergyHovmoller1.hovMap)) val = gEnergyHovmoller1%hovMap(x, y)
+            endif
+
+        end function getHovValue
 
 end function MainWndProc
 
