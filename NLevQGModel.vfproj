@@ -81,21 +81,24 @@
 				<File RelativePath=".\ModelCode\ArrayDimensionsModule.f90"/>
 				<File RelativePath=".\ModelCode\ConstantsModule.f90"/>
 				<File RelativePath=".\ModelCode\InteractionCoefficientsModule.f90"/>
-				<File RelativePath=".\ModelCode\ModelFieldsModule.f90">
-				</File>
+				<File RelativePath=".\ModelCode\ModelFieldsModule.f90"/>
 				<File RelativePath=".\ModelCode\ModelModule.f90"/>
 				<File RelativePath=".\ModelCode\ModelParamsModule.f90"/>
 				<File RelativePath=".\ModelCode\SetupModule.f90"/>
 				<File RelativePath=".\ModelCode\UtilitiesModule.f90"/>
-				<File RelativePath=".\ModelCode\WelfordModule.f90">
-				</File>
+				<File RelativePath=".\ModelCode\WelfordModule.f90"/>
 			</Filter>
 			<Filter Name="PlotCode">
 				<File RelativePath=".\PlotCode\AxesSubModule.f90"/>
-				<File RelativePath=".\PlotCode\InterpolateSubModule.f90"/>
-				<File RelativePath=".\PlotCode\PlotModule.f90"/>
+				<File RelativePath=".\PlotCode\InterpolateSubModule.f90">
+				</File>
+				<File RelativePath=".\PlotCode\PlotModule.f90">
+				</File>
+				<File RelativePath=".\PlotCode\SvgSubModule.f90">
+				</File>
 			</Filter>
-			<File RelativePath=".\NLevQGModel.f90"/>
+			<File RelativePath=".\NLevQGModel.f90">
+			</File>
 			<File RelativePath=".\NLevQGModelglobals.f90"/>
 			<File RelativePath=".\WndProcInterfacesModule.f90"/>
 		</Filter>

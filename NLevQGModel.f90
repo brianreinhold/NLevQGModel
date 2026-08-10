@@ -436,7 +436,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime, gPressure
+    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime, gPressure, GenerateSVG
 
     implicit none
 

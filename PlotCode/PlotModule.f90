@@ -243,6 +243,17 @@ module PlotModule
         END SUBROUTINE Interpolate2D
     END INTERFACE
 
+! ----------------------- SVG submodule interfaces
+    INTERFACE
+        ! Use 'MODULE' keyword here to link it to a submodule
+        MODULE SUBROUTINE GenerateSVG(X, width, height, contourIntInv)
+            !------------------------------------------------------Passed variables:
+            REAL, intent(in) :: X(:, :)
+            integer, intent(in) :: width, height
+            REAL, intent(in) :: contourIntInv
+        END SUBROUTINE GenerateSVG
+    END INTERFACE
+
 ! ----------------------- Axes submodule interfaces
     INTERFACE
         MODULE SUBROUTINE DrawCartesianAxes(invalidate, phaseSpace1, phaseSpace2)
