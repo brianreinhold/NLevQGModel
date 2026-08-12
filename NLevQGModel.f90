@@ -1002,9 +1002,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         end subroutine
 
         function getHovValue(x, y, fieldNumber) result(val)
-            use ConstantsModule, only: ONE, TWO
-            use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
-                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1, X1, X2
+            use ConstantsModule, only: ONE
+            use PlotModule, only: X1, X2
 
             implicit none
             
@@ -1014,24 +1013,16 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             
             if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 if (fieldNumber == ONE) then
-                    if (associated(X1)) val = gLatHovmoller1%hovMap(x, gBitMapInfo%height - y + 1)
+                    if (associated(X1)) val = X1(x, gBitMapInfo%height - y + 1)
                 else
-                    if (associated(X2)) val = gLatHovmoller2%hovMap(x, gBitMapInfo%height - y + 1)
+                    if (associated(X2)) val = X2(x, gBitMapInfo%height - y + 1)
                 endif
-            else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
+            else
                 if (fieldNumber == ONE) then
-                    if (associated(X1)) val = gLonHovmoller1%hovMap(x, y)
+                    if (associated(X1)) val = X1(x, y)
                 else
-                    if (associated(X2)) val = gLonHovmoller2%hovMap(x, y)
+                    if (associated(X2)) val = X2(x, y)
                 endif
-            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
-                if (fieldNumber == ONE) then
-                    if (associated(X1)) val = gVertHovmoller1%hovMap(x, y)
-                else
-                    if (associated(X2)) val = gVertHovmoller2%hovMap(x, y)
-                endif
-            else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
-                if (associated(X1)) val = gEnergyHovmoller1%hovMap(x, y)
             endif
 
         end function getHovValue
