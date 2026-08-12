@@ -436,7 +436,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime, gPressure, GenerateSVG
+    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime, gPressure, GenerateSVG, X1, X2
 
     implicit none
 
@@ -478,9 +478,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     integer :: draw_x, i, screenHeight
     real :: rlat, rlon
     integer :: years
-    REAL, ALLOCATABLE, save :: X(:,:), X_Overlay(:, :)  ! These are the arrays containing interpolated values for weather maps. Created on heap.
-
-
 
     select case ( mesg )
         
@@ -581,14 +578,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 MainWndProc = 0
                 return
             endif
-            !if ((gModelState%runState == RUNNING) .OR. &
-            !   (.NOT. (maps .OR. graphs .OR. hovs)) .OR. &
-            !   (maps .AND. .NOT. (ALLOCATED(X) .OR. ALLOCATED(X_Overlay)))) then
-            !    lret = EndPaint(hWnd, ps)
-            !    MainWndProc = 0
-            !    return
-            !endif
-            
+
             ! --- 2. Calculate Content (The "What") This is the lat-lon for maps and the time for time series graphs
             !        The values of the two field are printed above and below this line
             textBuffer = ""
@@ -689,17 +679,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     screenHeight = gBitMapInfo%height / 2
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. & 
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LON) screenHeight = gBitMapInfo%height
-                    ! 1. Ensure data is ready (only happens once per plot change)
-                    if (.NOT. ALLOCATED(X) .AND. .NOT. ALLOCATED(X_Overlay)) then
-                         call SetModRealParamsDimensionalState(.false.)
-                         call PrepareGrid(X, gModIntParams%field1, screenHeight)
-                         call PrepareGrid(X_Overlay, gModIntParams%field2, screenHeight)
-                    end if
-            
                     ! 2. Sample data if within bounds
                     if (mouse_y >= 0 .and. mouse_y < screenHeight) then
-                        if (ALLOCATED(X))         current_val1 = X(mouse_x + 1, screenHeight - mouse_y)
-                        if (ALLOCATED(X_Overlay)) current_val2 = X_Overlay(mouse_x + 1, screenHeight - mouse_y)
+                        if (associated(X1)) current_val1 = X1(mouse_x + 1, screenHeight - mouse_y)
+                        if (associated(X2)) current_val2 = X2(mouse_x + 1, screenHeight - mouse_y)
                         ret = InvalidateRect(hWnd, NULL, .FALSE.)
                     end if
                 else if (hovs .AND. mouse_y >= 0 .and. mouse_y < gBitMapInfo%height) then
@@ -743,14 +726,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ret = SetActiveWindow(ghCurrentDlg)
 
                     gElapsedTime%timeSteps = 0 ! Reset the elapsed time displayed in plots
-                    if(ALLOCATED(X)) then
-                        call LogMessage("DeAllocated interpolated grid X on F10")
-                        deallocate(X)
-                    endif
-                    if(ALLOCATED(X_Overlay)) then
-                        call LogMessage("DeAllocated interpolated grid X_overlay on F10")
-                        deallocate(X_Overlay)
-                    endif
                 endif
             endif
             MainWndProc = 0
@@ -762,14 +737,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     ! F1: PAUSE/RESUME -----------------------
                 case (VK_F1)
                     if (gModelState%runState .NE. RUNNING) then
-                        if(ALLOCATED(X)) then
-                            call LogMessage("DeAllocated interpolated X grid on F1")
-                            deallocate(X)
-                        endif
-                        if(ALLOCATED(X_Overlay)) then
-                            call LogMessage("DeAllocated interpolated x_Overlay grid on F1")
-                            deallocate(X_Overlay)
-                        endif
                         call SetModRealParamsDimensionalState(.false.)
                         call LogMessage("User resuming run")
                         if (gModelState%runState == PAUSED) then
@@ -795,9 +762,6 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModINtParams%KMAX2 < 3) gModIntParams%plotType = WEATHER_STN
                         if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAP
                     end if
-                    if (ALLOCATED(X)) deallocate(X)     ! Otherwise we will have an old X and a new one wont be created
-                                                        ! if we switch to weather maps
-                    if (ALLOCATED(X_Overlay)) deallocate(X_Overlay)
                     current_val1 = -1.0
                     call initializePlot()
                     call ClearScreen()
@@ -841,6 +805,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         call ClearScreen()                        
                         call LogMessage("User changed field 1")
                     endif
+    ! F6: Create SVG file from plot -----------------------
+                case (VK_F6)
+                    if (gModelState%runState .NE. PAUSED) return
+
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
                     if (gModelState%runState .NE. RUNNING) return
@@ -1033,27 +1001,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             end select
         end subroutine
 
-        ! Helper for MOUSE_MOVE
-        subroutine PrepareGrid(X, field, screenHeight)
-            use ConstantsModule, only: PLOTTING_OFF
-            use PlotModule, only: populateInterpolatedGrid
-
-            implicit none
-
-            REAL, ALLOCATABLE, INTENT(INOUT) :: X(:,:)
-            INTEGER, INTENT(IN) :: field, screenHeight
-        
-            if (field == PLOTTING_OFF) return
-
-            allocate(X(gBitMapInfo%width, screenHeight))
-
-            call populateInterpolatedGrid(X, field)
-        end subroutine
-        
         function getHovValue(x, y, fieldNumber) result(val)
             use ConstantsModule, only: ONE, TWO
             use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
-                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1
+                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1, X1, X2
 
             implicit none
             
@@ -1063,24 +1014,24 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             
             if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gLatHovmoller1.hovMap)) val = gLatHovmoller1%hovMap(x, gBitMapInfo%height - y + 1)
+                    if (associated(X1)) val = gLatHovmoller1%hovMap(x, gBitMapInfo%height - y + 1)
                 else
-                    if (ALLOCATED(gLatHovmoller2.hovMap)) val = gLatHovmoller2%hovMap(x, y)
+                    if (associated(X2)) val = gLatHovmoller2%hovMap(x, gBitMapInfo%height - y + 1)
                 endif
             else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gLonHovmoller1.hovMap)) val = gLonHovmoller1%hovMap(x, y)
+                    if (associated(X1)) val = gLonHovmoller1%hovMap(x, y)
                 else
-                    if (ALLOCATED(gLonHovmoller2.hovMap)) val = gLonHovmoller2%hovMap(x, y)
+                    if (associated(X2)) val = gLonHovmoller2%hovMap(x, y)
                 endif
             else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gVertHovmoller1.hovMap)) val = gVertHovmoller1%hovMap(x, y)
+                    if (associated(X1)) val = gVertHovmoller1%hovMap(x, y)
                 else
-                    if (ALLOCATED(gVertHovmoller2.hovMap)) val = gVertHovmoller2%hovMap(x, y)
+                    if (associated(X2)) val = gVertHovmoller2%hovMap(x, y)
                 endif
             else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
-                if (ALLOCATED(gEnergyHovmoller1.hovMap)) val = gEnergyHovmoller1%hovMap(x, y)
+                if (associated(X1)) val = gEnergyHovmoller1%hovMap(x, y)
             endif
 
         end function getHovValue
@@ -1089,7 +1040,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             use ConstantsModule, only: ONE, TWO
             use ModelParamsModule, only: gScaleFactors
             use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
-                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1
+                gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1, X1, X2
 
             implicit none
             
@@ -1101,9 +1052,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             rowColumn = -9999
             if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gLatHovmoller1.hovMap)) rowColumn = gLatHovmoller1%rowColumn
+                    if (associated(X1)) rowColumn = gLatHovmoller1%rowColumn
                 else
-                    if (ALLOCATED(gLatHovmoller2.hovMap)) rowColumn = gLatHovmoller2%rowColumn
+                    if (associated(X2)) rowColumn = gLatHovmoller2%rowColumn
                 endif
 
                 if ((gBitMapInfo%height - y) .LE. rowColumn) then 
@@ -1114,18 +1065,18 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 return
             else if (gModIntParams%plotType == HOV_DIAG_AT_LON) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gLonHovmoller1.hovMap)) rowColumn = gLonHovmoller1%rowColumn
+                    if (associated(X1)) rowColumn = gLonHovmoller1%rowColumn
                 else
-                    if (ALLOCATED(gLonHovmoller2.hovMap)) rowColumn = gLonHovmoller2%rowColumn
+                    if (associated(X2)) rowColumn = gLonHovmoller2%rowColumn
                 endif
             else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 if (fieldNumber == ONE) then
-                    if (ALLOCATED(gVertHovmoller1.hovMap)) rowColumn = gVertHovmoller1%rowColumn
+                    if (associated(X1)) rowColumn = gVertHovmoller1%rowColumn
                 else
-                    if (ALLOCATED(gVertHovmoller2.hovMap)) rowColumn = gVertHovmoller2%rowColumn
+                    if (associated(X2)) rowColumn = gVertHovmoller2%rowColumn
                 endif
             else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
-                if (ALLOCATED(gEnergyHovmoller1.hovMap)) rowColumn = gEnergyHovmoller1%rowColumn
+                if (associated(X1)) rowColumn = gEnergyHovmoller1%rowColumn
             endif
             if (rowColumn == -9999) then
                 !val = ieee_value(val, ieee_quiet_nan)
