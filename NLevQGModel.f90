@@ -808,6 +808,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     ! F6: Create SVG file from plot -----------------------
                 case (VK_F6)
                     if (gModelState%runState .NE. PAUSED) return
+                    call GenerateSVG()
+                    
 
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
@@ -1001,6 +1003,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             end select
         end subroutine
 
+        !! Takes the current mouse coordinates and returns the actual value of the @-d map plotted
+        !! on the screen. This includes hovmollers.
         function getHovValue(x, y, fieldNumber) result(val)
             use ConstantsModule, only: ONE
             use PlotModule, only: X1, X2
@@ -1026,9 +1030,14 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             endif
 
         end function getHovValue
-        
+
+        !! Hovmoller diagrams recycle, so the top most and left most point on the screen is set to
+        !! time 0. This routine finds the rowColumn value of the instance being plotted and compares
+        !! it to the mouse coordinate x,y. Values above (lat hovmollers) will increase from the top
+        !! row to the current row and values below will be negative and increase to zero at the bottom.
+        !! Likewise for columns that start from the left.
         function getHovTime(x, y, fieldNumber) result(val)
-            use ConstantsModule, only: ONE, TWO
+            use ConstantsModule, only: ONE
             use ModelParamsModule, only: gScaleFactors
             use PlotModule, only: gLatHovmoller1, gLatHovmoller2, gLonHovmoller1, gLonHovmoller2, &
                 gVertHovmoller1, gVertHovmoller2, gEnergyHovmoller1, X1, X2

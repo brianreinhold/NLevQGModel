@@ -259,11 +259,7 @@ module PlotModule
 ! ----------------------- SVG submodule interfaces
     INTERFACE
         ! Use 'MODULE' keyword here to link it to a submodule
-        MODULE SUBROUTINE GenerateSVG(X, width, height, contourIntInv)
-            !------------------------------------------------------Passed variables:
-            REAL, intent(in) :: X(:, :)
-            integer, intent(in) :: width, height
-            REAL, intent(in) :: contourIntInv
+        MODULE SUBROUTINE GenerateSVG()
         END SUBROUTINE GenerateSVG
     END INTERFACE
 
