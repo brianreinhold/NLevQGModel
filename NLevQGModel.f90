@@ -809,7 +809,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (VK_F6)
                     if (gModelState%runState .NE. PAUSED) return
                     call GenerateSVG()
-                    
+                    lret = MessageBox(hWnd, "SVG file created"C, "Done"C, MB_OK)
 
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
