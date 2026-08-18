@@ -2,6 +2,30 @@
 SUBMODULE (PlotModule) SvgSubmodule
 
     integer, parameter :: NO_BORDER = -9999999
+    
+    ! Base colors converted cleanly from #BBGGRR to web #RRGGBB layout
+    character(len=7), parameter :: SVG_RAM_COLORS(20) = [ &
+        '#0000AA', & ! 0:  Was #AA0000 -> Now #0000AA (Dark Blue)
+        '#0000FF', & ! 1:  Was #FF0000 -> Now #0000FF (Deep Blue)
+        '#0066FF', & ! 2:  Was #FF6600 -> Now #0066FF (Blue)
+        '#008DFF', & ! 3:  Was #FF8D00 -> Now #008DFF (Medium Blue)
+        '#00A6FF', & ! 4:  Was #FFA600 -> Now #00A6FF (Lighter Blue)
+        '#00BBE7', & ! 5:  Was #E7BB00 -> Now #00BBE7 (Cyan-Blue)
+        '#00CE9A', & ! 6:  Was #9ACE00 -> Now #00CE9A (Cyan)
+        '#007861', & ! 7:  Was #617800 -> Now #007861 (Light Cyan)
+        '#009655', & ! 8:  Was #559600 -> Now #009655 (Green-Cyan)
+        '#00B444', & ! 9:  Was #44B400 -> Now #00B444 (Green)
+        '#4DD12D', & ! 10: Was #2DD14D -> Now #4DD12D (Bright Green)
+        '#ABEA0D', & ! 11: Was #0DEAAB -> Now #ABEA0D (Yellow-Green)
+        '#FFFF00', & ! 12: Was #00FFFF -> Now #FFFF00 (Yellow)
+        '#FFC000', & ! 13: Was #00C0FF -> Now #FFC000 (Orange-Yellow)
+        '#FF8000', & ! 14: Was #0080FF -> Now #FF8000 (Orange)
+        '#FF0000', & ! 15: Was #0000FF -> Now #FF0000 (Red)
+        '#FF0077', & ! 16: Was #7700FF -> Now #FF0077 (Magenta)
+        '#FF00AA', & ! 17: Was #AA00FF -> Now #FF00AA (Lite Magenta)
+        '#FF77AA', & ! 18: Was #AA77FF -> Now #FF77AA (Pink Magenta)
+        '#FF77FF'  & ! 19: Was #FF77FF -> Now #FF77FF (Pink Lilac)
+    ]
 
     CONTAINS
 
@@ -40,16 +64,16 @@ SUBMODULE (PlotModule) SvgSubmodule
                 ! No second field here
             endif
             if (associated(X1)) then
-                call CreateSVG(X1, size(X1, dim=1), size(X1, dim=2), contourIntervalInv1, svgFileInfo, .NOT. ASSOCIATED(X2))
+                call CreateSVG(X1, size(X1, dim=1), size(X1, dim=2), contourIntervalInv1, svgFileInfo, .NOT. ASSOCIATED(X2), .true.)
             endif
             if (associated(X2)) then
-                call createSVG(X2, size(X2, dim=1), size(X2, dim=2), contourIntervalInv2, svgFileInfo, .TRUE.)
+                call createSVG(X2, size(X2, dim=1), size(X2, dim=2), contourIntervalInv2, svgFileInfo, .TRUE. , .NOT. ASSOCIATED(X1) )
             endif
 
         end subroutine GenerateSVG
 
     
-        subroutine CreateSVG(X, width, height, contourIntervalInv, svgFileInfo, closeFile)
+        subroutine CreateSVG(X, width, height, contourIntervalInv, svgFileInfo, closeFile, useSolidColor)
             use ModelParamsModule, only: FileStruct
 
             implicit none
@@ -58,10 +82,11 @@ SUBMODULE (PlotModule) SvgSubmodule
             integer, intent(in) :: width, height
             REAL, intent(in) :: contourIntervalInv
             type(FileStruct), intent(inout) :: svgFileInfo
-            logical, intent(in) :: closeFile
+            logical, intent(in) :: closeFile, useSolidColor
 
             integer, allocatable :: borders(:, :)
-            integer :: ios
+            integer :: ios, binMin,  binMax, i
+            character(len=7) :: fillColor
             character(len=32) :: filename
 
 
@@ -69,7 +94,7 @@ SUBMODULE (PlotModule) SvgSubmodule
 
             call CreateBorderPoints(X, width, height, contourIntervalInv, borders)
 
-            call DebugPrintFirst20Rows("BordersFile.txt", borders, width, height)
+            !call DebugPrintFirst20Rows("BordersFile.txt", borders, width, height)
 
             if (svgFileInfo%fileHandle .EQ. -1) then
                 call GenerateUniqueFilename(svgFileInfo%fileName) ! Uses current time to create a unique filename
@@ -83,8 +108,17 @@ SUBMODULE (PlotModule) SvgSubmodule
                 ! Paint the background white.
                 write(svgFileInfo%fileHandle, '(A)') '<rect width="100%" height="100%" fill="#FFFFFF"/>'
             endif
-            
-            call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height)
+            if (useSolidColor) then
+                do i = 1, 20
+                    binMin = i - 11
+                    binMax = i - 10
+                    fillColor = SVG_RAM_COLORS(i)
+                    call FillContourBand(svgFileInfo%fileHandle, X, width, height, contourIntervalInv, binMin, binMax, trim(fillColor))
+                end do
+            else
+                !call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height, "#000000", 'stroke-dasharray="6,4"')
+                call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height, "#000000", '')
+            endif
             deallocate(borders)
             
             if (closeFile) then
@@ -96,44 +130,44 @@ SUBMODULE (PlotModule) SvgSubmodule
     
     
     
-subroutine DebugPrintFirst20Rows(filename, borders, width, height)
-    implicit none
-    character(len=*), intent(in) :: filename
-    integer, intent(in)          :: width, height
-    integer, intent(in)          :: borders(width, height)
-    
-    integer :: u, ios, x, y
-    
-    open(newunit=u, file=trim(filename), status='REPLACE', form='FORMATTED', iostat=ios)
-    if (ios /= 0) return
-    
-    write(u, '(A)') 'DISPLAYING BORDERS ARRAY: FIRST 40 ROWS (Y=1 to 40)'
-    write(u, '(A)') 'Focusing on X = 900 to 1400 where the diagonal error occurs'
-    write(u, '(A)') '----------------------------------------------------------------------'
-    
-    ! 1. Loop through exactly the first 20 rows of your screen array
-    do y = 1, 40
-        write(u, '(A,I3,A)', advance='no') 'Row ', y, ': '
-        
-        ! 2. Focus strictly on the X-width coordinates around your broken polylines
-        do x = 900, 1400
-            
-            if (borders(x, y) == NO_BORDER) then
-                ! Print a clean visual dot for background space
-                write(u, '(A)', advance='no') '    .'
-            else
-                ! Print the actual cell contents scaled down (e.g., 0)
-                ! Using I5 ensures everything stays perfectly aligned like a grid
-                write(u, '(I5)', advance='no') borders(x, y) / 100
-            end if
-            
-        end do
-        ! Line break at the end of every row
-        write(u, *)
-    end do
-    
-    close(u)
-end subroutine DebugPrintFirst20Rows
+!subroutine DebugPrintFirst20Rows(filename, borders, width, height)
+!    implicit none
+!    character(len=*), intent(in) :: filename
+!    integer, intent(in)          :: width, height
+!    integer, intent(in)          :: borders(width, height)
+!    
+!    integer :: u, ios, x, y
+!    
+!    open(newunit=u, file=trim(filename), status='REPLACE', form='FORMATTED', iostat=ios)
+!    if (ios /= 0) return
+!    
+!    write(u, '(A)') 'DISPLAYING BORDERS ARRAY: FIRST 40 ROWS (Y=1 to 40)'
+!    write(u, '(A)') 'Focusing on X = 900 to 1400 where the diagonal error occurs'
+!    write(u, '(A)') '----------------------------------------------------------------------'
+!    
+!    ! 1. Loop through exactly the first 20 rows of your screen array
+!    do y = 1, 40
+!        write(u, '(A,I3,A)', advance='no') 'Row ', y, ': '
+!        
+!        ! 2. Focus strictly on the X-width coordinates around your broken polylines
+!        do x = 900, 1400
+!            
+!            if (borders(x, y) == NO_BORDER) then
+!                ! Print a clean visual dot for background space
+!                write(u, '(A)', advance='no') '    .'
+!            else
+!                ! Print the actual cell contents scaled down (e.g., 0)
+!                ! Using I5 ensures everything stays perfectly aligned like a grid
+!                write(u, '(I5)', advance='no') borders(x, y) / 100
+!            end if
+!            
+!        end do
+!        ! Line break at the end of every row
+!        write(u, *)
+!    end do
+!    
+!    close(u)
+!end subroutine DebugPrintFirst20Rows
     
     
         subroutine GenerateUniqueFilename(filename)
@@ -154,7 +188,7 @@ end subroutine DebugPrintFirst20Rows
     
             ! Construct the final filename string
             filename = 'plot_' // date_time_str // '.svg'
-    end subroutine GenerateUniqueFilename
+        end subroutine GenerateUniqueFilename
 
         !! Takes the array of interpolated values in X that are the actual values of the
         !! variable being plotted. X has the array that allows the mouse over to display
@@ -204,19 +238,18 @@ end subroutine DebugPrintFirst20Rows
         END subroutine CreateBorderPoints
 
 ! TODO: Make that loop around dx a subroutine. It is repeated 4 times!!
-        subroutine ExportBordersToSVG(fileUnit, borders, width, height)
+        subroutine ExportBordersToSVG(fileUnit, borders, width, height, strokeColor, lineStyle)
             integer, intent(in)    :: fileUnit
             integer, intent(inout) :: borders(:, :) 
             integer, intent(in)    :: width, height
+            character(len=*), intent(in) :: strokeColor ! Expects e.g., "#000000" or "#FF0000"
+            character(len=*), intent(in) :: lineStyle   ! Expects e.g., "solid", "dashed", or "dotted"
     
             integer :: x, y, cx, cy, nx, ny, i, mx, my, j
             integer :: startX, startY, contour_val, count
             logical :: found_next
     
             ! 8-way directional pixel offsets
-            !integer :: dx(8) = [ 0, 1, 1, 1, 0,-1,-1,-1]
-            !integer :: dy(8) = [-1,-1, 0, 1, 1, 1, 0,-1]
-            
             integer :: dx(8) = [ 1, 1, 0, -1, -1, -1,  0, 1]
             integer :: dy(8) = [ 0, 1, 1,  1,  0, -1, -1,-1]
 
@@ -257,10 +290,10 @@ end subroutine DebugPrintFirst20Rows
                         endif
                         cx = startX
                         cy = startY
-                        write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Forward: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
+                        !write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Forward: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
 
-                        write(fileUnit, '(A, F0.2, A)', advance='no') '<polyline data-contour-val="', &
-                            real(contour_val) * 0.01, '" stroke="#000000" stroke-width="1.0" fill="none" points="'
+                        write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineStyle), ' points="'
 
                         count = 0
                         do
@@ -332,10 +365,10 @@ end subroutine DebugPrintFirst20Rows
                         cx = startX
                         cy = startY
 
-                        write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Reverse: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
+                        !write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Reverse: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
 
-                        write(fileUnit, '(A, F0.2, A)', advance='no') '<polyline data-contour-val="', &
-                            real(contour_val) * 0.01, '" stroke="#000000" stroke-width="1.0" fill="none" points="'
+                        write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineStyle), ' points="'
 
                         do
                             write(fileUnit, '(I0, A, I0, A)', advance='no') cx, ',', cy, ' '
@@ -372,6 +405,62 @@ end subroutine DebugPrintFirst20Rows
                 end do
             end do
         end subroutine ExportBordersToSVG
+
+        subroutine FillContourBand(fileUnit, X, width, height, contourIntervalInv, binMin, binMax, fillColor)
+            implicit none
+            integer, intent(in)          :: fileUnit
+            real, intent(in)             :: X(:,:)
+            integer, intent(in)          :: width, height
+            real, intent(in)             :: contourIntervalInv
+            integer, intent(in)          :: binMin, binMax      ! The target band range (e.g., bin 1 to 2)
+            character(len=*), intent(in) :: fillColor          ! Hex color string (e.g., "#99CCFF")
+    
+            integer :: x_idx, y_idx, j1
+            integer :: current_bin
+            integer :: spanStart
+            logical :: insideSpan
+    
+            ! Sweep rows from top to bottom
+            do y_idx = 1, height
+                j1 = height - y_idx + 1
+        
+                insideSpan = .false.
+                spanStart  = 0
+        
+                do x_idx = 1, width
+                    ! 1. Identify which contour bin the current data coordinate belongs to
+                    current_bin = floor(X(x_idx, j1) * contourIntervalInv)
+            
+                    ! 2. Check if this pixel sits inside our active target shading band
+                    if (current_bin >= binMin .and. current_bin < binMax) then
+                        if (.not. insideSpan) then
+                            ! Start a new horizontal fill ribbon segment
+                            spanStart = x_idx
+                            insideSpan = .true.
+                        end if
+                    else
+                        if (insideSpan) then
+                            ! The band ended -> Stream out a solid 1-pixel-tall rectangle mapping the span
+                            ! width = current_x - spanStart
+                            write(fileUnit, '(A, I0, A, I0, A, I0, A, A, A)') &
+                                '<rect x="', spanStart, '" y="', y_idx, &
+                                '" width="', (x_idx - spanStart), '" height="1" fill="', trim(fillColor), '" />'
+                            insideSpan = .false.
+                        end if
+                    end if
+                end do
+        
+                ! 3. Safety Catch: If the shaded band stretches all the way to the right frame edge
+                if (insideSpan) then
+                    write(fileUnit, '(A, I0, A, I0, A, I0, A, A, A)') &
+                        '<rect x="', spanStart, '" y="', y_idx, &
+                        '" width="', (width - spanStart + 1), '" height="1" fill="', trim(fillColor), '" />'
+                end if
+        
+                ! Inject a hard line break every row to keep Chrome's text file parsing buffer happy
+                write(fileUnit, *)
+            end do
+        end subroutine FillContourBand
     
 
     end submodule SvgSubmodule
