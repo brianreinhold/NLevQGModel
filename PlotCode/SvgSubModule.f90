@@ -27,6 +27,31 @@ SUBMODULE (PlotModule) SvgSubmodule
         '#FF77FF'  & ! 19: Was #FF77FF -> Now #FF77FF (Pink Lilac)
     ]
 
+    ! 100% Academic Publication Compliant Grayscale Palette
+    ! Strictly adheres to the 15% to 85% safe contrast boundaries
+    character(len=7), parameter :: SVG_GRAY_RAM_COLORS(20) = [ &
+        '#262626', & ! 0:  15.0% Gray (Strict Minimum Boundary)
+        '#2F2F2F', & ! 1:  18.4% Gray
+        '#383838', & ! 2:  22.0% Gray
+        '#424242', & ! 3:  25.9% Gray
+        '#4B4B4B', & ! 4:  29.4% Gray
+        '#545454', & ! 5:  32.9% Gray
+        '#5E5E5E', & ! 6:  36.9% Gray
+        '#676767', & ! 7:  40.4% Gray
+        '#707070', & ! 8:  43.9% Gray
+        '#7A7A7A', & ! 9:  47.8% Gray
+        '#838383', & ! 10: 51.4% Gray
+        '#8D8D8D', & ! 11: 55.3% Gray
+        '#969696', & ! 12: 58.8% Gray
+        '#9F9F9F', & ! 13: 62.4% Gray
+        '#A9A9A9', & ! 14: 66.3% Gray
+        '#B2B2B2', & ! 15: 69.8% Gray
+        '#BBBBBB', & ! 16: 73.3% Gray
+        '#C5C5C5', & ! 17: 77.3% Gray
+        '#CECECE', & ! 18: 80.8% Gray
+        '#D8D8D8'  & ! 19: 84.7% Gray (Strict Maximum Boundary)
+    ]
+
     CONTAINS
 
         module subroutine GenerateSVG()
@@ -112,9 +137,10 @@ SUBMODULE (PlotModule) SvgSubmodule
                 do i = 1, 20
                     binMin = i - 11
                     binMax = i - 10
-                    fillColor = SVG_RAM_COLORS(i)
+                    fillColor = SVG_GRAY_RAM_COLORS(i)
                     call FillContourBand(svgFileInfo%fileHandle, X, width, height, contourIntervalInv, binMin, binMax, trim(fillColor))
                 end do
+                call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height, "#000000", '')
             else
                 !call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height, "#000000", 'stroke-dasharray="6,4"')
                 call ExportBordersToSVG(svgFileInfo%fileHandle, borders, width, height, "#000000", '')
@@ -248,6 +274,7 @@ SUBMODULE (PlotModule) SvgSubmodule
             integer :: x, y, cx, cy, nx, ny, i, mx, my, j
             integer :: startX, startY, contour_val, count
             logical :: found_next
+            character(len=32) :: lineType
     
             ! 8-way directional pixel offsets
             integer :: dx(8) = [ 1, 1, 0, -1, -1, -1,  0, 1]
@@ -292,8 +319,10 @@ SUBMODULE (PlotModule) SvgSubmodule
                         cy = startY
                         !write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Forward: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
 
+                        lineType = ''
+                        if (contour_val < 0) lineType = 'stroke-dasharray="6,4"'
                         write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
-                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineStyle), ' points="'
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
 
                         count = 0
                         do
@@ -367,8 +396,10 @@ SUBMODULE (PlotModule) SvgSubmodule
 
                         !write(*, '(A, I0, A, I0, A, I0, A, I0)') 'Reverse: x = ', x, ' y = ', y, ' StartX = ', startX, ' startY = ', startY
 
+                        lineType = ''
+                        if (contour_val < 0) lineType = 'stroke-dasharray="6,4"'
                         write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
-                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineStyle), ' points="'
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
 
                         do
                             write(fileUnit, '(I0, A, I0, A)', advance='no') cx, ',', cy, ' '
@@ -421,6 +452,7 @@ SUBMODULE (PlotModule) SvgSubmodule
             logical :: insideSpan
     
             ! Sweep rows from top to bottom
+            write(fileUnit, '(A)'), '<g shape-rendering="crispEdges">'
             do y_idx = 1, height
                 j1 = height - y_idx + 1
         
@@ -444,7 +476,7 @@ SUBMODULE (PlotModule) SvgSubmodule
                             ! width = current_x - spanStart
                             write(fileUnit, '(A, I0, A, I0, A, I0, A, A, A)') &
                                 '<rect x="', spanStart, '" y="', y_idx, &
-                                '" width="', (x_idx - spanStart), '" height="1" fill="', trim(fillColor), '" />'
+                                '" width="', (x_idx - spanStart), '" height="1" fill="', trim(fillColor), '"/>'
                             insideSpan = .false.
                         end if
                     end if
@@ -454,12 +486,13 @@ SUBMODULE (PlotModule) SvgSubmodule
                 if (insideSpan) then
                     write(fileUnit, '(A, I0, A, I0, A, I0, A, A, A)') &
                         '<rect x="', spanStart, '" y="', y_idx, &
-                        '" width="', (width - spanStart + 1), '" height="1" fill="', trim(fillColor), '" />'
+                        '" width="', (width - spanStart + 1), '" height="1" fill="', trim(fillColor), '"/>'
                 end if
         
                 ! Inject a hard line break every row to keep Chrome's text file parsing buffer happy
                 write(fileUnit, *)
             end do
+            write(fileUnit, '(A)'), '</g>'
         end subroutine FillContourBand
     
 
