@@ -255,7 +255,7 @@ module ModelModule
                             !   the time step is reached. Here the CreateBomb is created.
                             ! In all cases, the timeStepsToDelay is set to its negative so it does not get called 
                             ! again until the user resets it.
-                            if (gModIntParams%timeStepsToDelay == KSTEP) then
+                            if (gModIntParams%timeStepsToDelay == KSTEPT) then
                                 if (KSTEPT > 1) call CreateBomb()
                                 gModIntParams%timeStepsToDelay = -gModIntParams%timeStepsToDelay ! Have to reset to repeat
                             endif
@@ -279,7 +279,7 @@ module ModelModule
                                 !do N = 1, gModIntParams%NLEV
                                 !    call updateRunStats(gEnergyArr%GQ(:, N), gWelford)
                                 !end do
-                                call outputPlot()
+                                call outputPlot(.FALSE.)
                                 gHorzArr%FS = 0.0
                             endif
 
@@ -288,7 +288,7 @@ module ModelModule
                             B1 = RD
                             DO NCYC4 = 1, 4
                                 call EquationSystem(buffer)
-                                if (RD == 0.0) cycle
+                                if (RD == 0.0) cycle        ! Case for a time step of zero
                                 ! FS() has streamfunction tendencies after this call
                                 ! ADS() has vorticity plus beta tendencies after this call
                                 ! ADT() has temperature tendencies after this call
@@ -1742,6 +1742,60 @@ module ModelModule
 
         END SUBROUTINE ComputeZonalSpectrum
         
+        !SUBROUTINE ComputeStructures()
+        !    use ConstantsModule, only: RAD_TO_DEGREES
+        !    use ArrayDimensionsModule, only: gCurrentDims
+        !    use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, gEnergyArr
+        !    use ModelParamsModule, only: gModIntParams, gModRealParams
+        !    use WelfordModule, only: updateRunStats
+        !    implicit none
+        !    
+        !    integer :: I, N
+        !    integer :: KMAX, LMAX, NMAX, ITOT
+        !    REAL :: phase, amplitude, phase_diff
+        !    
+        !    KMAX = gModIntParams%KMAX2
+        !    LMAX = gModIntParams%LMAX2
+        !    NMAX = gModIntParams%NLEV
+        !    ITOT = gCurrentDims%ITOT
+        !    
+        !    ! To compute the structure we get the phase and amplitude of the streamfunction at layer
+        !    ! n and compute the phase difference with respect to the phase of the streamfunction at
+        !    ! the layer n-1.
+        !    ! 1. First Pass: Compute absolute amplitudes and phases for ALL levels
+        !    do N = 1, NMAX
+        !        do I = LMAX + 1, ITOT - 1, 2
+        !            ! Compute absolute phase and amplitude at level N
+        !            phase = atan2(gHorzArr%PS(I + 1, N), gHorzArr%PS(I, N)) * RAD_TO_DEGREES
+        !            amplitude = sqrt(gHorzArr%PS(I, N)**2 + gHorzArr%PS(I + 1, N)**2)
+        !
+        !            gEnergyArr%AMP_PHASE(I, N) = amplitude
+        !            gEnergyArr%AMP_PHASE(I + 1, N) = phase  ! Temporarily store absolute phase
+        !        end do
+        !    end do
+        !
+        !    ! 2. Second Pass: Compute relative phase differences and update stats
+        !    do N = 2, NMAX
+        !        do I = LMAX + 1, ITOT - 1, 2
+        !            ! Compute difference relative to level 1
+        !            phase_diff = gEnergyArr%AMP_PHASE(I + 1, N) - gEnergyArr%AMP_PHASE(I + 1, 1)
+        !    
+        !            ! Crucial: Wrap phase difference to the range [-180, 180] 
+        !            ! to prevent Welford statistics from blowing up due to 360-degree jumps
+        !            phase_diff = phase_diff - 360.0 * nint(phase_diff / 360.0)
+        !            gEnergyArr%AMP_PHASE(I + 1, N) = phase_diff
+        !
+        !        end do
+        !    end do
+        !    
+        !    ! 3. Third Pass: Log statistics and cleanly zero out Level 1
+        !    gEnergyArr%AMP_PHASE(LMAX + 2 : ITOT : 2, 1) = 0.0
+        !    do N = 1, NMAX
+        !        call updateRunStats(gEnergyArr%AMP_PHASE(:, N), gEnergyArr%WelfordAMP_PHASE(:, N))
+        !    end do
+        !    print '(*(F10.4))', (gEnergyArr%WelfordAMP_PHASE(3, N)%mean, N = 1, SIZE(gEnergyArr%WelfordAMP_PHASE, 2))
+        !end subroutine ComputeStructures
+        
         SUBROUTINE ComputeStructures()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1752,7 +1806,7 @@ module ModelModule
             
             integer :: I, N
             integer :: KMAX, LMAX, NMAX, ITOT
-            REAL :: phase, amplitude
+            REAL :: phaseS, amplitudeS, phaseT, amplitudeT, phase_diff, phase_diff_TMin
             
             KMAX = gModIntParams%KMAX2
             LMAX = gModIntParams%LMAX2
@@ -1762,17 +1816,42 @@ module ModelModule
             ! To compute the structure we get the phase and amplitude of the streamfunction at layer
             ! n and compute the phase difference with respect to the phase of the streamfunction at
             ! the layer n-1.
-            
+
             do N = 1, NMAX
                 do I = LMAX + 1, ITOT - 1, 2
-                    ! Compute phase difference between layer N and N-1
-                    phase = atan2(gHorzArr%PS(I + 1, N), gHorzArr%PS(I, N)) * RAD_TO_DEGREES  ! phase = atan2(imaginary, real)
-                    amplitude = sqrt(gHorzArr%PS(I, N) * gHorzArr%PS(I, N) + gHorzArr%PS(I + 1, N) * gHorzArr%PS(I + 1, N))
-                    gEnergyArr%AMP_PHASE(I, N) = amplitude
-                    gEnergyArr%AMP_PHASE(I + 1, N) = phase - gEnergyArr%AMP_PHASE(I + 1, 1)
+                    ! Compute absolute phase and amplitude at level N
+                    phaseS = atan2(gHorzArr%PS(I + 1, N), gHorzArr%PS(I, N)) * RAD_TO_DEGREES
+                    amplitudeS = sqrt(gHorzArr%PS(I, N)**2 + gHorzArr%PS(I + 1, N)**2)
+                    phaseT = atan2(gHorzArr%TH(I + 1, N), gHorzArr%TH(I, N)) * RAD_TO_DEGREES
+                    amplitudeT = sqrt(gHorzArr%TH(I, N)**2 + gHorzArr%TH(I + 1, N)**2)
+
+                    gEnergyArr%AMP_PHASE(I, N) = amplitudeS
+
+                    phase_diff = phaseS - phaseT
+                    
+                    if (phase_diff > 180.0) then
+                        phase_diff = phase_diff - 360.0
+                    else if (phase_diff <= -180.0) then
+                        phase_diff = phase_diff + 360.0
+                    end if
+                    
+                    phase_diff_TMin = phaseS - (phaseT + 180.)
+                    
+                    if (phase_diff_TMin > 180.0) then
+                        phase_diff_TMin = phase_diff_TMin - 360.0
+                    else if (phase_diff_TMin <= -180.0) then
+                        phase_diff_TMin = phase_diff_TMin + 360.0
+                    end if
+                    
+                    !if (N == 1) print '(F10.4, A, F10.4)', phase_diff, " ", phase_diff_TMin
+                    
+                    if (ABS(phase_diff_TMin) .LT. ABS(phase_diff)) phase_diff = phase_diff_TMin - 180.0
+
+                    gEnergyArr%AMP_PHASE(I + 1, N) = phase_diff
                 end do
                 call updateRunStats(gEnergyArr%AMP_PHASE(:, N), gEnergyArr%WelfordAMP_PHASE(:, N))
             end do
+            !print '(*(F10.4))', (gEnergyArr%WelfordAMP_PHASE(3, N)%mean, N = 1, SIZE(gEnergyArr%WelfordAMP_PHASE, 2))
         end subroutine ComputeStructures
 
     end module ModelModule

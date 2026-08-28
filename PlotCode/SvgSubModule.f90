@@ -3,6 +3,11 @@ SUBMODULE (PlotModule) SvgSubmodule
 
     integer, parameter :: NO_BORDER = -9999999
     
+    type :: LegendEntry
+        character(len=64) :: field1
+        character(len=16) :: contourInterval
+    end type LegendEntry
+    
     ! Base colors converted cleanly from #BBGGRR to web #RRGGBB layout
     character(len=7), parameter :: SVG_RAM_COLORS(20) = [ &
         '#0000AA', & ! 0:  Was #AA0000 -> Now #0000AA (Dark Blue)
@@ -67,8 +72,14 @@ SUBMODULE (PlotModule) SvgSubmodule
             contourIntervalInv1 = 0.0
             contourIntervalInv2 = 0.0
             if (gModIntParams%plotType == WEATHER_MAP .OR. gModIntParams%plotType == PHASE_AND_MAP) then
-                if (associated(X1)) contourIntervalInv1 = gWeatherMap1%contourIntervalInv
-                if (associated(X2)) contourIntervalInv2 = gWeatherMap2%contourIntervalInv
+                if (associated(X1)) then
+                    contourIntervalInv1 = gWeatherMap1%contourIntervalInv
+                    !field1 = gFieldLabels(gModIntParams%field1)
+                endif
+                if (associated(X2)) then
+                    contourIntervalInv2 = gWeatherMap2%contourIntervalInv
+                    !field2 = gFieldLabels(gModIntParams%field2)
+                endif
             else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
                 if (associated(X1)) contourIntervalInv1 = gVertHovmoller1%contourIntervalInv
                 if (associated(X2)) contourIntervalInv2 = gVertHovmoller2%contourIntervalInv
@@ -272,7 +283,7 @@ SUBMODULE (PlotModule) SvgSubmodule
             character(len=*), intent(in) :: lineStyle   ! Expects e.g., "solid", "dashed", or "dotted"
     
             integer :: x, y, cx, cy, nx, ny, i, mx, my, j
-            integer :: startX, startY, contour_val, count
+            integer :: startX, startY, contour_val, count, point_counter
             logical :: found_next
             character(len=32) :: lineType
     
@@ -325,7 +336,31 @@ SUBMODULE (PlotModule) SvgSubmodule
                                         '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
 
                         count = 0
+                        point_counter = 0
                         do
+
+                            point_counter = point_counter + 1
+
+                            if (mod(point_counter, 250) == 0) then
+    
+                                ! 1. Seal the current line segment right here
+                                write(fileUnit, '(A)') '" />'
+    
+                                ! 2. Output your 1-pass white halo and sharp black text numbers at the current gap position
+                                !write(fileUnit, '(A, I0, A, I0, A, F0.2, A)') &
+                                !    '<text x="', cx, '" y="' , cy, '" font-family="sans-serif" font-size="13" font-weight="bold" fill="none" &
+                                !    &stroke="#FFFFFF" stroke-width="4" text-anchor="middle" dominant-baseline="central">', real(contour_val) * 0.01, '</text>'
+                                write(fileUnit, '(A, I0, A, I0, A, F0.2, A)') &
+                                    '<text x="', cx, '" y="' , cy, '" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000" &
+                                    &text-anchor="middle" dominant-baseline="central">', real(contour_val) * 0.01, '</text>'
+        
+                                ! 3. Re-open a brand new polyline tag with the exact same styles to continue streaming the rest of the curve
+                                write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
+        
+                                write(fileUnit, *) ! Keep Chrome's line parser buffer safe
+                            end if
+
                             write(fileUnit, '(I0, A, I0, A)', advance='no') cx, ',', cy, ' '
                             if (cx .EQ. startX .and. cy .EQ. startY) then
                                 ! Have we completed a loop - kill if so or the loop will go indefinitely
@@ -401,7 +436,29 @@ SUBMODULE (PlotModule) SvgSubmodule
                         write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
                                         '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
 
+                        point_counter = 0
                         do
+                            point_counter = point_counter + 1
+
+                            if (mod(point_counter, 250) == 0) then
+    
+                                ! 1. Seal the current line segment right here
+                                write(fileUnit, '(A)') '" />'
+    
+                                ! 2. Output your 1-pass white halo and sharp black text numbers at the current gap position
+                                !write(fileUnit, '(A, I0, A, I0, A, F0.2, A)') &
+                                !    '<text x="', cx, '" y="' , cy, '" font-family="sans-serif" font-size="13" font-weight="bold" fill="none" &
+                                !    &stroke="#FFFFFF" stroke-width="4" text-anchor="middle" dominant-baseline="central">', real(contour_val) * 0.01, '</text>'
+                                write(fileUnit, '(A, I0, A, I0, A, F0.2, A)') &
+                                    '<text x="', cx, '" y="' , cy, '" font-family="sans-serif" font-size="13" font-weight="bold" fill="#000000" &
+                                    &text-anchor="middle" dominant-baseline="central">', real(contour_val) * 0.01, '</text>'
+        
+                                ! 3. Re-open a brand new polyline tag with the exact same styles to continue streaming the rest of the curve
+                                write(fileUnit, '(A, F0.2, A, A, A, A, A)', advance='no') '<polyline data-contour-val="', real(contour_val) * 0.01, &
+                                        '" stroke="', trim(strokeColor), '" stroke-width="1.0" fill="none" ', trim(lineType), ' points="'
+        
+                                write(fileUnit, *) ! Keep Chrome's line parser buffer safe
+                            end if
                             write(fileUnit, '(I0, A, I0, A)', advance='no') cx, ',', cy, ' '
                             borders(cx, cy) = NO_BORDER ! Wipes out the anchor and backward segments
                     

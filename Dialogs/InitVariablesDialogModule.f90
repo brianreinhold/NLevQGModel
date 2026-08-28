@@ -59,19 +59,21 @@ module InitVariablesDialogModule
 
             type(T_RECT) :: rc
             type(T_POINT) :: pt
-            
-            real, pointer :: pTempDriving(:)  ! Local 1D pointer
-            integer, save :: levelIndex = 1 ! Current levelIndex when the list view displays the components at a given level
+
+            integer, save :: levelIndex = 1     ! Current levelIndex when the list view displays the components at a given level
             integer, save :: componentIndex = 1 ! Current componentIndex when the list view displays levels for a given component
+            logical, save :: isComponentView = .TRUE.  ! TRUE: list view shows components at a given level. FALSE: list view shows levels for a given component 
+            
+            character(len=32) :: description
+            integer :: waveStart, K, L, I, M
             
             ! For the list view report rows
-            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo
+            integer(HANDLE) :: hList, hEdit, hCheckBox, hFocus, hCombo, hStatic
             integer, save :: psRowClicked, tfRowClicked, topRowClicked, sfRowClicked
             integer :: id
             CHARACTER(LEN=16) :: buffer ! Use this to read the value in the edit box
 
             integer :: newValue      ! For editing the displayed value in the list box
-            integer :: i
 
             select case (dlgMsg)
                 CASE (WM_APP + 300)
@@ -97,6 +99,9 @@ module InitVariablesDialogModule
                 CASE (WM_APP + 305)
                     RETURN
                 CASE (WM_APP + 306)
+                    bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
+                    iret = DialogBoxParam(ghInstance, INT(IDD_VIEW_VARIABLES, LONG_PTR), hDlg, LOC(ViewVariablesDlgProc), 0_LONG_PTR)
+                    call initializeDialog()
                     RETURN
 
                 case (WM_INITDIALOG)   ! dlgMsg: initialize dialog box
@@ -104,24 +109,13 @@ module InitVariablesDialogModule
                     tfRowClicked = -1
                     topRowClicked = -1
                     call DimensionalizeHorizontalParams()
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_HORZ_DIMENSIONALIZE)
+                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgInitVariablesProc), NULL, GetCurrentThreadId())
                     ghInitVariablesDlg = hDlg
 
-                    hCombo = GetDlgItem(hDlg, IDC_COMBO_LEVEL)
-                    do i = 1, gModIntParams%NLEV
-                        write(buffer, '(F6.1)') gVertArr%PV(i)
-                        bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(trim(buffer)//char(0)))
-                    end do
-                    ! Initialize the combo box with levelIndex
-                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(levelIndex - 1, UINT_PTR), 0)
-                    ! How many items to display in dropdown
-                    !bret = SendMessage(hCombo, Z'1701', INT(min(gModIntParams%NLEV, 20)), 0) ! CB_SETMINVISIBLE = 0x1701
-
-                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_HORZ_DIMENSIONALIZE)
-                    bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
-                    call populateListControls(levelIndex)
-
+                    call initializeDialog()
                     ! Center the dialog over the application window
                     call CenterWindow (hDlg, GetWindow (hDlg, GW_OWNER))
 
@@ -137,7 +131,7 @@ module InitVariablesDialogModule
                         integer :: ios, rowClicked
                         character(len=16) :: str
                         real, pointer :: ptr(:, :)
-                        real :: val
+                        real :: val, factor
                         ! Step 1: cast lParam to a C_PTR
                         lp = lParam
                         p_raw = transfer(lp, p_raw)
@@ -169,25 +163,32 @@ module InitVariablesDialogModule
                                         ptr => getArrayFromId(INT(pnmv%hdr%idFrom))
                                         ! Converts real value to string for edit box
                                         if (pnmv%hdr%idFrom .NE. IDC_LIST_INIT_OROGRAPHY) then
-                                            val = ptr(J + 1, levelIndex)
+                                            if (isComponentView) then
+                                                val = ptr(J + 1, levelIndex)
+                                            else
+                                                val = ptr(componentIndex, J + 1)
+                                            endif
                                         else
                                             val = ptr(J + 1, 1) ! Orography case
                                         endif
                                         if (gHorzArr%isDimensionalized) then
-                                            if (J + 1 .LE. gModIntParams%LMAX2) then
-                                                val = SQRT2 * val
+                                            factor = 2.0
+                                            if (isComponentView) then
+                                                if (J + 1 .LE. gModIntParams%LMAX2) factor = SQRT2
                                             else
-                                                val = 2.0 * val
+                                                if (componentIndex .LE. gModIntParams%LMAX2) factor = SQRT2
                                             endif
+                                            val = factor * val
                                         endif
-                                        ios = RealToAsciiToReal(REAL_TO_ASCII, val, str)
+                                        write(str, '(f0.4)') val
+                                        !ios = RealToAsciiToReal(REAL_TO_ASCII, val, str)
                                         bret = SetWindowPos(hEdit, 0, 0, 0, 0, 0, SWP_NOMOVE .OR. SWP_NOSIZE .OR. SWP_FRAMECHANGED .OR. SWP_NOZORDER)
                                     end if
                                 case default
                                     InitVariablesDlgProc = 1
                                     return
                             end select
-                            bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, str)
+                            bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, trim(str)//char(0))
                         end if
                     end BLOCK
 
@@ -198,8 +199,13 @@ module InitVariablesDialogModule
                     if (ISHFT(wParam, -16) == CBN_SELCHANGE) then
                         select case(IAND(wParam, Z'FFFF'))
                             case (IDC_COMBO_LEVEL)
+                                bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
                                 levelIndex = GetComboIndex(hDlg, IDC_COMBO_LEVEL) + 1
                                 call populateListControls(levelIndex)
+                            case (IDC_COMBO_COMPONENT)
+                                bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
+                                componentIndex = GetComboIndex(hDlg, IDC_COMBO_COMPONENT) + 1
+                                call populateListControlsLevel(componentIndex)
                         end select
                     end if
 
@@ -242,7 +248,9 @@ module InitVariablesDialogModule
                             
 !--F6: View all variables ====================================================
                         case (IDC_BUTTON_VIEW_VARIABLES)
+                            bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
                             iret = DialogBoxParam(ghInstance, INT(IDD_VIEW_VARIABLES, LONG_PTR), hDlg, LOC(ViewVariablesDlgProc), 0_LONG_PTR)
+                            call initializeDialog()
                             InitVariablesDlgProc = 1
 
 !--F10: EXIT ==============================================================
@@ -262,8 +270,26 @@ module InitVariablesDialogModule
                                     call NonDimensionalizeHorizontalParams()
                                 end if
                                 bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
-                                call populateListControls(levelIndex)
+                                if (isComponentView) then
+                                    call populateListControls(levelIndex)
+                                else
+                                    call populateListControls(componentIndex)
+                                endif
 
+                            endif
+                            InitVariablesDlgProc = 1
+                            
+                        case (IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE)
+                            bret = PostMessage(hDlg, WM_APP + 300, 0, 0)
+                            if (ISHFT(wParam, -16) == BN_CLICKED) then
+
+                                ! Now we ask Windows: "Is it checked or not?"
+                                if (IsDlgButtonChecked(hDlg, IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE) == BST_UNCHECKED) then
+                                    isComponentView = .FALSE.
+                                else
+                                    isComponentView = .TRUE.
+                                endif
+                                call initializeDialog()
                             endif
                             InitVariablesDlgProc = 1
 
@@ -281,7 +307,7 @@ module InitVariablesDialogModule
                                         character(LEN=16) :: strC ! C-string will have null terminator
                                         integer :: ios, rowClicked
                                         real, pointer :: ptr(:, :)
-                                        real :: val
+                                        real :: val, factor
                                         logical, save :: isUpdating = .FALSE.
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
                                         
@@ -319,22 +345,29 @@ module InitVariablesDialogModule
                                             if (GetDlgCtrlID(hList) == IDC_LIST_INIT_OROGRAPHY) then
                                                 val = ptr(rowClicked + 1, 1)
                                             else
-                                                val = ptr(rowClicked + 1, levelIndex)
-                                            endif
-                                            if (gHorzArr%isDimensionalized) then
-                                                if (rowClicked + 1 .LE. gModIntParams%LMAX2) then
-                                                    val = SQRT2 * val
+                                                if (isComponentView) then
+                                                    val = ptr(rowClicked + 1, levelIndex)
                                                 else
-                                                    val = 2.0 * val
+                                                    val = ptr(componentIndex, rowClicked + 1)
                                                 endif
                                             endif
-                                            ios = RealToAsciiToReal(REAL_TO_ASCII, val, strC)
+                                            if (gHorzArr%isDimensionalized) then
+                                                factor = 2.0
+                                                if (isComponentView) then
+                                                    if (rowClicked + 1 .LE. gModIntParams%LMAX2) factor = SQRT2
+                                                else
+                                                    if (componentIndex .LE. gModIntParams%LMAX2) factor = SQRT2
+                                                endif
+                                                val = factor * val
+                                            endif
+                                            !ios = RealToAsciiToReal(REAL_TO_ASCII, val, strC)
+                                            write(strC, '(f0.4)') val
                                             !strC = getStringFromRealForEditBox(ptr(rowClicked + 1))
-                                            bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, strC)
+                                            bret = SetDlgItemText(hDlg, IDC_EDIT_HORZ, trim(strC)//char(0))
                                             isUpdating = .FALSE.
                                             exit EN
                                         end if
-                                        call updateListViewValue(hEdit, hList, rowClicked, strC)
+                                        call updateListViewValue(hEdit, hList, rowClicked, trim(strC)//char(0))
                                         isUpdating = .FALSE.
                                     end BLOCK EN
                             end SELECT
@@ -375,19 +408,95 @@ module InitVariablesDialogModule
                         gHorzArr%PS(KL, N) = .1 * scale * REAL(N - 1) / REAL(gModIntParams%NLEV)
                     END DO
                 end subroutine CreateEquivBarotropic
+                
+                subroutine initializeDialog()
+                    implicit none
+
+                    hCombo = GetDlgItem(hDlg, IDC_COMBO_LEVEL)
+                    bret = SendMessage(GetDlgItem(hDlg, IDC_COMBO_LEVEL), CB_RESETCONTENT, 0, 0) ! Clear items already in levels combo box
+                    do i = 1, gModIntParams%NLEV
+                        write(buffer, '(F6.1)') gVertArr%PV(i)
+                        bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(trim(buffer)//char(0)))
+                    end do
+                    ! Initialize the combo box with levelIndex
+                    bret = SendMessage(hCombo, CB_SETCURSEL, INT(levelIndex - 1, UINT_PTR), 0)
+                    ! How many items to display in dropdown
+                    !bret = SendMessage(hCombo, Z'1701', INT(min(gModIntParams%NLEV, 20)), 0) ! CB_SETMINVISIBLE = 0x1701
+
+                    if (IsDlgButtonChecked(hDlg, IDC_CHECK_HORZ_DIMENSIONALIZE) /= 0) then
+                        ! User checked it - update your variable/logic here
+                        call DimensionalizeHorizontalParams()
+                    else
+                        ! User unchecked it
+                        call NonDimensionalizeHorizontalParams()
+                    end if
+
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE)
+                    if (isComponentView) then
+                        bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
+                    else
+                        bret = SendMessage(hCheckBox, BM_SETCHECK, BST_UNCHECKED, 0)
+                    endif
+                    if (isComponentView) then
+                        bret = SendMessage(hCheckBox, BM_SETCHECK, BST_CHECKED, 0)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_COMBO_COMPONENT), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_COMBO_COMPONENT), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_COMBO_LEVEL), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_COMBO_LEVEL), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_LIST_INIT_OROGRAPHY), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_INIT_OROGRAPHY), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_INIT_ZERO_OROGRAPHY), SW_SHOW)
+                        call populateListControls(levelIndex)
+                    else
+                        bret = SendMessage(hCheckBox, BM_SETCHECK, BST_UNCHECKED, 0)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_COMBO_COMPONENT), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_COMBO_COMPONENT), SW_SHOW)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_COMBO_LEVEL), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_COMBO_LEVEL), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_LIST_INIT_OROGRAPHY), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_STATIC_INIT_OROGRAPHY), SW_HIDE)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_BUTTON_INIT_ZERO_OROGRAPHY), SW_HIDE)
+                        hCombo = GetDlgItem(hDlg, IDC_COMBO_COMPONENT)
+                        bret = SendMessage(hCombo, CB_RESETCONTENT, 0, 0) ! Clear items already in components combo box
+                        do i = 1, gCurrentDims%ITOT
+                            if (I <= gModIntParams%LMAX2) then
+                                write(description, '(A, I0, A)') "cos", i, "y"
+                                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(description//char(0)))
+                            else
+                                waveStart = (i - gModIntParams%LMAX2)
+                                ! pattern is cosKnxsinLy, sinKnxsinLy, for all L and then for all K
+                                K = (waveStart - 1) / (2 * gModIntParams%LMAX2) + 1
+                                L = mod(waveStart - 1, 2 * gModIntParams%LMAX2) / 2 + 1
+                                if (mod(waveStart, 2) == 1) then
+                                    ! Print out the cosKxSinLy for every odd waveStart
+                                    write(description, '(A, I0, A, I0, A)') "cosn", k, "x sin", L, "y"
+                                else
+                                    ! Print out the sinKxSinLy for every even waveStart
+                                    write(description, '(A, I0, A, I0, A)') "sinn", k, "x sin", L, "y"
+                                endif
+                                bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc(description//char(0)))
+                            endif
+                        end do
+                        bret = SendMessage(hCombo, CB_SETCURSEL, INT(componentIndex - 1, UINT_PTR), 0) ! These are not zero based in our code
+                        call populateListControlsLevel(componentIndex)
+                    endif
+                end subroutine initializeDialog
 
                 subroutine populateListControls(N)
                     implicit none
 
                     integer, intent(in) :: N
 
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Component", "meters"], gHorzArr%PS, N)
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Component", ACHAR(176)//"C"], gHorzArr%TF, N)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Component", "meters"], gHorzArr%PS, N, isComponentView)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Component", ACHAR(176)//"C"], gHorzArr%TF, N, isComponentView)
                     ! The topography is a one-d array. We need to fake a two-d array to reuse the same handleIntListControl subroutine. 
                     ! The second dimension is just 1 in this case and the subroutine will index it accordingly.
                     ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1)
-                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, N)
+                    if (isComponentView) then
+                        call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Component", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), &
+                            1, isComponentView)
+                    endif
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Component", "meters"], gHorzArr%SF, N, isComponentView)
                     ! Keep forgetting about MERGE
                     hList = GetDlgItem(hDlg, IDC_LIST_INIT_TEMP_DRIVING)
                     bret = EnableWindow(hList, MERGE(1, 0, N < gModIntParams%NLEV))
@@ -405,6 +514,38 @@ module InitVariablesDialogModule
                     END IF
 
                 end subroutine populateListControls
+                
+                
+                subroutine populateListControlsLevel(componentIndex)
+                    implicit none
+
+                    integer, intent(in) :: componentIndex
+
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM, ["Level", "meters"], gHorzArr%PS, componentIndex, isComponentView)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_TEMP_DRIVING, ["Level", ACHAR(176)//"C"], gHorzArr%TF, componentIndex, isComponentView)
+                    ! The topography is a one-d array. We need to fake a two-d array to reuse the same handleIntListControl subroutine. 
+                    ! The second dimension is just 1 in this case and the subroutine will index it accordingly.
+                    ! Apparently fortran has a 'reshape' function that can do just this kind of thing!
+                    !call handleIntListControl(hDlg, IDC_LIST_INIT_OROGRAPHY, ["Level", "meters"], reshape(gHorzArr%TOP, [gCurrentDims%ITOT, 1]), 1, isComponentView)
+                    call handleIntListControl(hDlg, IDC_LIST_INIT_STRM_DRIVING, ["Level", "meters"], gHorzArr%SF, componentIndex, isComponentView)
+                    ! Keep forgetting about MERGE
+                    hList = GetDlgItem(hDlg, IDC_LIST_INIT_TEMP_DRIVING)
+                    bret = EnableWindow(hList, MERGE(1, 0, componentIndex < gModIntParams%NLEV))
+                    ! Disabling does not 'gray out' the control. So one has to do it manually.
+                    IF (componentIndex < gModIntParams%NLEV) THEN
+                        ! RESTORE to standard colors (Black text on White background)
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(0, 0, 0), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(255, 255, 255), kind=8))
+                    ELSE
+                        ! SET to "Grayed" colors
+                        bret = SendMessage(hList, LVM_SETTEXTCOLOR, 0, INT(RGB(128, 128, 128), kind=8))
+                        bret = SendMessage(hList, LVM_SETBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                        bret = SendMessage(hList, LVM_SETTEXTBKCOLOR, 0, INT(RGB(240, 240, 240), kind=8))
+                    END IF
+
+                end subroutine populateListControlsLevel
+
 
                 ! Set of 'contained' subroutine and function to link list control rows to the corresponding arrays
                 ! Contained methods have access to all declared variables in the parent function so one does not 
@@ -557,8 +698,10 @@ module InitVariablesDialogModule
                     end if
                 end function getRowClickedFromId
         end function InitVariablesDlgProc
+        
+!-------------------- External helper functions.
 
-        subroutine handleIntListControl(hDlg, id, labels, horzArr, level)
+        subroutine handleIntListControl(hDlg, id, labels, horzArr, index, isComponentView)
             use ifwinty
             use ifwin
             use DialogHelpersModule, only: EnsureListViewColumns, ResizeListViewToFitItems
@@ -570,7 +713,8 @@ module InitVariablesDialogModule
             integer, intent(in) :: id
             character(len=*), intent(in) :: labels(:)
             REAL, intent(in) :: horzArr(:, :)
-            integer, intent(in) :: level
+            integer, intent(in) :: index
+            logical, intent(in) :: isComponentView
 
             integer(HANDLE) :: hList 
             integer(bool) :: bret
@@ -585,7 +729,11 @@ module InitVariablesDialogModule
             widths(1) = 128  ! This is a hard coded width for the first column. It will only contain 'Level n'.
             widths(2) = rc%right - rc%left - widths(1)  ! buffer for margin/scrollbar is 16 but that is not to be there
             call EnsureListViewColumns(hList, labels, widths)
-            call loadLevelsValuesIntoListView(hList, horzArr, level)
+            if (isComponentView) then
+                call loadLevelsValuesIntoListView(hList, horzArr, index) ! Show all the component for a given level
+            else
+                call loadComponentValuesIntoListView(hList, horzArr, index) ! Show all the levels for a given component
+            endif
             bret = SendMessage(hList, LVM_ENSUREVISIBLE, 0, 0)
             bret = UpdateWindow(hList)
 
@@ -633,7 +781,7 @@ module InitVariablesDialogModule
             do i = 1, gCurrentDims%ITOT
                 if (I <= gModIntParams%LMAX2) then
                         write(description, '(A, I0, A)') "cos", i, "y"
-                        call AddListViewRowReal(hList, description, [zonalFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
+                        call AddListViewRowReal(hList, description, [zonalFactor * horzArr(i, level)], '(F0.4)') ! The 'trim' is done in the called subroutine
                 else
                     waveStart = (i - gModIntParams%LMAX2)
                     ! pattern is cosKnxsinLy, sinKnxsinLy, for all L and then for all K
@@ -646,11 +794,43 @@ module InitVariablesDialogModule
                         ! Print out the sinKxSinLy for every even waveStart
                         write(description, '(A, I0, A, I0, A)') "sinn", k, "x sin", L, "y"
                     endif
-                    call AddListViewRowReal(hList, description, [waveFactor * horzArr(i, level)], '(F8.3)') ! The 'trim' is done in the called subroutine
+                    call AddListViewRowReal(hList, description, [waveFactor * horzArr(i, level)], '(F0.4)') ! The 'trim' is done in the called subroutine
                 endif
             end do
             i = SendMessage(hList, LVM_ENSUREVISIBLE, INT(gCurrentDims%ITOT - 1, INT_PTR_KIND()), TRUE)
         end subroutine loadLevelsValuesIntoListView
+        
+        subroutine loadComponentValuesIntoListView(hList, horzArr, component)
+            use ifwinty
+            use ifwin
+            use ConstantsModule, only: SQRT2
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelParamsModule, only: gModIntParams
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use DialogHelpersModule, only : AddListViewRowReal
+             
+            implicit none
+        
+            integer(HANDLE), intent(in) :: hList
+            REAL, intent(in) :: horzArr(:, :)
+            integer, intent(in) :: component
+
+            integer :: i, K, L, waveStart
+            character(len=32) :: description
+            real :: factor
+
+            factor = 1.0
+
+            if (gHorzArr%isDimensionalized) then
+                factor = 2.0
+                if (component .LE. gModIntParams%LMAX2) factor = SQRT2
+            endif
+            do i = 1, gModIntParams%NLEV
+                write(description, '(F0.1)') gVertArr%PV(i)
+                call AddListViewRowReal(hList, description, [factor * horzArr(component, i)], '(F0.4)') ! The 'trim' is done in the called subroutine
+            end do
+            i = SendMessage(hList, LVM_ENSUREVISIBLE, INT(gCurrentDims%ITOT - 1, INT_PTR_KIND()), TRUE)
+        end subroutine loadComponentValuesIntoListView
 
         ! Just to simplify code parsing in the dialog procedure. The user has clicked on
         ! one of the real parameters and this method gets the real value and converts it

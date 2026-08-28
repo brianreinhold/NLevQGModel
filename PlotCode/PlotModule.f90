@@ -229,6 +229,8 @@ module PlotModule
         logical :: isPeriodicX = .TRUE.
     end type InterpolationBounds
     
+    Logical :: gViewOnly = .FALSE.
+    
 !=====================  SUBMODULE INTERFACES ============================
 ! These are subroutines implemented in submodules. In order to put subroutine
 ! belonging to this module in another file one has to create 'submodules' and
@@ -938,12 +940,16 @@ module PlotModule
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
         !> and gDataType%dataSource (where the data to be plotted is coming from the model, a file
         !> or a set of ensemble files
-        subroutine outputPlot()
+        subroutine outputPlot(viewOnly)
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LON, &
                 HOV_DIAG_AT_LON, PHASE_SPACE, ZONAL_WAVE_ENERGY, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, SECONDS_PER_DAY
             use ModelParamsModule, only: gModIntParams, gModRealParams, gScaleFactors
 
             IMPLICIT NONE
+            
+            Logical, intent(in) :: viewOnly
+            
+            gViewOnly = viewOnly
 
             ! Allows the user to interact with the program.
             CALL PumpMessages()

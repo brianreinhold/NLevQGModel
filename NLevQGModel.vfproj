@@ -90,15 +90,14 @@
 			</Filter>
 			<Filter Name="PlotCode">
 				<File RelativePath=".\PlotCode\AxesSubModule.f90"/>
-				<File RelativePath=".\PlotCode\InterpolateSubModule.f90">
+				<File RelativePath=".\HelpTextModule.f90">
 				</File>
-				<File RelativePath=".\PlotCode\PlotModule.f90">
-				</File>
+				<File RelativePath=".\PlotCode\InterpolateSubModule.f90"/>
+				<File RelativePath=".\PlotCode\PlotModule.f90"/>
 				<File RelativePath=".\PlotCode\SvgSubModule.f90">
 				</File>
 			</Filter>
-			<File RelativePath=".\NLevQGModel.f90">
-			</File>
+			<File RelativePath=".\NLevQGModel.f90"/>
 			<File RelativePath=".\NLevQGModelglobals.f90"/>
 			<File RelativePath=".\WndProcInterfacesModule.f90"/>
 		</Filter>

@@ -83,7 +83,7 @@ module ModelControlDialogModule
 
             integer :: newValue      ! For editing the displayed value in the list box
             LOGICAL :: res
-            logical, save :: isDimensional = .true.
+            logical, save :: isDimensional = .true., viewOnly = .FALSE.
 
             ModelControlDlgProc = 0
 
@@ -351,6 +351,12 @@ module ModelControlDialogModule
                                     gHorzArr%T = 0.0 ! Remove any temperature dissipative or forcing terms
                                 endif
                             endif
+                        
+                        case (IDC_CHECK_VIEW_MODEL)
+                            call cleanUpEditBoxes()
+                            if (ISHFT(wParam, -16) == BN_CLICKED) then
+                                viewOnly = (IsDlgButtonChecked(hDlg, IDC_CHECK_VIEW_MODEL) .NE. 0)
+                            endif
 
 ! ------------------ Now to handle the F1-F10 buttons
 ! ---- F1:  Run Model
@@ -469,10 +475,25 @@ module ModelControlDialogModule
                 
                 !-------- F1: run model
                 subroutine setupAndRunModel()
-                    use ConstantsModule, only: ERR_NUMERIC_INSTABILITY
+                use ConstantsModule, only: ERR_NUMERIC_INSTABILITY, PAUSED, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
                     use ModelFieldsModule, only: ZeroEnergyArrays
+                    use ModelParamsModule, only: gModelState
+                    use PlotModule, only: outputPlot
                     implicit none
 
+                    logical :: isMap
+                    
+                    isMap = (gModIntParams%plotType == WEATHER_MAP .OR.  &
+                             gModIntParams%plotType == PHASE_AND_MAP .OR. &
+                             gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                             gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+                    if (viewOnly .AND. .NOT. isMap) then
+                        bret = MessageBox (hDlg, &
+                            "Cannot view Hovmollers or graphs as they require several time steps to generate."C, &
+                            "Can only view maps!"C, &
+                            IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
+                        return
+                    endif
                     call cleanUpEditBoxes()
                     ! paramChange is defined in KeyboardHooksModule
                     ! This routine checks for any changes and makes sure that they are in bounds and then will reallocate
@@ -494,15 +515,20 @@ module ModelControlDialogModule
                     call ClearScreen()
                     bret = SetFocus(ghwndMain)
                     call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
-                    ret = StartTimeLoop()
-                    if (ret == ERR_NUMERIC_INSTABILITY) then
-                        bret = MessageBox (hDlg, &
-                            "The model has gone unstable. Dependent variables reset"C, &
-                            "Numeric Instability!"C, &
-                            IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
-                        bret = EnableWindow(hDlg, .TRUE.)
-                        bret = SetFocus(hDlg)
-                        bret = SetActiveWindow(hDlg)
+                    if (viewOnly) then
+                        gModelState%runState = PAUSED
+                        call outputPlot(.TRUE.)
+                    else
+                        ret = StartTimeLoop()
+                        if (ret == ERR_NUMERIC_INSTABILITY) then
+                            bret = MessageBox (hDlg, &
+                                "The model has gone unstable. Dependent variables reset"C, &
+                                "Numeric Instability!"C, &
+                                IOR(MB_SYSTEMMODAL, IOR(MB_OK, MB_ICONHAND)))
+                            bret = EnableWindow(hDlg, .TRUE.)
+                            bret = SetFocus(hDlg)
+                            bret = SetActiveWindow(hDlg)
+                        endif
                     endif
                     call SetModRealParamsDimensionalState(isDimensional)
                     call initializeDialog()
@@ -518,19 +544,27 @@ module ModelControlDialogModule
                     character(len=32) :: description
                     call cleanUpEditBoxes()
                     call SetModRealParamsDimensionalState(isDimensional)
+                    
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE)
                     if (isDimensional) then
                         bret = CheckDlgButton(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE, BST_CHECKED)
                     else
                         bret = CheckDlgButton(hDlg, IDC_CHECK_MODREAL_DIMENSIONALIZE, BST_UNCHECKED)
-                    end if                    
+                    end if
+                    
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_RUN_INVISCID)
                     if (gModelState%runInviscid) then
                         bret = CheckDlgButton(hDlg, IDC_CHECK_RUN_INVISCID, BST_CHECKED)
                     else
                         bret = CheckDlgButton(hDlg, IDC_CHECK_RUN_INVISCID, BST_UNCHECKED)
                     end if
-
+                    
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VIEW_MODEL)
+                    if (viewOnly) then
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_MODEL, BST_CHECKED)
+                    else
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_MODEL, BST_UNCHECKED)
+                    end if
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgModelControlProc), NULL, GetCurrentThreadId())
                     ghModelControlDlg = hDlg
@@ -605,7 +639,7 @@ module ModelControlDialogModule
                     bret = SendMessage(hCombo, CB_ADDSTRING, 0, loc('Not implemented yet - dont use'//char(0)))
                     ! initialize
                     bret = SendMessage(hCombo, CB_SETCURSEL, INT(gModIntParams%modelType, UINT_PTR), 0) ! These are zero based in our code
-                    
+
                     !! ============================ Phase Space components
                     do M = 1, 2
                         if (M == 1) then

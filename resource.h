@@ -136,8 +136,9 @@
 #define IDC_STATIC_VIEW_HTG_TEND_INFO   1101
 #define IDC_STATIC_VIEW_TEMP_TEND_INFO  1102
 #define IDC_STATIC_VERT_EDIT_TROPOPAUSE 1102
-#define IDC_EDIT2                       1103
 #define IDC_EDIT_VERT_TROPOPAUSE        1103
+#define IDC_CHECK_VIEW_MODEL            1104
+#define IDC_COMBO_COMPONENT             1105
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -147,7 +148,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1104
+#define _APS_NEXT_CONTROL_VALUE         1106
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

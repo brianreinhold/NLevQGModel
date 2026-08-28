@@ -469,7 +469,7 @@ module KeyboardHooksModule
                     IF (wParam == VK_F6 .AND. IAND(lParam, Z'80000000') /= 0) THEN ! Respond to only key up; lParam bit 31 set
                         ! F6: 
                         call LogMessage('User pressed F6 key in InitVariables Dialog')
-                        iret = DialogBoxParam(ghInstance, INT(IDD_VIEW_VARIABLES, LONG_PTR), ghInitVariablesDlg, LOC(ViewVariablesDlgProc), 0_LONG_PTR)
+                        bret = PostMessage(ghInitVariablesDlg, WM_APP + 306, 0, 0)
                         KeyboardForDlgInitVariablesProc = 1  ! Swallow the key
                         RETURN
                     END IF

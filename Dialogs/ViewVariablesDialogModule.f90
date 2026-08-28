@@ -182,7 +182,6 @@ module ViewVariablesDialogModule
                     ViewVariablesDlgProc = 1
 
                 case (WM_DESTROY)
-                    !bret = WriteCurrentStateToFile(hDlg, gModelSaveFile, gModelWelford, .true.)
                     bret = UnhookWindowsHookEx(hHook)
                     call NonDimensionalizeHorizontalParams()
                     ghViewVariablesDlg = 0

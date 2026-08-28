@@ -436,7 +436,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot, getYValues, gElapsedTime, gPressure, GenerateSVG, X1, X2
+    use PlotModule, only: ClearScreen, initializePlot, outputPlot, getYValues, gElapsedTime, gPressure, gViewOnly, GenerateSVG, X1, X2
+    use HelpTextModule, only: PLOT_HELP_TEXT
 
     implicit none
 
@@ -734,8 +735,12 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         case (WM_KEYUP)
             ! wParam contains the Virtual Key code
             select case (wParam)
+    ! H Help key -----------------------
+                case (Z'48')  ! <--- THIS CATCHES 'H' or 'h' REGARDLESS OF CASE. Windows passes hex 48 (ASCII 72) for the physical H key
+                    lret = MessageBox(hWnd, PLOT_HELP_TEXT, "Help"C, MB_OK)
     ! F1: PAUSE/RESUME -----------------------
                 case (VK_F1)
+                    if (gViewOnly) return
                     if (gModelState%runState .NE. RUNNING) then
                         call SetModRealParamsDimensionalState(.false.)
                         call LogMessage("User resuming run")
@@ -777,7 +782,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call LogMessage("User cleared screen")
     ! F4: Change Field 1 -----------------------
                 case (VK_F4)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
                         if (GetKeyState(VK_SHIFT) < 0) then
                             gModIntParams%field1 = gModIntParams%field1 - 1
@@ -787,12 +792,13 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                             if (gModIntParams%field1 .GT. PLOTTING_OFF) gModIntParams%field1 = VORTICITY
                         endif
                         call initializePlot()
-                        call ClearScreen()                        
+                        call ClearScreen()
+                        if (gViewOnly) call outputPlot(gViewOnly)
                         call LogMessage("User changed field 1")
                     endif
     ! F5: Change Field 1 -----------------------
                 case (VK_F5)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
                         if (GetKeyState(VK_SHIFT) < 0) then
                             gModIntParams%field2 = gModIntParams%field2 - 1
@@ -802,7 +808,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                             if (gModIntParams%field2 .GT. PLOTTING_OFF) gModIntParams%field2 = VORTICITY
                         endif
                         call initializePlot()
-                        call ClearScreen()                        
+                        call ClearScreen()
+                        if (gViewOnly) call outputPlot(gViewOnly)
                         call LogMessage("User changed field 1")
                     endif
     ! F6: Create SVG file from plot -----------------------
@@ -813,7 +820,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
     ! Up/Down: Change Levels or move lat/lon in vertical cross sections
                 case (VK_UP)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat + 5.0 * DEGREES_TO_RAD
@@ -836,8 +843,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
+                    if (gViewOnly) call outputPlot(gViewOnly)
                 case (VK_DOWN)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT) then
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%hovLat = gModRealParams%hovLat - 5.0 * DEGREES_TO_RAD
@@ -860,12 +868,13 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ! Need to recompute the specific plot types struct values
                     call initializePlot()
                     call ClearScreen()
+                    if (gViewOnly) call outputPlot(gViewOnly)
                 ! Left arrow key
                 ! Vertical Hovmoller at point moves longitude point WESTWARD (Poleward is done by up arrow)
                 ! Hovmoller at latitude moves latitude EQUATORWARD
                 ! Hovmoller at longitude moves longitude WESTWARD
                 case (VK_LEFT)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
                         call LogMessage("User moving equatorward 5 degrees Latitude")
                         gModRealParams%latPoint = gModRealParams%latPoint - 5.0 * DEGREES_TO_RAD
@@ -891,13 +900,14 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
                     call initializePlot()
                     call ClearScreen()
+                    if (gViewOnly) call outputPlot(gViewOnly)
                     
                 ! Right arrow key shift handles the equatorward/poleward shift of the weather station
                 ! Vertical Hovmoller at point moves latitude point EASTWARD (equatorward is done by down arrow)
                 ! Hovmoller at latitude moves latitude POLEWARD
                 ! Hovmoller at longitude moves longitude EASTWARD
                 case (VK_RIGHT)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (GetKeyState(VK_SHIFT) < 0 .AND. gModIntParams%plotType == WEATHER_STN) then
                         call LogMessage("User moving poleward 5 degrees Latitude")
                         gModRealParams%latPoint = gModRealParams%latPoint + 5.0 * DEGREES_TO_RAD
@@ -923,6 +933,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
                     call initializePlot()
                     call ClearScreen()
+                    if (gViewOnly) call outputPlot(gViewOnly)
                 case (VK_ESCAPE)
                     call PostQuitMessage(0)
             end select
