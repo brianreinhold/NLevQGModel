@@ -55,6 +55,7 @@
 #define IDC_BUTTON_VIEW_STATISTICS2     1047
 #define IDC_LIST_TEMPERATURES           1047
 #define IDC_EDIT_BOMB_MERID_WAVE        1047
+#define IDC_BUTTON_VIEW_STATISTICS      1047
 #define IDC_STATIC_TEMPERATURES         1048
 #define IDC_BUTTON_CLEAR_SCREEN         1048
 #define IDC_EDIT_BOMB_STRM_AMP          1048
@@ -95,6 +96,7 @@
 #define IDC_COMBO_LEVEL                 1073
 #define IDC_COMBO_PHASE_SPACE_X         1073
 #define IDC_COMBO_VIEW_LEVELS           1073
+#define IDC_COMBO_VIEW_LEVEL            1073
 #define IDC_STATIC_COMBO_LEVEL          1074
 #define IDC_COMBO_PHASE_SPACE_X2        1074
 #define IDC_COMBO_PHASE_SPACE_Y         1074
@@ -118,6 +120,7 @@
 #define IDC_LIST_VIEW_VARIABLES         1083
 #define IDC_BUTTON_EXIT_VIEW_VARIABLES  1085
 #define IDC_STATIC_VIEW_LEVELS          1086
+#define IDC_STATIC_VIEW_LEVEL           1086
 #define IDC_BUTTON1                     1087
 #define IDC_BUTTON_VIEW_VARIABLES       1087
 #define IDC_BUTTON_EXIT_BOMB            1087
@@ -139,6 +142,10 @@
 #define IDC_EDIT_VERT_TROPOPAUSE        1103
 #define IDC_CHECK_VIEW_MODEL            1104
 #define IDC_COMBO_COMPONENT             1105
+#define IDC_CHECK_VIEW_AVERAGES         1106
+#define IDC_CHECK_VIEW_COMPONENT_LEVEL_TOGGLE 1107
+#define IDC_STATIC_VIEW_COMPONENT       1108
+#define IDC_COMBO_VIEW_COMPONENT        1109
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -148,7 +155,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1106
+#define _APS_NEXT_CONTROL_VALUE         1110
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -369,7 +369,7 @@ module SettingsDialogModule
             pt%y = rc%top
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
             ! The makes the height sized to encompass the actual number of rows added
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, 14)
         end subroutine handleIntListControl
 
         subroutine loadSettingsIntItemsIntoListControl(hList)

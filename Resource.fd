@@ -8,7 +8,9 @@
       integer, parameter :: IDC_EDIT_VERT_TROPOPAUSE = 1103
       integer, parameter :: IDC_BUTTON_RETURN_TO_MAIN = 1050
       integer, parameter :: IDC_STATIC_TEMPERATURES = 1048
+      integer, parameter :: IDC_STATIC_VIEW_COMPONENT = 1108
       integer, parameter :: IDC_EDIT_BOMB_TEMP_AMP = 1049
+      integer, parameter :: IDC_COMBO_VIEW_COMPONENT = 1109
       integer, parameter :: IDC_CHECK_MODREAL_DIMENSIONALIZE = 1060
       integer, parameter :: IDC_STATIC_VERT_PROFILES = 1100
       integer, parameter :: IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE = 1081
@@ -17,10 +19,12 @@
       integer, parameter :: IDC_CHECK_BOMB_ADD = 1081
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
       integer, parameter :: IDC_COMBO_COMPONENT = 1105
+      integer, parameter :: IDC_CHECK_VIEW_AVERAGES = 1106
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
       integer, parameter :: IDC_REALVALUES = 1023
       integer, parameter :: IDD_VERTICAL_PARAMS = 108
       integer, parameter :: IDC_BUTTON_EXIT_INIT_VARIABLES = 1063
+      integer, parameter :: IDC_CHECK_VIEW_COMPONENT_LEVEL_TOGGLE = 1107
       integer, parameter :: IDC_USERSETTINGS = 1008
       integer, parameter :: IDC_COMBO_USERSETTINGS1 = 1013
       integer, parameter :: IDC_INTEGERVALUES = 1024
@@ -44,6 +48,7 @@
       integer, parameter :: IDD_INIT_VARIABLES = 110
       integer, parameter :: IDC_EDIT_HORZ = 1046
       integer, parameter :: IDC_BUTTON_EDIT_REAL_DONE = 1035
+      integer, parameter :: IDC_BUTTON_VIEW_STATISTICS = 1047
       integer, parameter :: IDC_STATIC_COMBO_COMPONENT = 1089
       integer, parameter :: IDC_BUTTON_SET_SCALE_FACTORS = 1021
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY = 1069
@@ -71,6 +76,7 @@
       integer, parameter :: IDC_STATIC_COMBO_FIELD2 = 1034
       integer, parameter :: IDC_COMBO_PHASE_SPACE_X = 1073
       integer, parameter :: IDC_CHECK_RUN_INVISCID = 1081
+      integer, parameter :: IDC_STATIC_VIEW_LEVEL = 1086
       integer, parameter :: ID_CONFIGURATION_SETTINGS = 30016
       integer, parameter :: IDC_STATIC_BOMB_ZONAL_WAVE = 1090
       integer, parameter :: IDC_STATIC_COMBO_LEVEL = 1074
@@ -99,6 +105,7 @@
       integer, parameter :: IDC_BUTTON_SENSITIVITY_FILES = 1020
       integer, parameter :: IDC_BUTTON1 = 1087
       integer, parameter :: IDC_STATIC_BOMB_PHASE_DIFF = 1094
+      integer, parameter :: IDC_COMBO_VIEW_LEVEL = 1073
       integer, parameter :: IDC_COMBO_PHASE_SPACE_X2 = 1074
       integer, parameter :: IDC_EDIT_BOMB_EXPONENT = 1051
       integer, parameter :: IDC_BUTTON_VIEW_VARIABLES = 1087

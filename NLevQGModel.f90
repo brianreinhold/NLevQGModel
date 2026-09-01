@@ -717,7 +717,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
         case (WM_SYSKEYUP)
             ! Will cause the model to quit on the next plot check.
             if (wParam == VK_F10) then
-                if (gModelState%runState .NE. STOPPED) then
+                if (gViewOnly) gModelState%runState = STOPPED ! Return immediately to Model Control with F10 when not running model.
+                
+                if (gModelState%runState .NE. STOPPED) then ! When model is running, we set to stopped so the integration loop catches the
+                                                            ! the stopped state and terminates the run. 
                     gModelState%runState = STOPPED
                     call LogMessage("User stopped run using F10")
                 else
@@ -755,7 +758,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     endif
     ! F2: Change Plot type -----------------------
                 case (VK_F2)
-                    if (gModelState%runState .NE. RUNNING) return
+                    if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     ! Check if the SHIFT key is pressed
                     ! GetKeyState returns a negative value if the high-order bit is set
                     if (GetKeyState(VK_SHIFT) < 0) then
@@ -770,11 +773,12 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     current_val1 = -1.0
                     call initializePlot()
                     call ClearScreen()
-                    if (gModelState%runState .NE. RUNNING) then
-                        call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
-                        call SetModRealParamsDimensionalState(.false.)
-                        ret = StartTimeLoop()
-                    end if
+                    if (gViewOnly) call outputPlot(gViewOnly)
+                    !if (gModelState%runState .NE. RUNNING) then
+                    !    call LogMessage("Plot type changed while model was stopped or paused. Restarting model")
+                    !    call SetModRealParamsDimensionalState(.false.)
+                    !    ret = StartTimeLoop()
+                    !end if
 
     ! F3: Clear Screen -----------------------
                 case (VK_F3)

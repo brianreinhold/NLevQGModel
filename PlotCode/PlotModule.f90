@@ -1705,7 +1705,7 @@ module PlotModule
             ! The levelt is for the interface. 
 
             select case (field)
-            case(VORTICITY)             ! Vorticity in 10**-5/s
+                case(VORTICITY)             ! Vorticity in 10**-5/s
 
                     DO I = 1, SIZE(gHorzArr%PS, 2)
                         gHorzArr%ZS(:, I) = -gHorzArr%AKL(:) * gHorzArr%PS(:, I)

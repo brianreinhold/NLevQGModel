@@ -60,8 +60,8 @@ module InitVariablesDialogModule
             type(T_RECT) :: rc
             type(T_POINT) :: pt
 
-            integer, save :: levelIndex = 1     ! Current levelIndex when the list view displays the components at a given level
-            integer, save :: componentIndex = 1 ! Current componentIndex when the list view displays levels for a given component
+            integer, save :: levelIndex = 1     ! Current levelIndex when the list view displays the components at a given level. Used when isComponentView is TRUE
+            integer, save :: componentIndex = 1 ! Current componentIndex when the list view displays levels for a given component. Used when isComponentView is FALSE
             logical, save :: isComponentView = .TRUE.  ! TRUE: list view shows components at a given level. FALSE: list view shows levels for a given component 
             
             character(len=32) :: description
@@ -335,9 +335,13 @@ module InitVariablesDialogModule
                                         
                                         ! Load the new value into the correct array index field
                                         if (GetDlgCtrlID(hList) == IDC_LIST_INIT_OROGRAPHY) then
-                                            ios = readRealDataFromEditBox(str, rowClicked, ptr, 1)
+                                            ios = readRealDataFromEditBox(str, rowClicked, ptr, 1, isComponentView)
                                         else
-                                            ios = readRealDataFromEditBox(str, rowClicked, ptr, levelIndex)
+                                            if (isComponentView) then  ! list view shows components at a given level
+                                                ios = readRealDataFromEditBox(str, rowClicked, ptr, levelIndex, isComponentView)
+                                            else                        ! list view shows levels for a given component
+                                                ios = readRealDataFromEditBox(str, rowClicked, ptr, componentIndex, isComponentView)
+                                            endif
                                         endif
                                         !write(*, '(A, A)') "Real value 3: ", str
                                         if (ios .NE. 0) then
@@ -748,9 +752,9 @@ module InitVariablesDialogModule
             pt%x = rc%left  ! A T_POINT struct is needed to convert the screen coordinates to dlg coordinates
             pt%y = rc%top
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
-            ! The makes the height sized to encompass the actual number of rows added
+            ! This makes the height sized to encompass the actual number of rows added
             ! THe resize will skipped if there is not enough room in the dialog to show all the rows without scrolling.
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, 14, dlgHeight)
         end subroutine handleIntListControl
 
         subroutine loadLevelsValuesIntoListView(hList, horzArr, level)
@@ -854,7 +858,7 @@ module InitVariablesDialogModule
 
         ! Just to simplify code parsing in the dialog procedure. The user has edit
         ! a real parameter. This loads the edited value into the correct field
-        function readRealDataFromEditBox(str, rowClicked, horzArr, level) result(ios)
+        function readRealDataFromEditBox(str, rowClicked, horzArr, index, isComponentView) result(ios)
             use ConstantsModule, only: SQRT2
             use ModelFieldsModule, only: gHorzArr
             use ModelParamsModule, only: gModIntParams
@@ -864,7 +868,8 @@ module InitVariablesDialogModule
             CHARACTER(:), ALLOCATABLE, intent(inout) :: str
             integer, intent(in) :: rowClicked
             REAL, intent(inout) :: horzArr(:, :)
-            integer, intent(in) :: level
+            integer, intent(in) :: index
+            logical, intent(in) :: isComponentView
             
             REAL :: val
 
@@ -873,13 +878,25 @@ module InitVariablesDialogModule
             ios = 0
             read(str, *, iostat = ios) val
             if (gHorzArr%isDimensionalized) then
-                if (rowClicked + 1 .LE. gModIntParams%LMAX2) then
-                    val = val / SQRT2
+                if (isComponentView) then
+                    if (rowClicked + 1 .LE. gModIntParams%LMAX2) then
+                        val = val / SQRT2
+                    else
+                        val = val / 2.0
+                    endif
                 else
-                    val = val / 2.0
+                    if (index .LE. gModIntParams%LMAX2) then
+                        val = val / SQRT2
+                    else
+                        val = val / 2.0
+                    endif
                 endif
             endif
-            horzArr(rowClicked + 1, level) = val
+            if (isComponentView) then
+                horzArr(rowClicked + 1, index) = val
+            else
+                horzArr(index, rowClicked + 1) = val
+            endif
         end function readRealDataFromEditBox
 
 end module InitVariablesDialogModule

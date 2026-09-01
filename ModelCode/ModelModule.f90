@@ -76,7 +76,7 @@ module ModelModule
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, &
                 gContourIntervals
-            use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, gEnergyArr, G2_pool, G3_pool, ZeroHorzArrays, ZeroVerticalArrays
             use SetUpModule, only: WriteSensFileHeader, SetDimensions, ComputeVerticalProfiles, WriteFileData, CreatePerturbation, CreateBomb, DFDIAB
             use InteractionCoefficientsModule
             use NLevQGModelGlobals, only: ghwndMain, LogMessage
@@ -112,6 +112,15 @@ module ModelModule
 
 
             errorCode = 0
+            
+            ! Zero out the upper layer of the temperature variables. They are defined only between layers
+            gHorzArr%FT(:, gModIntParams%NLEV) = 0.0
+            gHorzArr%T(:, gModIntParams%NLEV) = 0.0
+            gHorzArr%ADT(:, gModIntParams%NLEV) = 0.0
+            gHorzArr%WW(:, gModIntParams%NLEV) = 0.0
+            gHorzArr%WT(:, gModIntParams%NLEV) = 0.0
+            gHorzArr%TH(:, gModIntParams%NLEV) = 0.0
+
             gModelState%runState = RUNNING
             ALLOCATE(buffer(gCurrentDims%ITOT))
             bufferIsAllocated = .TRUE.  ! Use this to make sure the buffer gets deallocated at the end of its use
@@ -276,9 +285,11 @@ module ModelModule
                             if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
                                 call ComputeZonalSpectrum()
                                 call ComputeStructures()
-                                !do N = 1, gModIntParams%NLEV
-                                !    call updateRunStats(gEnergyArr%GQ(:, N), gWelford)
-                                !end do
+                                do N = 1, gModIntParams%NLEV
+                                    call updateRunStats(gHorzArr%PS(:, N), gEnergyArr%WelfordPS(:, N))
+                                    call updateRunStats(gHorzArr%ADS(:, N), gEnergyArr%WelfordADS(:, N))
+                                    call updateRunStats(gHorzArr%ADT(:, N), gEnergyArr%WelfordADT(:, N))
+                                end do
                                 call outputPlot(.FALSE.)
                                 gHorzArr%FS = 0.0
                             endif
@@ -472,7 +483,7 @@ module ModelModule
             use ModelParamsModule, only: gModIntParams, gModRealParams, gModelState
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gVertArr
-            use, intrinsic :: ieee_arithmetic
+            !use, intrinsic :: ieee_arithmetic
 
             implicit none
 
@@ -480,9 +491,9 @@ module ModelModule
 
             !------------------------------------------Local variables:
             INTEGER :: I, K, L, N, NP, NT, ITOT
-            REAL :: AX, BRN, R, R1
-            REAL :: C, Clower, Cupper, gamma, gammaLower, alpha, alpha1 ! Terms for iterative omega loop
-            logical :: notHit
+            REAL :: BRN, R, R1
+            !REAL :: C, Clower, Cupper, gamma, gammaLower, alpha, alpha1 ! Terms for iterative omega loop
+            !logical :: notHit
 
             !-------------------------------------------------Order of events:
             !  First we compute the nonlinear terms by either transforms or interactions,
@@ -572,7 +583,7 @@ module ModelModule
                     ! Using this caused numerical instability, so we have removed this weighting.
                     !w_shear = 0.5 * (gVertArr%DP(N) + gVertArr%DP(N+1)) * del_pi
 
-                    ! 5. Nondimensional Temperature (Shear) weighted properly for variable spacing
+                    ! 5. Nondimensional Temperature (Shear) 
                     gHorzArr%TH(1:ITOT, N) = (gHorzArr%PS(1:ITOT, N + 1) - gHorzArr%PS(1:ITOT, N)) !* w_shear
             
                     ! 6. Call the non-linear advection routine
@@ -603,8 +614,30 @@ module ModelModule
                    END DO
                 END DO
             ENDIF
-            !-----------------------------------------------Compute Omega for NLEV>1:
-            K = gCurrentDims%ITOT
+            
+            call ComputeOmega()
+        !------------------------------------------------Noise filter:
+        !    DO I=1,ITOT
+        !       DO N=1,NLEV
+        !        IF(ABS(FS(I,N)).LT.5.E-08)FS(I,N)=0.
+        !        IF(ABS(PS(I,N,5)).LT.5.E-08)PS(I,N,5)=0.
+        !        IF(ABS(FT(I,N)).LT.5.E-08)FT(I,N)=0.
+        !        IF(ABS(PS(I,N,9)).LT.5.E-08)PS(I,N,9)=0.
+        !        END DO
+        !       END DO
+        END subroutine EquationSystem
+        
+        subroutine ComputeOmega()
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelParamsModule, only: gModIntParams
+            use, intrinsic :: ieee_arithmetic
+
+            implicit none
+            
+            integer :: I, N, NT, NP
+            REAL :: AX, C, Clower, Cupper, gamma, gammaLower, alpha, alpha1 ! Terms for iterative omega loop
+            logical :: notHit
 
             !============================================Omega iteration loop:
             !mu(n) = 2(p(n+1) - p(n+2))/(p(n) - p(n+2))	where the p's are the pressures of the boundary levels (PP array)
@@ -658,63 +691,6 @@ module ModelModule
                     gVertArr%X(N) = gamma / alpha
                     gVertArr%Y(N) = (gammaLower * gVertArr%Y(N - 1) + C) / alpha
                 END DO
-
-                !!------------------------------------Upper boundary to compute WW(NLEV-1):
-                !! This smoother version did not work so well but it did stop numerical instability
-                !gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
-                !
-                !!------------------------------------Compute raw WW(N) via Back-Substitution
-                !DO NT = 2, gModIntParams%NLEV - 1
-                !    N = gModIntParams%NLEV - NT
-                !    gHorzArr%WW(I, N) = gVertArr%X(N) * gHorzArr%WW(I, N + 1) + gVertArr%Y(N)
-                !END DO
-                !
-                !!------------------------------------VERTICAL SMOOTHER FOR WW (Omega)
-                !BLOCK
-                !    REAL :: ww_prev, ww_curr, ww_next
-                !    ww_prev = gHorzArr%WW(I, 1)
-                !    DO N = 2, gModIntParams%NLEV - 2
-                !        ww_curr = gHorzArr%WW(I, N)
-                !        ww_next = gHorzArr%WW(I, N + 1)
-                !
-                !        ! 3-point vertical filter
-                !        gHorzArr%WW(I, N) = ww_curr + 0.125 * (ww_prev + ww_next - 2.0 * ww_curr)
-                !
-                !        ww_prev = ww_curr 
-                !    END DO
-                !END BLOCK
-                !
-                !!-------------------------------------Strm tendency due to omega at top interface:
-                !gHorzArr%WS(I, gModIntParams%NLEV) = -gHorzArr%WW(I, gModIntParams%NLEV - 1) * gHorzArr%AKLI(I) * gVertArr%DPI(gModIntParams%NLEV)
-                !
-                !!------------------------------------Compute top level strm tendency:
-                !gHorzArr%FS(I, gModIntParams%NLEV) = gHorzArr%ADS(I, gModIntParams%NLEV) + gHorzArr%WS(I, gModIntParams%NLEV) + gHorzArr%S(I, gModIntParams%NLEV)
-                !
-                !!-------------------------------------Compute WS and FS using smoothed WW
-                !DO NT = 2, gModIntParams%NLEV - 1
-                !    N = gModIntParams%NLEV - NT
-                !    NP = N + 1
-                !
-                !    gHorzArr%WS(I, NP) = -(gHorzArr%WW(I, N) - gHorzArr%WW(I, NP)) * gVertArr%DPI(NP) * gHorzArr%AKLI(I)
-                !    gHorzArr%FS(I, NP) = gHorzArr%ADS(I, NP) + gHorzArr%WS(I, NP) + gHorzArr%S(I, NP)
-                !
-                !    IF(notHit .AND. (ABS(gHorzArr%FS(I, NP)) .GT. 1. .OR. ieee_is_nan(gHorzArr%FS(I, NP)))) THEN
-                !        print *, 'Level=', NP, ' I=', I, ' FS(I,N)=', gHorzArr%FS(I, NP), ' WS(I, NP)= ', gHorzArr%WS(I, NP), ' PS(I, NP)= ', gHorzArr%PS(I, NP)
-                !        notHit = .false.
-                !    ENDIF
-                !END DO
-                !
-                !!----------------------------------Lower level strm tendency (with orography):
-                !gHorzArr%WS(I, 1) = gHorzArr%WW(I, 1) * gVertArr%DPI(1) * gHorzArr%AKLI(I)
-                !gHorzArr%FS(I, 1) = gHorzArr%ADS(I, 1) + gHorzArr%ADO(I) + gHorzArr%WS(I, 1) + gHorzArr%S(I, 1)
-                !
-                !!-----------------------------------Load temperature arrays for diagnostics:
-                !DO N = 1, gModIntParams%NLEV - 1 
-                !    ! Calculated safely using the smoothed WW values from above
-                !    gHorzArr%WT(I, N) = gVertArr%SIG(N) * gHorzArr%WW(I, N)
-                !    gHorzArr%FT(I, N) = -gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
-                !END DO
-
                 !------------------------------------Upper boundary to compute WW(NLEV-1):
                 gHorzArr%WW(I, gModIntParams%NLEV - 1) = gVertArr%Y(gModIntParams%NLEV - 1)
                 !-------------------------------------Strm tendency due to omega:
@@ -744,17 +720,8 @@ module ModelModule
                     gHorzArr%FT(I, N) = -gHorzArr%ADT(I, N) + gHorzArr%WT(I, N) + gHorzArr%T(I, N)
                 END DO
             END DO
+        end subroutine ComputeOmega
 
-        !------------------------------------------------Noise filter:
-        !    DO I=1,ITOT
-        !       DO N=1,NLEV
-        !        IF(ABS(FS(I,N)).LT.5.E-08)FS(I,N)=0.
-        !        IF(ABS(PS(I,N,5)).LT.5.E-08)PS(I,N,5)=0.
-        !        IF(ABS(FT(I,N)).LT.5.E-08)FT(I,N)=0.
-        !        IF(ABS(PS(I,N,9)).LT.5.E-08)PS(I,N,9)=0.
-        !        END DO
-        !       END DO
-        END subroutine EquationSystem
 
         !*******************************ROUTINE for NONLINEAR Computations:
         !  Contains both the interaction coefficient routine and the transform routine
@@ -1741,61 +1708,7 @@ module ModelModule
 
 
         END SUBROUTINE ComputeZonalSpectrum
-        
-        !SUBROUTINE ComputeStructures()
-        !    use ConstantsModule, only: RAD_TO_DEGREES
-        !    use ArrayDimensionsModule, only: gCurrentDims
-        !    use ModelFieldsModule, only: gHorzArr, gVertArr, gStatsArr, gEnergyArr
-        !    use ModelParamsModule, only: gModIntParams, gModRealParams
-        !    use WelfordModule, only: updateRunStats
-        !    implicit none
-        !    
-        !    integer :: I, N
-        !    integer :: KMAX, LMAX, NMAX, ITOT
-        !    REAL :: phase, amplitude, phase_diff
-        !    
-        !    KMAX = gModIntParams%KMAX2
-        !    LMAX = gModIntParams%LMAX2
-        !    NMAX = gModIntParams%NLEV
-        !    ITOT = gCurrentDims%ITOT
-        !    
-        !    ! To compute the structure we get the phase and amplitude of the streamfunction at layer
-        !    ! n and compute the phase difference with respect to the phase of the streamfunction at
-        !    ! the layer n-1.
-        !    ! 1. First Pass: Compute absolute amplitudes and phases for ALL levels
-        !    do N = 1, NMAX
-        !        do I = LMAX + 1, ITOT - 1, 2
-        !            ! Compute absolute phase and amplitude at level N
-        !            phase = atan2(gHorzArr%PS(I + 1, N), gHorzArr%PS(I, N)) * RAD_TO_DEGREES
-        !            amplitude = sqrt(gHorzArr%PS(I, N)**2 + gHorzArr%PS(I + 1, N)**2)
-        !
-        !            gEnergyArr%AMP_PHASE(I, N) = amplitude
-        !            gEnergyArr%AMP_PHASE(I + 1, N) = phase  ! Temporarily store absolute phase
-        !        end do
-        !    end do
-        !
-        !    ! 2. Second Pass: Compute relative phase differences and update stats
-        !    do N = 2, NMAX
-        !        do I = LMAX + 1, ITOT - 1, 2
-        !            ! Compute difference relative to level 1
-        !            phase_diff = gEnergyArr%AMP_PHASE(I + 1, N) - gEnergyArr%AMP_PHASE(I + 1, 1)
-        !    
-        !            ! Crucial: Wrap phase difference to the range [-180, 180] 
-        !            ! to prevent Welford statistics from blowing up due to 360-degree jumps
-        !            phase_diff = phase_diff - 360.0 * nint(phase_diff / 360.0)
-        !            gEnergyArr%AMP_PHASE(I + 1, N) = phase_diff
-        !
-        !        end do
-        !    end do
-        !    
-        !    ! 3. Third Pass: Log statistics and cleanly zero out Level 1
-        !    gEnergyArr%AMP_PHASE(LMAX + 2 : ITOT : 2, 1) = 0.0
-        !    do N = 1, NMAX
-        !        call updateRunStats(gEnergyArr%AMP_PHASE(:, N), gEnergyArr%WelfordAMP_PHASE(:, N))
-        !    end do
-        !    print '(*(F10.4))', (gEnergyArr%WelfordAMP_PHASE(3, N)%mean, N = 1, SIZE(gEnergyArr%WelfordAMP_PHASE, 2))
-        !end subroutine ComputeStructures
-        
+
         SUBROUTINE ComputeStructures()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1853,5 +1766,24 @@ module ModelModule
             end do
             !print '(*(F10.4))', (gEnergyArr%WelfordAMP_PHASE(3, N)%mean, N = 1, SIZE(gEnergyArr%WelfordAMP_PHASE, 2))
         end subroutine ComputeStructures
+        
+        ! Be sure to save the PS field when calling this routine and restore before integrating the model.
+        subroutine ComputeAverageFields()
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gEnergyArr, gHorzArr
+            !use ModelParamsModule, only: gModIntParams
+            implicit none
+            
+            REAL, ALLOCATABLE :: buffer(:)
+            
+            allocate(buffer(gCurrentDims%ITOT))
+
+            gHorzArr%PS(:, :) = gEnergyArr%WelfordPS(:, :)%mean
+            call EquationSystem(buffer)
+            gHorzArr%ADS(:, :) = gEnergyArr%WelfordADS(:, :)%mean
+            gHorzArr%ADT(:, :) = gEnergyArr%WelfordADT(:, :)%mean
+            call ComputeOmega()
+
+        end subroutine ComputeAverageFields
 
     end module ModelModule

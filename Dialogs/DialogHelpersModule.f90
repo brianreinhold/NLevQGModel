@@ -107,13 +107,13 @@ module DialogHelpersModule
         !! @left: The current left coordinate in the parent window of the ListView.
         !! @top: The current top coordinate in the parent window of the ListView.
         !! @width: The current width of the ListView control
-        subroutine ResizeListViewToFitItems(hwndList, left, top, width, dlgHeight)
+        subroutine ResizeListViewToFitItems(hwndList, left, top, width, fontSize, dlgHeight)
             use ifwinty
             use user32      ! For SendMessage
 
             implicit none
             integer(HANDLE), intent(in) :: hwndList
-            integer, intent(in) :: left, top, width
+            integer, intent(in) :: left, top, width, fontSize
             integer, optional, intent(in) :: dlgHeight
 
             integer(BOOL) :: bret
@@ -131,12 +131,14 @@ module DialogHelpersModule
             
             ! Do we have enough room in the dialog to expand the list view to fit all items? If not, we will skip and scroll
             if (present(dlgHeight)) then
-                if (top + heightPixels > dlgHeight) return
+                if (top + heightPixels > dlgHeight) then         !return
+                    heightPixels = dlgHeight - top
+                endif
             end if
 
             ! Resize the control
-            bret = MoveWindow(hwndList, left, top, width, heightPixels - 14, .TRUE.) 
-            ! The -14 is done because an extra SPACE of pretty close to 14 pt times new roman is left
+            bret = MoveWindow(hwndList, left, top, width, heightPixels - fontSize, .TRUE.) 
+            ! The -fontSize is done because an extra SPACE of pretty close to fontSize pt times new roman is left
             ! May need a different value for different font point sizes
         end subroutine ResizeListViewToFitItems
         

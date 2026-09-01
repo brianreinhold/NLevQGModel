@@ -83,7 +83,17 @@ module ModelControlDialogModule
 
             integer :: newValue      ! For editing the displayed value in the list box
             LOGICAL :: res
-            logical, save :: isDimensional = .true., viewOnly = .FALSE.
+            logical, save :: isDimensional = .true.
+            logical, save :: viewOnly = .FALSE., &          ! When true, view plots of the current state of the model. Model is not integrated
+                             viewAverages = .FALSE., &      ! When viewOnly is TRUE and viewAverages is true, get the mean fields of PS, ADS, and ADT
+                                                            ! from the Welford types and compute the mean tendencies. This changes all the variables
+                                                            ! in gHorzArr that have to do with the model. The original state of PS is saved in PSSAVE
+                                                            ! so all these fields and tendencies can be restored back to the current state once
+                                                            ! viewAverages is set to false.
+                             isAverages = .FALSE.           ! This field is set to true to indicate that the gHorzArr have been replaced with the average
+                                                            ! fields so the averages are not computed again and the PSSAVE field does not get overwritten
+                                                            ! It is set back to false when the viewAverages is set to false and the current fields are
+                                                            ! restored.
 
             ModelControlDlgProc = 0
 
@@ -356,6 +366,13 @@ module ModelControlDialogModule
                             call cleanUpEditBoxes()
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
                                 viewOnly = (IsDlgButtonChecked(hDlg, IDC_CHECK_VIEW_MODEL) .NE. 0)
+                                call initializeDialog()
+                            endif
+                        
+                        case (IDC_CHECK_VIEW_AVERAGES)
+                            call cleanUpEditBoxes()
+                            if (ISHFT(wParam, -16) == BN_CLICKED) then
+                                viewAverages = (IsDlgButtonChecked(hDlg, IDC_CHECK_VIEW_AVERAGES) .NE. 0)
                             endif
 
 ! ------------------ Now to handle the F1-F10 buttons
@@ -399,6 +416,9 @@ module ModelControlDialogModule
                             call loadSavedFlow()
                             ret = CheckModelControlChanges( paramChange%zonalWaves, paramChange%meridWaves, paramChange%levels, paramChange%RN, .false.)
                             ghModelControlDlg = hDlg
+                            
+! ---- F6:  View Statistics
+                        case (IDC_BUTTON_VIEW_STATISTICS)
 
 ! ---- F7:  EditContours
                         case (IDC_BUTTON_CONTOURS)
@@ -474,14 +494,25 @@ module ModelControlDialogModule
                 end subroutine cleanUpEditBoxes
                 
                 !-------- F1: run model
+                ! This routine handles three different cases
+                ! 1. Integrates the model
+                ! 2. When viewOnly allows viewing of the current model fields as plots. Of course this only works for the
+                !    the 2-d plots. Graphs and Hovmollers require many time steps to see anything worth while so those cases are not displayed
+                ! 3. If 'viewOnly' is set and 'viewAverages' is also checked, the average flows of most recent model run can be viewed
+                !    Again, as in the 'viewOnly' case only the 2-d plots can be viewed.
                 subroutine setupAndRunModel()
                 use ConstantsModule, only: ERR_NUMERIC_INSTABILITY, PAUSED, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
+                    use ArrayDimensionsModule, only: gCurrentDims
                     use ModelFieldsModule, only: ZeroEnergyArrays
                     use ModelParamsModule, only: gModelState
+                    use ModelModule, only: EquationSystem, ComputeAverageFields
                     use PlotModule, only: outputPlot
                     implicit none
 
                     logical :: isMap
+                    REAL, ALLOCATABLE :: buffer(:)
+
+
                     
                     isMap = (gModIntParams%plotType == WEATHER_MAP .OR.  &
                              gModIntParams%plotType == PHASE_AND_MAP .OR. &
@@ -506,7 +537,9 @@ module ModelControlDialogModule
                         call initializeDialog()
                         return
                     endif
-                    call ZeroEnergyArrays()
+                    if (.NOT. viewOnly) then
+                        call ZeroEnergyArrays()
+                    endif
                     call SetModRealParamsDimensionalState(.false.)
                     ret = InitModelWithModelControlVals()
                     bret = EnableWindow(hDlg, .FALSE.)
@@ -517,6 +550,20 @@ module ModelControlDialogModule
                     call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     if (viewOnly) then
                         gModelState%runState = PAUSED
+                        if (viewAverages) then
+                            if (.NOT. isAverages) then
+                                gHorzArr%PSSAVE = gHorzArr%PS
+                                call ComputeAverageFields()
+                                isAverages = .TRUE.
+                            endif
+                        else if (isAverages) then
+                            ! Restore
+                            gHorzArr%PS = gHorzArr%PSSAVE
+                            allocate(buffer(gCurrentDims%ITOT))
+                            call EquationSystem(buffer)
+                            deallocate(buffer)
+                            isAverages = .FALSE.
+                        endif
                         call outputPlot(.TRUE.)
                     else
                         ret = StartTimeLoop()
@@ -562,9 +609,19 @@ module ModelControlDialogModule
                     hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VIEW_MODEL)
                     if (viewOnly) then
                         bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_MODEL, BST_CHECKED)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_CHECK_VIEW_AVERAGES), SW_SHOW)
                     else
                         bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_MODEL, BST_UNCHECKED)
+                        bret = ShowWindow(GetDlgItem(hDlg, IDC_CHECK_VIEW_AVERAGES), SW_HIDE)
                     end if
+                    
+                    hCheckBox = GetDlgItem(hDlg, IDC_CHECK_VIEW_AVERAGES)
+                    if (viewAverages) then
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_AVERAGES, BST_CHECKED)
+                    else
+                        bret = CheckDlgButton(hDlg, IDC_CHECK_VIEW_AVERAGES, BST_UNCHECKED)
+                    end if
+
                     ! Set up a hook to trap key presses before the dialog message loop handles them
                     hHook = SetWindowsHookEx(WH_KEYBOARD, LOC(KeyboardForDlgModelControlProc), NULL, GetCurrentThreadId())
                     ghModelControlDlg = hDlg
@@ -747,7 +804,7 @@ module ModelControlDialogModule
             pt%y = rc%top
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
             ! The makes the height sized to encompass the actual number of rows added
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, 14)
         end subroutine handleRealListControl
         
         subroutine handleIntListControl(hDlg)
@@ -782,7 +839,7 @@ module ModelControlDialogModule
             pt%y = rc%top
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
             ! The makes the height sized to encompass the actual number of rows added
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, 14)
         end subroutine handleIntListControl
 
         ! Just to simplify code parsing in the dialog procedure. Loading the

@@ -230,6 +230,8 @@ MODULE ModelFieldsModule
     type(WelfordType), allocatable, target :: WelfordKE_Pool(:)
     type(WelfordType), allocatable, target :: WelfordPS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordAMP_PHASE_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordADS_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordADT_Pool(:)
     
     type :: EnergyArrays
         LOGICAL :: allocated = .FALSE.   ! Flag to indicate if arrays are allocated
@@ -247,6 +249,8 @@ MODULE ModelFieldsModule
         type(WelfordType), pointer :: WelfordKE(:)
         type(WelfordType), pointer :: WelfordPS(:, :)   ! This array holds the WelfordType for each of the spectral components at each level.
         type(WelfordType), pointer :: WelfordAMP_PHASE(:, :)   ! This array holds the WelfordType for each of the spectral amplitudes and phases at each level.
+        type(WelfordType), pointer :: WelfordADS(:, :)
+        type(WelfordType), pointer :: WelfordADT(:, :)
 
     end type EnergyArrays
     
@@ -319,6 +323,16 @@ MODULE ModelFieldsModule
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
+            allocate(WelfordADS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
+            allocate(WelfordADT_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
 
             gEnergyArr%allocated = .TRUE. ! Set allocated flag to true
 
@@ -336,6 +350,8 @@ MODULE ModelFieldsModule
             WelfordKE_Pool(1 : gModIntParams%KMAX2) = WelfordType()
             WelfordPS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordAMP_PHASE_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
+            WelfordADS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
+            WelfordADT_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
         end subroutine ZeroEnergyArrays
 
         function createEnergyArr(kmax, lmax, nlev) RESULT(status)
@@ -362,7 +378,9 @@ MODULE ModelFieldsModule
             gEnergyArr%WelfordKE(1 : kmax) => WelfordKE_Pool(1 : kmax)
             gEnergyArr%WelfordPS(1 : itot, 1 : nlev) => WelfordPS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordAMP_PHASE(1 : itot, 1 : nlev)  => WelfordAMP_PHASE_Pool(1 : itot * nlev)
-            
+            gEnergyArr%WelfordADS(1 : itot, 1 : nlev)  => WelfordADS_Pool(1 : itot * nlev)
+            gEnergyArr%WelfordADT(1 : itot, 1 : nlev)  => WelfordADT_Pool(1 : itot * nlev)
+
             gEnergyArr%defined = .TRUE. ! Set defined flag to true
         end function createEnergyArr
 
@@ -377,6 +395,8 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(WelfordPS_Pool)) DEALLOCATE(WelfordPS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordKE_Pool)) DEALLOCATE(WelfordKE_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordAMP_PHASE_Pool)) DEALLOCATE(WelfordAMP_PHASE_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordADS_Pool)) DEALLOCATE(WelfordADS_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordADT_Pool)) DEALLOCATE(WelfordADT_Pool, STAT = statusErr)
             NULLIFY(gEnergyArr%ZonalWaveKE)
             NULLIFY(gEnergyArr%ZonalWaveAPE)
             NULLIFY(gEnergyArr%ZonalKE)
@@ -385,6 +405,8 @@ MODULE ModelFieldsModule
             NULLIFY(gEnergyArr%WelfordKE)
             NULLIFY(gEnergyArr%WelfordPS)
             NULLIFY(gEnergyArr%WelfordAMP_PHASE)
+            NULLIFY(gEnergyArr%WelfordADS)
+            NULLIFY(gEnergyArr%WelfordADT)
 
             gEnergyArr%allocated = .FALSE. ! Set allocated flag to false
             gEnergyArr%defined = .FALSE. ! Set allocated flag to false

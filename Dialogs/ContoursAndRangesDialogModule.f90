@@ -418,7 +418,7 @@ module ContoursAndRangesDialogModule
             bret = ScreenToClient(hDlg, pt) ! Converts the screen pt struct coordinates to dialog relative coordinates
             ! The makes the height sized to encompass the actual number of rows added
             ! THe resize will skipped if there is not enough room in the dialog to show all the rows without scrolling.
-            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, dlgHeight)
+            call ResizeListViewToFitItems(hList, pt%x, pt%y, rc%right - rc%left, 14, dlgHeight)
         end subroutine handleIntListControl
 
         subroutine loadLevelsValuesIntoListView(hList, vrArr)
