@@ -254,6 +254,7 @@ module ModelModule
                     ITOTB = gCurrentDims%ITOT
                     IF(gModIntParams%modelType .EQ. ZONAL_MEAN_FLOW) ITOTB = gModIntParams%LMAX2
                     !--------------------------------------------------- Actual beginning of loop:
+                    call EquationSystem(buffer)  ! Initializes fields
                     DO KCYC = 1, gModIntParams%ICYC
                         DO KSTEP = 1, gModIntParams%ISTEP
                             ! timeStepsToDelay, if set to 0 will skip generating a bomb. 
@@ -284,9 +285,12 @@ module ModelModule
                             !---------------------------------------------- Selecting when to output data:
                             if (MOD(KSTEP - 1, gModIntParams%outputInterval) == 0) then
                                 call ComputeZonalSpectrum()
-                                call ComputeStructures()
+                                call ComputeVertStructures(gHorzArr%PS, gEnergyArr%PS_AMP_FAS, gEnergyArr%Welford_PS_AMP_FAS)
+                                call ComputeVertStructures(gHorzArr%WW, gEnergyArr%WW_AMP_FAS, gEnergyArr%Welford_WW_AMP_FAS)
+                                !call ComputeStructures()
                                 do N = 1, gModIntParams%NLEV
                                     call updateRunStats(gHorzArr%PS(:, N), gEnergyArr%WelfordPS(:, N))
+                                    call updateRunStats(gHorzArr%TH(:, N), gEnergyArr%WelfordTH(:, N))
                                     call updateRunStats(gHorzArr%ADS(:, N), gEnergyArr%WelfordADS(:, N))
                                     call updateRunStats(gHorzArr%ADT(:, N), gEnergyArr%WelfordADT(:, N))
                                 end do
@@ -427,25 +431,25 @@ module ModelModule
         ! This routine computes the tendency equations for the Quasi-Geostrophic model.
         ! We have the vorticity equation for each level n. del2 is the horizontal laplacian, J is the Jacobian,
         ! f is the Coriolis parameter, w is the vertical velocity, p is pressure, and H is the scale height.
-        ! d(del2 PS(n)) + J(PS(n), del2PS(n)) + f + f*top/H) – f(w(n-1) – w(n))/(p(n-1) – p(n)) =
-        !   fk(n)del2(sf(n)-ps(n)) + fj(n)u(n)del2(ps(n+1) – ps(n)) + fj(n-1)v(n)del2(PS(n-1)-PS(n))
-        ! u(n) = (p(n+1) – p(n+2)) / (p(n) - p(n+2))  pressures are at the boundaries, PP in this model
-        ! v(n) = (p(n-1) – p(n)) / (p(n-1) - p(n+1))
+        ! d(del2 PS(n)) + J(PS(n), del2PS(n)) + f + f*top/H) ï¿½ f(w(n-1) ï¿½ w(n))/(p(n-1) ï¿½ p(n)) =
+        !   fk(n)del2(sf(n)-ps(n)) + fj(n)u(n)del2(ps(n+1) ï¿½ ps(n)) + fj(n-1)v(n)del2(PS(n-1)-PS(n))
+        ! u(n) = (p(n+1) ï¿½ p(n+2)) / (p(n) - p(n+2))  pressures are at the boundaries, PP in this model
+        ! v(n) = (p(n-1) ï¿½ p(n)) / (p(n-1) - p(n+1))
         ! Temperature equation
-        ! dTH(n)/dt +  J((PS(n+1) + PS(n))/2, TH(n)) -SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(TH(n+1) – TH(n)) + G(n-1)*v'(n)*(TH(n-1) – TH(n))
-        ! u'(n) = (p'(n+1) – p'(n+2)) / (p'(n) - p(n + 2)) pressures are at the boundaries, PV in this model
-        ! v'(n) = (p'(n-1) – p'(n)) / (p'(n-1) - p'(n+1))
+        ! dTH(n)/dt +  J((PS(n+1) + PS(n))/2, TH(n)) -SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(TH(n+1) ï¿½ TH(n)) + G(n-1)*v'(n)*(TH(n-1) ï¿½ TH(n))
+        ! u'(n) = (p'(n+1) ï¿½ p'(n+2)) / (p'(n) - p(n + 2)) pressures are at the boundaries, PV in this model
+        ! v'(n) = (p'(n-1) ï¿½ p'(n)) / (p'(n-1) - p'(n+1))
         ! Thermal wind equation:
         ! A(n)del2(TH(n)) = del2(PS(n+1) - PS(n))) where A(n) = cp*[p(n)**kappa - p(n+1)**kappa]/(f * p(1)**kappa)
         ! del2(PS) = -a**2
         ! d(ps(n))/dt - [J(ps(n), del2(ps(n))) + f + f*top) - (w(n-1) - w(n))/(p(n-1) - p(n))]/a**2 = 
-        !           fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) – ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
-        ! d(th(n))/dt + J((PS(n+1) + PS(n))/2, TH(n)) - SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) – TH(n)) + 
-        !           G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) – TH(n))
+        !           fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) ï¿½ ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
+        ! d(th(n))/dt + J((PS(n+1) + PS(n))/2, TH(n)) - SIG(n)*W(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) ï¿½ TH(n)) + 
+        !           G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) ï¿½ TH(n))
         ! th(n) = ps(n+1) - ps(n)   Thermal wind relation
         
-        ! if we call S(n) = fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) – ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
-        !       and  T(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) – TH(n)) + G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) – TH(n))
+        ! if we call S(n) = fk(n)(sf(n)-ps(n)) + fj(n)u(n)(ps(n+1) ï¿½ ps(n)) + fj(n-1)v(n)(PS(n-1) - PS(n))
+        !       and  T(n) = H(n)(TF(n)-TH(n)) + G(n)*u'(n)(A(n)TH(n+1)/A(n+1) ï¿½ TH(n)) + G(n-1)*v'(n)*(A(n)TH(n-1)/A(n-1) ï¿½ TH(n))
         !       and  W(n) = (w(n-1) - w(n))/(p(n-1) - p(n))
         
         ! Then 
@@ -652,12 +656,12 @@ module ModelModule
 
             !C(n) = J(Theta)(n) - T(n) + S(n+1)- S(n) + (1/a2)[J(Psi)(n+1) - J(Psi)(n) ]
             
-            !alpha(n)*omega(n) – epsilon(n)*omega(n+1) – gamma(n-1)*omega(n-1) = C(n)
+            !alpha(n)*omega(n) ï¿½ epsilon(n)*omega(n+1) ï¿½ gamma(n-1)*omega(n-1) = C(n)
             !alpha(n) = gamma(n+1) + gamma(n) + sig(n)
             !gamma(n) = 1/(a**2 * P(n))
             !epsilon(n) = 1/(a**2 * P(n+1)) = gamma(n+1)
             
-            !alpha(n)*omega(n) – gamma(n+1)*omega(n+1) – gamma(n-1)*omega(n-1) = C(n)
+            !alpha(n)*omega(n) ï¿½ gamma(n+1)*omega(n+1) ï¿½ gamma(n-1)*omega(n-1) = C(n)
             ! Write
             ! WW(n) = X(n)*WW(n+1) + Y(n)
             ! Y(n) will have WW(n-1) in it, but the lower boundary condition of WW(0) = 0 will allow us to Y(n) to the top and there
@@ -1161,9 +1165,9 @@ module ModelModule
             REAL EkmanMixingLower, EkmanMixingUpper, EkmanFromAbove, EkmanFromBelow, DPS
             INTEGER N, NLEV, ITOT
             
-            ! fk(n)*(sf(i, n) – ps(i,n)) + fj(n)*u(n)*(ps(i,n+1) – ps(i,n)) + fj(n-1)*v(n)*(ps(i, n-1) – ps(i, n))
-            ! u(n) = 2(pp(n+1) – pp(n+2))/(pp(n) – pp(n+2))  weighting functions to account for different layer thicknesses for the ekman mixing
-            ! v(n) = 2(pp(n-1) – pp(n))/(pp(n-1) – pp(n+1))  Pressures are at temperature levels or interfaces
+            ! fk(n)*(sf(i, n) ï¿½ ps(i,n)) + fj(n)*u(n)*(ps(i,n+1) ï¿½ ps(i,n)) + fj(n-1)*v(n)*(ps(i, n-1) ï¿½ ps(i, n))
+            ! u(n) = 2(pp(n+1) ï¿½ pp(n+2))/(pp(n) ï¿½ pp(n+2))  weighting functions to account for different layer thicknesses for the ekman mixing
+            ! v(n) = 2(pp(n-1) ï¿½ pp(n))/(pp(n-1) ï¿½ pp(n+1))  Pressures are at temperature levels or interfaces
 
             !----------------------------------------Compute diabatic strm terms:
             ! gHorzArr%S = tendencies of the streamfunction due to diabatic processes. This includes both the direct diabatic driving
@@ -1628,8 +1632,8 @@ module ModelModule
             LMAX = gModIntParams%LMAX2
             NMAX = gModIntParams%NLEV
     
-            gEnergyArr%ZonalWaveKE = 0.0
-            gEnergyArr%ZonalWaveAPE = 0.0
+            gEnergyArr%KWaveKE = 0.0
+            gEnergyArr%KWaveAPE = 0.0
             gEnergyArr%ZonalKE = 0.0
             gEnergyArr%ZonalAPE = 0.0
             RN = gModRealParams%RN
@@ -1697,8 +1701,8 @@ module ModelModule
                         APE = APE + (gHorzArr%TH(I, N) * gHorzArr%TH(I, N) + gHorzArr%TH(I_next, N) * gHorzArr%TH(I_next, N)) * local_APE_W(N)
                     END DO
                     totalKE(K) = totalKE(K) + KE
-                    gEnergyArr%ZonalWaveKE(K) = gEnergyArr%ZonalWaveKE(K) + KE
-                    gEnergyArr%ZonalWaveAPE(K) = gEnergyArr%ZonalWaveAPE(K) + APE
+                    gEnergyArr%KWaveKE(K) = gEnergyArr%KWaveKE(K) + KE
+                    gEnergyArr%KWaveAPE(K) = gEnergyArr%KWaveAPE(K) + APE
                     ! Jump past the (cos, sin) pair
                     I = I + 2
                 END DO
@@ -1709,6 +1713,7 @@ module ModelModule
 
         END SUBROUTINE ComputeZonalSpectrum
 
+        ! This computes G-Q between Streamfunction and temperature fields
         SUBROUTINE ComputeStructures()
             use ConstantsModule, only: RAD_TO_DEGREES
             use ArrayDimensionsModule, only: gCurrentDims
@@ -1738,7 +1743,7 @@ module ModelModule
                     phaseT = atan2(gHorzArr%TH(I + 1, N), gHorzArr%TH(I, N)) * RAD_TO_DEGREES
                     amplitudeT = sqrt(gHorzArr%TH(I, N)**2 + gHorzArr%TH(I + 1, N)**2)
 
-                    gEnergyArr%AMP_PHASE(I, N) = amplitudeS
+                    gEnergyArr%PS_AMP_FAS(I, N) = amplitudeS
 
                     phase_diff = phaseS - phaseT
                     
@@ -1760,12 +1765,79 @@ module ModelModule
                     
                     if (ABS(phase_diff_TMin) .LT. ABS(phase_diff)) phase_diff = phase_diff_TMin - 180.0
 
-                    gEnergyArr%AMP_PHASE(I + 1, N) = phase_diff
+                    gEnergyArr%PS_AMP_FAS(I + 1, N) = phase_diff
                 end do
-                call updateRunStats(gEnergyArr%AMP_PHASE(:, N), gEnergyArr%WelfordAMP_PHASE(:, N))
+                call updateRunStats(gEnergyArr%PS_AMP_FAS(:, N), gEnergyArr%Welford_PS_AMP_FAS(:, N))
             end do
-            !print '(*(F10.4))', (gEnergyArr%WelfordAMP_PHASE(3, N)%mean, N = 1, SIZE(gEnergyArr%WelfordAMP_PHASE, 2))
+            !print '(*(F10.4))', (gEnergyArr%Welford_PS_AMP_FAS(3, N)%mean, N = 1, SIZE(gEnergyArr%Welford_PS_AMP_FAS, 2))
         end subroutine ComputeStructures
+        
+        SUBROUTINE ComputeVertStructures(PS, PS_AMP_FAS, welfordAMP_PHASE)
+            use ConstantsModule, only: RAD_TO_DEGREES
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelParamsModule, only: gModIntParams
+            use WelfordModule, only: updateRunStats, WelfordType
+            implicit none
+            
+            real, intent(in) :: PS(:, :)
+            real, intent(out) :: PS_AMP_FAS(:, :)
+            type(WelfordType), intent(out) :: welfordAMP_PHASE(:, :)
+            
+            integer :: I, N
+            integer :: KMAX, LMAX, NMAX, ITOT
+            REAL :: phase, amplitude, phase_base, phase_diff, phase_diff_TMin
+            
+            KMAX = gModIntParams%KMAX2
+            LMAX = gModIntParams%LMAX2
+            NMAX = gModIntParams%NLEV
+            ITOT = gCurrentDims%ITOT
+            
+            ! To compute the structure we get the phase and amplitude of the variable at layer
+            ! n and compute the phase difference with respect to the phase of the variable at
+            ! the layer n-1.
+            
+            do N = 1, NMAX
+                do I = LMAX + 1, ITOT - 1, 2
+                    if (N .EQ. 1) then
+                        phase_base = atan2(PS(I + 1, 1), PS(I, 1)) * RAD_TO_DEGREES
+                        phase = phase_base
+                        amplitude = sqrt(PS(I, N)**2 + PS(I + 1, N)**2)
+                    else
+                        ! Compute absolute phase and amplitude at level N
+                        phase = atan2(PS(I + 1, N), PS(I, N)) * RAD_TO_DEGREES
+                        amplitude = sqrt(PS(I, N)**2 + PS(I + 1, N)**2)
+                    endif
+
+                    PS_AMP_FAS(I, N) = amplitude
+
+                    phase_diff = phase - phase_base
+                    
+                    if (phase_diff > 180.0) then
+                        phase_diff = phase_diff - 360.0
+                    else if (phase_diff <= -180.0) then
+                        phase_diff = phase_diff + 360.0
+                    end if
+                    
+                    phase_diff_TMin = phase - (phase_base + 180.)
+                    
+                    if (phase_diff_TMin > 180.0) then
+                        phase_diff_TMin = phase_diff_TMin - 360.0
+                    else if (phase_diff_TMin <= -180.0) then
+                        phase_diff_TMin = phase_diff_TMin + 360.0
+                    end if
+                    
+                    !if (N == 1) print '(F10.4, A, F10.4)', phase_diff, " ", phase_diff_TMin
+                    
+                    if (ABS(phase_diff_TMin) .LT. ABS(phase_diff)) phase_diff = phase_diff_TMin - 180.0
+
+                    PS_AMP_FAS(I + 1, N) = phase_diff
+                    phase_base = phase
+                    !print '(I0, A, F0.4, A, F0.4)', N, " ", phase_diff, " ", amplitude
+                end do
+                call updateRunStats(PS_AMP_FAS(:, N), welfordAMP_PHASE(:, N))
+            end do
+            !print '(*(F10.4))', (gEnergyArr%Welford_PS_AMP_FAS(3, N)%mean, N = 1, SIZE(gEnergyArr%Welford_PS_AMP_FAS, 2))
+        end subroutine ComputeVertStructures
         
         ! Be sure to save the PS field when calling this routine and restore before integrating the model.
         subroutine ComputeAverageFields()
@@ -1783,7 +1855,6 @@ module ModelModule
             gHorzArr%ADS(:, :) = gEnergyArr%WelfordADS(:, :)%mean
             gHorzArr%ADT(:, :) = gEnergyArr%WelfordADT(:, :)%mean
             call ComputeOmega()
-
         end subroutine ComputeAverageFields
 
     end module ModelModule

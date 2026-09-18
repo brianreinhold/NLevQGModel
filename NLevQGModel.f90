@@ -436,7 +436,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot, outputPlot, getYValues, gElapsedTime, gPressure, gViewOnly, GenerateSVG, X1, X2
+    use PlotModule, only: ClearScreen, initializePlot, outputPlot, getYValues, gElapsedTime, gPressure, gViewOnly, gShowRunningMean, GenerateSVG, X1, X2
     use HelpTextModule, only: PLOT_HELP_TEXT
 
     implicit none
@@ -563,10 +563,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             ! THis mess prints the moused-over value 'current_val' of the weather map to the screen in a separate 
             ! layer. Some extra variables are needed since the value will be printed to the left when
             ! the cursor is too close to the right side.
-            maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
-                    gModIntParams%plotType == PHASE_AND_MAP .OR. &
-                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
-                    gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+            maps = isMapPlot()
             hovs = (gModIntParams%plotType == HOV_DIAG_AT_LAT .OR.  &
                     gModIntParams%plotType == HOV_DIAG_AT_LON .OR. &
                     gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. &
@@ -667,10 +664,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 if (GetForegroundWindow() .NE. hWnd .or. gModelState%runState /= PAUSED) return
                 mouse_x = IAND(lParam, #FFFF)
                 mouse_y = ISHFT(lParam, -16)
-                maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
-                        gModIntParams%plotType == PHASE_AND_MAP .OR. &
-                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
-                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+                maps = isMapPlot()
                 hovs = (gModIntParams%plotType == HOV_DIAG_AT_LAT .OR.  &
                     gModIntParams%plotType == HOV_DIAG_AT_LON .OR. &
                     gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN .OR. &
@@ -763,12 +757,26 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ! GetKeyState returns a negative value if the high-order bit is set
                     if (GetKeyState(VK_SHIFT) < 0) then
                         gModIntParams%plotType = gModIntParams%plotType - 1
-                        if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModIntParams%KMAX2 < 3) gModIntParams%plotType = PHASE_SPACE
-                        if (gModIntParams%plotType .LT. WEATHER_MAP) gModIntParams%plotType = NO_PLOT
+                        if (gViewOnly) then
+                            do while(.NOT. isMapPlot())
+                                gModIntParams%plotType = gModIntParams%plotType - 1
+                                if (gModIntParams%plotType .LT. WEATHER_MAP) gModIntParams%plotType = VERT_CROSS_SEC_AT_LON
+                            end do
+                        else
+                            if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModIntParams%KMAX2 < 3) gModIntParams%plotType = PHASE_SPACE
+                            if (gModIntParams%plotType .LT. WEATHER_MAP) gModIntParams%plotType = NO_PLOT
+                        endif
                     else
                         gModIntParams%plotType = gModIntParams%plotType + 1
-                        if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModINtParams%KMAX2 < 3) gModIntParams%plotType = WEATHER_STN
-                        if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAP
+                        if (gViewOnly) then
+                            do while(.NOT. isMapPlot())
+                                gModIntParams%plotType = gModIntParams%plotType + 1
+                                if (gModIntParams%plotType .GT. VERT_CROSS_SEC_AT_LON) gModIntParams%plotType = WEATHER_MAP
+                            end do
+                        else
+                            if (gModIntParams%plotType .EQ. ZONAL_WAVE_ENERGY .AND. gModINtParams%KMAX2 < 3) gModIntParams%plotType = WEATHER_STN
+                            if (gModIntParams%plotType .GT. NO_PLOT) gModIntParams%plotType = WEATHER_MAP
+                        endif
                     end if
                     current_val1 = -1.0
                     call initializePlot()
@@ -806,7 +814,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
                         if (GetKeyState(VK_SHIFT) < 0) then
                             gModIntParams%field2 = gModIntParams%field2 - 1
-                            if (gModIntParams%field1 .LT. VORTICITY) gModIntParams%field1 = PLOTTING_OFF
+                            if (gModIntParams%field2 .LT. VORTICITY) gModIntParams%field2 = PLOTTING_OFF
                         else
                             gModIntParams%field2 = gModIntParams%field2 + 1
                             if (gModIntParams%field2 .GT. PLOTTING_OFF) gModIntParams%field2 = VORTICITY
@@ -814,7 +822,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         call initializePlot()
                         call ClearScreen()
                         if (gViewOnly) call outputPlot(gViewOnly)
-                        call LogMessage("User changed field 1")
+                        call LogMessage("User changed field 2")
                     endif
     ! F6: Create SVG file from plot -----------------------
                 case (VK_F6)
@@ -940,6 +948,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     if (gViewOnly) call outputPlot(gViewOnly)
                 case (VK_ESCAPE)
                     call PostQuitMessage(0)
+                case (ICHAR('A'))
+                    ! If we are integrating the model [gViewOnly = false), allow toggling between plotting the instantaneous versus running mean value
+                    if (.NOT. gViewOnly) gShowRunningMean = .NOT. gShowRunningMean
             end select
 
             MainWndProc = 0
@@ -1105,6 +1116,17 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             endif
 
         end function getHovTime
+
+        function isMapPlot() result(maps)
+            implicit none
+            
+            logical :: maps
+
+            maps = (gModIntParams%plotType == WEATHER_MAP .OR.  &
+                        gModIntParams%plotType == PHASE_AND_MAP .OR. &
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                        gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
+        end function isMapPlot
 
 end function MainWndProc
 

@@ -1,0 +1,27 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Intel Fortran (VS Engine)",
+            "type": "shell",
+            // Clean executable call without spaces or slashes
+            "command": "devenv.com",
+            "args": [
+                "NLevQGModel.sln",
+                "/Build",
+                "\"Debug|x64\""
+            ],
+            "options": {
+                "env": {
+                    // Injecting the path to the environment eliminates string escaping issues
+                    "Path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE;${env:Path}"
+                }
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

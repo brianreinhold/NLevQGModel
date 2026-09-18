@@ -177,44 +177,49 @@ module PlotModule
         integer :: years
     end type ElapsedTime
     
-    type(ElapsedTime) gElapsedTime
-
-    !type(PlotConfig) :: gPlotConfig
-    type(PhaseSpace) :: gPhaseSpace1
-    type(PhaseSpace) :: gPhaseSpace2
-    type(WeatherMap) :: gWeatherMap1
-    type(WeatherMap) :: gWeatherMap2
-    type(VertCrossSection) :: gLatVertCrossSec1
-    type(VertCrossSection) :: gLatVertCrossSec2
-    type(Hovmoller) :: gLatHovmoller1
-    type(Hovmoller) :: gLatHovmoller2
-    type(VertCrossSection) :: gLonVertCrossSec1
-    type(VertCrossSection) :: gLonVertCrossSec2
-    type(Hovmoller) :: gLonHovmoller1
-    type(Hovmoller) :: gLonHovmoller2
-    type(VertHovmoller) :: gVertHovmoller1
-    type(VertHovmoller) :: gVertHovmoller2
-    type(WeatherStation) :: gWeatherStation1
-    type(WeatherStation) :: gWeatherStation2
+    type(ElapsedTime) gElapsedTime      ! Global type for displaying the current elapsed time of the integration.
     
-    type(EnergyHovmoller) :: gEnergyHovmoller1 ! Only one so far
+    ! Global types for displaying the different plot types. There are two-d maps (weather maps and cross sections) or Hovmollers (where a new line
+    ! is created and plotted every time step a plot is shown) and time series graphs (phase space and the current value at a point in lat., lon., and level).
+    ! For the 2-d maps and hovmollers, if only one variable is displayed, they will be plotted as solid color contours. If a second variable is displayed
+    ! (field number 2) it will be line contours overlaying the solid color plot. The weather station time series can be displayed as points or lines
+    ! (the points are connected). 
 
-    type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer
-    type(TimeSeriesBuffer) :: gTempStatsTimeSeriesBuffer
-    type(TimeSeriesBuffer) :: gKeTimeSeriesBuffer
-    type(TimeSeriesBuffer) :: gApeTimeSeriesBuffer
-    type(TimeSeriesBuffer) :: gTotTimeSeriesBuffer
+    type(PhaseSpace) :: gPhaseSpace1            ! Global type for displaying the phase space point of field number 1
+    type(PhaseSpace) :: gPhaseSpace2            ! Global type for displaying the phase space point of field number 2
+    type(WeatherMap) :: gWeatherMap1            ! Global type for displaying a weather map of field number 1.
+    type(WeatherMap) :: gWeatherMap2            ! Global type for displaying a weather map of field number 2.
+    type(VertCrossSection) :: gLatVertCrossSec1 ! Global type for displaying a vertical cross section along a latitude line of field number 1.
+    type(VertCrossSection) :: gLatVertCrossSec2 ! Global type for displaying a vertical cross section along a latitude line of field number 2.
+    type(Hovmoller) :: gLatHovmoller1           ! Global type for displaying a homvoller diagram along a latitude line at a given level of field number 1.
+    type(Hovmoller) :: gLatHovmoller2           ! Global type for displaying a homvoller diagram along a latitude line at a given level of field number 2.
+    type(VertCrossSection) :: gLonVertCrossSec1 ! Global type for displaying a vertical cross section along a longitude line of field number 1.
+    type(VertCrossSection) :: gLonVertCrossSec2 ! Global type for displaying a vertical cross section along a longitude line of field number 2.
+    type(Hovmoller) :: gLonHovmoller1           ! Global type for displaying a homvoller diagram along a longitude line at a given level of field number 1.
+    type(Hovmoller) :: gLonHovmoller2           ! Global type for displaying a homvoller diagram along a longitude line at a given level of field number 2.
+    type(VertHovmoller) :: gVertHovmoller1      ! Global type for displaying a homvoller diagram of the vertical profile at (lat, lon) point for field number 1.
+    type(VertHovmoller) :: gVertHovmoller2      ! Global type for displaying a homvoller diagram of the vertical profile at (lat, lon) point for field number 2.
+    type(WeatherStation) :: gWeatherStation1    ! Global type for displaying a time series of the value at a given point (lat, lon, press) for field number 1.
+    type(WeatherStation) :: gWeatherStation2    ! Global type for displaying a time series of the value at a given point (lat, lon, press) for field number 2.
+    
+    type(EnergyHovmoller) :: gEnergyHovmoller1  ! A 'hovmoller' for displaying the total energy as a function of the zonal wave (all L modes for a given K).
 
-    REAL, ALLOCATABLE :: gPressure(:) ! Array containing the pressure values interpolated from gVertArr%LVS to screen height
-                                     ! This array will be used only by the vertical cross sections and the vertical hovmollers
+    !type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer  ! Currently unused
+    !type(TimeSeriesBuffer) :: gTempStatsTimeSeriesBuffer    ! Currently unused
+    !type(TimeSeriesBuffer) :: gKeTimeSeriesBuffer           ! Currently unused
+    !type(TimeSeriesBuffer) :: gApeTimeSeriesBuffer          ! Currently unused
+    !type(TimeSeriesBuffer) :: gTotTimeSeriesBuffer          ! Currently unused
+
+    REAL, ALLOCATABLE :: gPressure(:) ! Array containing the pressure values interpolated from gVertArr%LVS to screen heights
+                                      ! This array will be used only by the vertical cross sections and the vertical hovmollers
 
  
-    type :: CartesianData           ! Used only locally 
+    type :: CartesianData           ! Currently used only for drawing the axes of the phase space plots.
         integer(4) :: x_origin
         integer(4) :: y_origin
         integer(4) :: num_ticks_x
         integer(4) :: num_ticks_y
-        real       :: tick_step_px
+        real       :: tick_step_px  ! This is used to make sure that the interval delta X and delta Y on the screen are the same given screens are typcially not square.
     end type CartesianData
 
     type :: InterpolationBounds
@@ -229,7 +234,13 @@ module PlotModule
         logical :: isPeriodicX = .TRUE.
     end type InterpolationBounds
     
-    Logical :: gViewOnly = .FALSE.
+    Logical :: gViewOnly = .FALSE.      ! This global is used in the main screen callback to tell the plot engine that the user is examining the
+                                        ! the plots when the model is not being integrated (the view current state and average state options in
+                                        ! the model control dialog). When true, only Weather Maps and Cross Sections can be displayed since time
+                                        ! series, phase spaces, and hovmollers require several time steps before something makes any sense.
+    Logical :: gShowRunningMean = .FALSE.  ! When true this global is used to tell the 'loadFields()' routine to return the running mean of the varaible to
+                                           ! be displayed versus the instantaneous value. Currently running means can only be displayed for those fields
+                                           ! which have been associated with a Welford type. At the moment that is PS, TH, KE, ADS, ADT
     
 !=====================  SUBMODULE INTERFACES ============================
 ! These are subroutines implemented in submodules. In order to put subroutine
@@ -628,7 +639,7 @@ module PlotModule
                 baseMapType%scale = gPlotScales(field)
             endif
             ! We divide by the contour interval here to save a division
-            baseMapType%contourIntervalInv = 1.0 / REAL(gContourIntervals%Contours(field))
+            baseMapType%contourIntervalInv = 1.0 / gContourIntervals%Contours(field)
         end subroutine initializeBaseMapType
         
         !! Initializes the trig tables needed for either plots along a latitude or longitude.
@@ -702,7 +713,6 @@ module PlotModule
         !> @param solidColor: When true the map is plotted using solid color and not line contours. If more than one
         !>                    field is being plotted, only the first field can be solid color
         subroutine initializeWeatherMapType(field, weatherMapType, useSolidColor, X)
-
             IMPLICIT NONE
 
             integer, intent(in) :: field
@@ -841,8 +851,6 @@ module PlotModule
         !> @param latOrLon: if true the latitude is the fixed value, otherwise its the longitude. This will tell which of
         !>                  the trig functions to pre-compute
         subroutine initializeHovmollerType(field, hovmollerType, useSolidColor, latLon, X)
-            use ConstantsModule, only: LATITUDE
-            use ArrayDimensionsModule, only: gCurrentDims
             use NLevQGModelglobals, only: gBitMapInfo
             use ModelParamsModule, only: gModRealParams
             IMPLICIT NONE
@@ -1563,7 +1571,7 @@ module PlotModule
             use IFWBASE ! Contains RGB macro
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, HOV_DIAG_AT_LAT, VERT_CROSS_SEC_AT_LON, &
-                HOV_DIAG_AT_LON, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, PLOTTING_OFF, &
+                HOV_DIAG_AT_LON, PHASE_SPACE, WEATHER_STN, VERT_HOV_AT_WEATHER_STN, NO_PLOT, PLOTTING_OFF, &
                 HEIGHT, TEMPERATURE, wp
             use ModelParamsModule, only: gModIntParams
             
@@ -1630,6 +1638,8 @@ module PlotModule
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
                 call DrawGridLines(.false., .false.)
                 call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
+            else if (gModIntParams%plotType == NO_PLOT) then
+                call labelPlotsAndDisplayTime(.false.)
             endif
 
             ! Invalidate the window rectangle to trigger a redraw
@@ -1659,7 +1669,7 @@ module PlotModule
                 OROG_HGT_TEND, OROGRAPHY, ONE, TWO
 
             use ArrayDimensionsModule, only: gCurrentDims
-            use ModelFieldsModule, only: gHorzArr, gVertArr
+            use ModelFieldsModule, only: gHorzArr, gVertArr, gEnergyArr
             use ModelParamsModule, only: gModIntParams
             
             implicit none
@@ -1707,18 +1717,32 @@ module PlotModule
             select case (field)
                 case(VORTICITY)             ! Vorticity in 10**-5/s
 
-                    DO I = 1, SIZE(gHorzArr%PS, 2)
-                        gHorzArr%ZS(:, I) = -gHorzArr%AKL(:) * gHorzArr%PS(:, I)
-                    END DO
+                    if (gShowRunningMean) then
+                        DO I = 1, SIZE(gHorzArr%PS, 2)
+                            gHorzArr%ZS(:, I) = -gHorzArr%AKL(:) * gEnergyArr%WelfordPS(:, I)%mean
+                        END DO
+                    else
+                        DO I = 1, SIZE(gHorzArr%PS, 2)
+                            gHorzArr%ZS(:, I) = -gHorzArr%AKL(:) * gHorzArr%PS(:, I)
+                        END DO
+                    endif
                     var => gHorzArr%ZS(:, :)      ! ZS has the vorticity spectral components (it is zeroed at every N-cycle start so we can reuse
                     isTempField = .FALSE.
 
                 case(HEIGHT)                ! Height in meters
-                    var => gHorzArr%PS(:, :)      ! PS is the streamfunction spectral components
+                    if (gShowRunningMean) then
+                        var => gEnergyArr%WelfordPS(:, :)%mean
+                    else
+                        var => gHorzArr%PS(:, :)      ! PS is the streamfunction spectral components
+                    endif
                     isTempField = .FALSE.
 
                 case(TEMPERATURE)           ! Temperature in Centigrade
-                    var => gHorzArr%TH(:, :)      ! TH(ITOT,maxLevels) is the temperature spectral components
+                    if (gShowRunningMean) then
+                        var => gEnergyArr%WelfordTH(:, :)%mean
+                    else
+                        var => gHorzArr%TH(:, :)      ! TH(ITOT,maxLevels) is the temperature spectral components
+                    endif
                     isTempField = .TRUE.
 
                 case(VERTICAL_WIND)         ! Vertical wind in mb/hr or mm/sec
@@ -1734,7 +1758,11 @@ module PlotModule
                     isTempField = .FALSE.
 
                 case(ADV_BETA_HGT_TEND)     ! Height tendencies in m/day from Advection plus beta
-                    var => gHorzArr%ADS(:, :)     ! ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+                    if (gShowRunningMean) then
+                        var => gEnergyArr%WelfordADS(:, :)%mean
+                    else
+                        var => gHorzArr%ADS(:, :)     ! ADS(ITOT,maxLevels) is the spectral form of the vorticity advection
+                    endif
                     isTempField = .FALSE.
 
                 case(OMEGA_HGT_TEND)        ! Height tendencies in m/day from omega (dp/dt)
@@ -1750,7 +1778,11 @@ module PlotModule
                     isTempField = .TRUE.
 
                 case(ADV_TEMP_TEND)         ! Temperature tendencies in C/day from advection
-                    var => gHorzArr%ADT(:, :)     ! ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+                    if (gShowRunningMean) then
+                        var => gEnergyArr%WelfordADT(:, :)%mean
+                    else
+                        var => gHorzArr%ADT(:, :)     ! ADT(ITOT,maxLevels) is the spectral form of the temperature advection
+                    endif
                     isTempField = .TRUE.
 
                 case(OMEGA_TEMP_TEND)       ! Temperature tendencies in C/day from omega
@@ -2918,13 +2950,13 @@ module PlotModule
             real, dimension(gModIntParams%KMAX2) :: totalEnergy
             real :: lowestValue
             type(InterpolationBounds) b
-            integer :: i
 
-
-            !totalEnergy = gEnergyArr%ZonalWaveKE + 1.0
-            do i = 1, gModIntParams%KMAX2
-                totalEnergy(i) = gEnergyArr%WelfordKE(i)%mean
-            end do
+            !totalEnergy = gEnergyArr%KWaveKE + 1.0
+            if (gShowRunningMean) then
+                totalEnergy(1 : gModIntParams%KMAX2) = gEnergyArr%WelfordKE(1 : gModIntParams%KMAX2)%mean
+            else
+                totalEnergy = gEnergyArr%KWaveKE + 1.0
+            endif
             totalEnergy = LOG10(totalEnergy)
             lowestValue = totalEnergy(gModIntParams%KMAX2)
             totalEnergy = totalEnergy - lowestValue

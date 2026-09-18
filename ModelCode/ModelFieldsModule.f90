@@ -222,33 +222,40 @@ MODULE ModelFieldsModule
     
 ! ======================================= DECLARATIONS for Energy arrays
     
-    REAL, ALLOCATABLE, TARGET :: ZonalWaveKE_Pool(:)
-    REAL, ALLOCATABLE, TARGET :: ZonalWaveAPE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: KWaveKE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: KWaveAPE_Pool(:)
     REAL, ALLOCATABLE, TARGET :: ZonalKE_Pool(:)
     REAL, ALLOCATABLE, TARGET :: ZonalAPE_Pool(:)
-    REAL, ALLOCATABLE, TARGET :: AMP_PHASE_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: PS_AMP_FAS_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: WW_AMP_FAS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordKE_Pool(:)
     type(WelfordType), allocatable, target :: WelfordPS_Pool(:)
-    type(WelfordType), allocatable, target :: WelfordAMP_PHASE_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordTH_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordPS_AMP_FAS_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordWW_AMP_FAS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordADS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordADT_Pool(:)
     
     type :: EnergyArrays
         LOGICAL :: allocated = .FALSE.   ! Flag to indicate if arrays are allocated
         LOGICAL :: defined = .FALSE.     ! Flag to indicate if arrays are defined with proper sizes
-        REAL, POINTER :: ZonalWaveKE(:)  ! This array holds the kinetic energy in the zonal waves as a function of the zonal wavenumber
+        REAL, POINTER :: KWaveKE(:)  ! This array holds the kinetic energy in the zonal waves as a function of the zonal wavenumber
                                          ! for all meridional modes of that zonal wavenumber. So if there are KMAX zonal waves
                                          ! this array will have KMAX elements.
-        REAL, POINTER :: ZonalWaveAPE(:) ! This array holds the APE in the zonal waves as a function of the zonal wavenumber
+        REAL, POINTER :: KWaveAPE(:) ! This array holds the APE in the zonal waves as a function of the zonal wavenumber
 
         REAL, POINTER :: ZonalKE(:)      ! This array holds the kinetic energy in each zonal mode as a function of meridional wavenumber. If there
                                          ! are LMAX meridional modes this array will have LMAX elements
         REAL, POINTER :: ZonalAPE(:)     ! This array holds the available potential energy in each zonal mode as a function of meridional wavenumber
-        real, pointer :: AMP_PHASE(:, :) ! This array holds the amplitude and phase instead of the cosknx, sinknx components in the same form as
+        real, pointer :: PS_AMP_FAS(:, :) ! This array holds the amplitude and phase instead of the cosknx, sinknx components in the same form as
                                          ! all the other arrays. The first LMAX2 are zonal flows then amplitude and phase for each L for all K
+        real, pointer :: WW_AMP_FAS(:, :) ! This array holds the amplitude and phase instead of the WW cosknx, sinknx components
+
         type(WelfordType), pointer :: WelfordKE(:)
-        type(WelfordType), pointer :: WelfordPS(:, :)   ! This array holds the WelfordType for each of the spectral components at each level.
-        type(WelfordType), pointer :: WelfordAMP_PHASE(:, :)   ! This array holds the WelfordType for each of the spectral amplitudes and phases at each level.
+        type(WelfordType), pointer :: WelfordPS(:, :)   ! This array holds the WelfordType for each of the streamfunction spectral components at each level.
+        type(WelfordType), pointer :: WelfordTH(:, :)   ! This array holds the WelfordType for each of the temperature spectral components at each level.
+        type(WelfordType), pointer :: Welford_PS_AMP_FAS(:, :)   ! This array holds the WelfordType for each of the PS spectral amplitudes and phases at each level.
+        type(WelfordType), pointer :: Welford_WW_AMP_FAS(:, :)   ! This array holds the WelfordType for each of the Omega spectral amplitudes and phases at each level.
         type(WelfordType), pointer :: WelfordADS(:, :)
         type(WelfordType), pointer :: WelfordADT(:, :)
 
@@ -286,9 +293,9 @@ MODULE ModelFieldsModule
 
             INTEGER :: status
 
-            ALLOCATE(ZonalWaveKE_Pool(gUserSettings%maxZonalWaves), STAT = status)
+            ALLOCATE(KWaveKE_Pool(gUserSettings%maxZonalWaves), STAT = status)
             if (status /= 0) RETURN
-            ALLOCATE(ZonalWaveAPE_Pool(gUserSettings%maxZonalWaves), STAT = status)
+            ALLOCATE(KWaveAPE_Pool(gUserSettings%maxZonalWaves), STAT = status)
             if (status /= 0) then
                 status = DeallocateEnergyArrays()
                 RETURN
@@ -303,7 +310,12 @@ MODULE ModelFieldsModule
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
-            ALLOCATE(AMP_PHASE_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            ALLOCATE(PS_AMP_FAS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
+            ALLOCATE(WW_AMP_FAS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
             if (status /= 0) then
                 status = DeallocateEnergyArrays()
                 RETURN
@@ -318,11 +330,22 @@ MODULE ModelFieldsModule
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
-            allocate(WelfordAMP_PHASE_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            allocate(WelfordTH_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
             if (status /= 0) then
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
+            allocate(WelfordPS_AMP_FAS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
+            allocate(WelfordWW_AMP_FAS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
+
             allocate(WelfordADS_Pool(gArrayDims%ITOT * gUserSettings%maxLevels), STAT = status)
             if (status /= 0) then
                 status = DeallocateEnergyArrays()
@@ -342,14 +365,15 @@ MODULE ModelFieldsModule
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
             implicit none
-            ZonalWaveKE_Pool = 0.0
-            ZonalWaveAPE_Pool = 0.0
+            KWaveKE_Pool = 0.0
+            KWaveAPE_Pool = 0.0
             ZonalKE_Pool = 0.0
             ZonalAPE_Pool = 0.0
-            AMP_PHASE_Pool = 0.0
+            PS_AMP_FAS_Pool = 0.0
             WelfordKE_Pool(1 : gModIntParams%KMAX2) = WelfordType()
             WelfordPS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
-            WelfordAMP_PHASE_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
+            WelfordTH_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
+            WelfordPS_AMP_FAS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordADS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordADT_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
         end subroutine ZeroEnergyArrays
@@ -370,14 +394,17 @@ MODULE ModelFieldsModule
             
             itot = lmax + 2 * lmax * kmax 
 
-            gEnergyArr%ZonalWaveKE(1 : kmax)  => ZonalWaveKE_Pool(1 : kmax)
-            gEnergyArr%ZonalWaveAPE(1 : kmax)  => ZonalWaveAPE_Pool(1 : kmax)
+            gEnergyArr%KWaveKE(1 : kmax)  => KWaveKE_Pool(1 : kmax)
+            gEnergyArr%KWaveAPE(1 : kmax)  => KWaveAPE_Pool(1 : kmax)
             gEnergyArr%ZonalKE(1 : lmax)  => ZonalKE_Pool(1 : lmax)
             gEnergyArr%ZonalAPE(1 : lmax)  => ZonalAPE_Pool(1 : lmax)
-            gEnergyArr%AMP_PHASE(1 : itot, 1 : nlev) => AMP_PHASE_Pool(1 : itot * nlev)
+            gEnergyArr%PS_AMP_FAS(1 : itot, 1 : nlev) => PS_AMP_FAS_Pool(1 : itot * nlev)
+            gEnergyArr%WW_AMP_FAS(1 : itot, 1 : nlev) => WW_AMP_FAS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordKE(1 : kmax) => WelfordKE_Pool(1 : kmax)
             gEnergyArr%WelfordPS(1 : itot, 1 : nlev) => WelfordPS_Pool(1 : itot * nlev)
-            gEnergyArr%WelfordAMP_PHASE(1 : itot, 1 : nlev)  => WelfordAMP_PHASE_Pool(1 : itot * nlev)
+            gEnergyArr%WelfordTH(1 : itot, 1 : nlev) => WelfordTH_Pool(1 : itot * nlev)
+            gEnergyArr%Welford_PS_AMP_FAS(1 : itot, 1 : nlev)  => WelfordPS_AMP_FAS_Pool(1 : itot * nlev)
+            gEnergyArr%Welford_WW_AMP_FAS(1 : itot, 1 : nlev)  => WelfordWW_AMP_FAS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordADS(1 : itot, 1 : nlev)  => WelfordADS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordADT(1 : itot, 1 : nlev)  => WelfordADT_Pool(1 : itot * nlev)
 
@@ -387,24 +414,29 @@ MODULE ModelFieldsModule
         function DeallocateEnergyArrays() result(statusErr)
             integer statusErr
             
-            IF (ALLOCATED(ZonalWaveKE_Pool)) DEALLOCATE(ZonalWaveKE_Pool, STAT = statusErr)
-            IF (ALLOCATED(ZonalWaveAPE_Pool)) DEALLOCATE(ZonalWaveAPE_Pool, STAT = statusErr)
+            IF (ALLOCATED(KWaveKE_Pool)) DEALLOCATE(KWaveKE_Pool, STAT = statusErr)
+            IF (ALLOCATED(KWaveAPE_Pool)) DEALLOCATE(KWaveAPE_Pool, STAT = statusErr)
             IF (ALLOCATED(ZonalKE_Pool)) DEALLOCATE(ZonalKE_Pool, STAT = statusErr)
             IF (ALLOCATED(ZonalAPE_Pool)) DEALLOCATE(ZonalAPE_Pool, STAT = statusErr)
-            IF (ALLOCATED(AMP_PHASE_Pool)) DEALLOCATE(AMP_PHASE_Pool, STAT = statusErr)
+            IF (ALLOCATED(PS_AMP_FAS_Pool)) DEALLOCATE(PS_AMP_FAS_Pool, STAT = statusErr)
+            IF (ALLOCATED(WW_AMP_FAS_Pool)) DEALLOCATE(WW_AMP_FAS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordPS_Pool)) DEALLOCATE(WelfordPS_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordTH_Pool)) DEALLOCATE(WelfordTH_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordKE_Pool)) DEALLOCATE(WelfordKE_Pool, STAT = statusErr)
-            IF (ALLOCATED(WelfordAMP_PHASE_Pool)) DEALLOCATE(WelfordAMP_PHASE_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordPS_AMP_FAS_Pool)) DEALLOCATE(WelfordPS_AMP_FAS_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordWW_AMP_FAS_Pool)) DEALLOCATE(WelfordWW_AMP_FAS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordADS_Pool)) DEALLOCATE(WelfordADS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordADT_Pool)) DEALLOCATE(WelfordADT_Pool, STAT = statusErr)
-            NULLIFY(gEnergyArr%ZonalWaveKE)
-            NULLIFY(gEnergyArr%ZonalWaveAPE)
+            NULLIFY(gEnergyArr%KWaveKE)
+            NULLIFY(gEnergyArr%KWaveAPE)
             NULLIFY(gEnergyArr%ZonalKE)
             NULLIFY(gEnergyArr%ZonalAPE)
-            NULLIFY(gEnergyArr%AMP_PHASE)
+            NULLIFY(gEnergyArr%PS_AMP_FAS)
+            NULLIFY(gEnergyArr%WW_AMP_FAS)
             NULLIFY(gEnergyArr%WelfordKE)
             NULLIFY(gEnergyArr%WelfordPS)
-            NULLIFY(gEnergyArr%WelfordAMP_PHASE)
+            NULLIFY(gEnergyArr%Welford_PS_AMP_FAS)
+            NULLIFY(gEnergyArr%Welford_WW_AMP_FAS)
             NULLIFY(gEnergyArr%WelfordADS)
             NULLIFY(gEnergyArr%WelfordADT)
 

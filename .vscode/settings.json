@@ -1,0 +1,25 @@
+{ 
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+    "fortran.fortls.configure": "${workspaceFolder}/.vscode/fortls.json",
+    "fortran.linter.extraArgs": [
+        "-I${workspaceFolder}\\x64\\Debug"
+    ],
+    "fortran.linter.compiler": "ifx",
+    "files.exclude": {
+        ".vs/": true,
+        "copies/": true,
+        "x64/": true,
+        "**/*.res": true,
+        "**/RC*": true,
+        "**/*.obj": true,
+        "**/*.mod": true,
+        "**/*.sav": true,
+        "**/*.SAV": true,
+        "**/*.exe": true,
+        "**/*.sln": true,
+        "**/*.u2d": true,
+        "**/*.aps": true,
+        "**/*.pdf": true,
+        "**/*.vfproj": true
+    }
+}

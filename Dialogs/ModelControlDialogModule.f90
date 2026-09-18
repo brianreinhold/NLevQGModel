@@ -503,17 +503,17 @@ module ModelControlDialogModule
                 subroutine setupAndRunModel()
                 use ConstantsModule, only: ERR_NUMERIC_INSTABILITY, PAUSED, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
                     use ArrayDimensionsModule, only: gCurrentDims
-                    use ModelFieldsModule, only: ZeroEnergyArrays
+                    use ModelFieldsModule, only: ZeroEnergyArrays, gEnergyArr
                     use ModelParamsModule, only: gModelState
                     use ModelModule, only: EquationSystem, ComputeAverageFields
                     use PlotModule, only: outputPlot
+
                     implicit none
 
                     logical :: isMap
                     REAL, ALLOCATABLE :: buffer(:)
+                    integer :: N
 
-
-                    
                     isMap = (gModIntParams%plotType == WEATHER_MAP .OR.  &
                              gModIntParams%plotType == PHASE_AND_MAP .OR. &
                              gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
@@ -556,6 +556,18 @@ module ModelControlDialogModule
                                 call ComputeAverageFields()
                                 isAverages = .TRUE.
                             endif
+                            do N = 1, gModIntParams%NLEV
+                                print '(A, I0)', "PS ", N
+                                print '(*(A, F10.4, A, F10.4))', &
+                                    (" ", gEnergyArr%Welford_PS_AMP_FAS(I, N)%mean, " ", gEnergyArr%Welford_PS_AMP_FAS(I + 1, N)%mean, &
+                                     I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT - 1, 2 * gModIntParams%LMAX2)
+                            end do
+                            do N = 1, gModIntParams%NLEV
+                                print '(A, I0)', "WW ", N
+                                print '(*(A, F10.4, A, F10.4))', &
+                                    (" ", gEnergyArr%Welford_WW_AMP_FAS(I, N)%mean, " ", gEnergyArr%Welford_WW_AMP_FAS(I + 1, N)%mean, &
+                                     I = gModIntParams%LMAX2 + 1, gCurrentDims%ITOT - 1, 2 * gModIntParams%LMAX2)
+                            end do
                         else if (isAverages) then
                             ! Restore
                             gHorzArr%PS = gHorzArr%PSSAVE
