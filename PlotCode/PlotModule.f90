@@ -2278,8 +2278,7 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
 
             LOGICAL(BOOL) :: bret
-            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:, :)
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :)
             integer(RGB32), pointer :: dibArray(:,:)
 
             integer(RGB32), target :: Pixels(gBitMapInfo%width)
@@ -2291,23 +2290,17 @@ module PlotModule
             ! Returns transformed latitude line at specified level in gTransArr%GZonal
             call loadLatValues(latHovmoller, gModIntParams%LEVP, 1.0)
 
-            if (latHovmoller%useSolidColor) then
-                if (.not. allocated(X)) allocate(X(gBitMapInfo%width, 3))
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                if (.not. allocated(X_Overlay)) allocate(X_Overlay(gBitMapInfo%width, 3))
-                Xptr => X_Overlay
-            endif
+            if (.not. allocated(X)) allocate(X(gBitMapInfo%width, 3))
 
             currentRow = mod(latHovmoller%rowColumn, 3) + 1 
-            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IXMAX + 1, 1, gBitMapInfo%width, .true., Xptr(:, currentRow)) ! is periodic
-            latHovmoller%hovMap(:, latHovmoller%rowColumn + 1) = Xptr(:, currentRow)
+            call Interpolate1D(gTransArr%GZonal, 1, gCurrentDims%IXMAX + 1, 1, gBitMapInfo%width, .true., X(:, currentRow)) ! is periodic
+            latHovmoller%hovMap(:, latHovmoller%rowColumn + 1) = X(:, currentRow)
 
             if (latHovmoller%useSolidColor) then
                 ! Turn X into an integer array of 32-pixel values
                 do K = 1, gBitMapInfo%width
                     ! Calculate value based on the contour interval
-                    iVal = FLOOR(Xptr(K, currentRow) * latHovmoller%contourIntervalInv) + 9
+                    iVal = FLOOR(X(K, currentRow) * latHovmoller%contourIntervalInv) + 9
                     ! Cycle through the colorRam if iVal exceeds its size
                     ! Use ABS to handle negative iVal if necessary
                     ! Modulo keeps the recylcing postive versus mod which does not
@@ -2342,9 +2335,9 @@ module PlotModule
 
                     !L = gBitMapInfo%width - K + 1
 
-                    iVal      = floor(X_Overlay(K, currentRow) * latHovmoller%contourIntervalInv)
-                    iValRight  = floor(X_Overlay(K + 1, currentRow) * latHovmoller%contourIntervalInv)
-                    iValUp    = floor(X_Overlay(K, prevRow) * latHovmoller%contourIntervalInv)
+                    iVal      = floor(X(K, currentRow) * latHovmoller%contourIntervalInv)
+                    iValRight  = floor(X(K + 1, currentRow) * latHovmoller%contourIntervalInv)
+                    iValUp    = floor(X(K, prevRow) * latHovmoller%contourIntervalInv)
                     ! Detect boundary
                     if (iVal /= iValRight) then
                         colorIdx = max(iVal, iValRight)    ! reuse colorIdx for the max level
@@ -2402,21 +2395,15 @@ module PlotModule
 
             IMPLICIT NONE
 
-
             LOGICAL, intent(in) :: invalidate
             type(VertCrossSection), intent(inout) :: latVertCrossSec
 
             LOGICAL(BOOL) :: bret
             REAL :: cntInt
             type (InterpolationBounds) b
-        
-            REAL, save, ALLOCATABLE, TARGET :: X(:,:), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:,:)
-            integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
-        
+            integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection        
             integer(RGB32), target :: Pixels(gBitMapInfo%width)
-            integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx
-            
+            integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx            
             integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
             integer(c_intptr_t) :: bytesPerRow
             integer(4) :: colorToDraw
@@ -2431,31 +2418,6 @@ module PlotModule
                 gTransArr%plotFull(1 : gCurrentDims%IXMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IXMAX + 1)
             end DO
 
-            ! --- RESIZE LOGIC ---
-            ! Check if X needs allocation or resizing based on the DIB size
-            if (latVertCrossSec%useSolidColor) then
-                if (.not. allocated(X)) then
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
-                else if (size(X, 1) .NE. gBitMapInfo%width .or. size(X, 2) .NE. gBitMapInfo%height) then ! size(X, 1) is size of first dimension
-                    deallocate(X)
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
-                end if
-            end if
-            ! Check if X_Overlay needs allocation or resizing based on the DIB size
-            if (.NOT. latVertCrossSec%useSolidColor) then
-                if (.not. allocated(X_Overlay)) then
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
-                else if (size(X_Overlay, 1) .NE. gBitMapInfo%width .or. size(X_Overlay, 2) .NE. gBitMapInfo%height) then
-                    deallocate(X_Overlay)
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
-                end if
-            end if
-        
-            if (latVertCrossSec%useSolidColor) then
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                Xptr => X_Overlay
-            endif
             ! Interpolate the grid array to a resolution that matches the size of the display of the
             ! weather map on the screen.
             b%il = 1
@@ -2467,14 +2429,8 @@ module PlotModule
             b%LL = 1
             b%LU = gBitMapInfo%height
             b%isPeriodicX = .TRUE.
-            call Interpolate2D(gTransArr%plotFull, b, Xptr)
-            do j = 1, gBitMapInfo%height
-                do i = 1, gBitMapInfo%width
-                    latVertCrossSec%hovMap(i, j) = Xptr(i, j)
-                end do
-            end do
-            
-            ! However, we need to map these interpolated values in X to colors for each pixel. We will
+            call Interpolate2D(gTransArr%plotFull, b, latVertCrossSec%hovMap)
+            ! However, we need to map these interpolated values in latVertCrossSec%hovMap to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
             ! the DIBSection.
@@ -2494,7 +2450,7 @@ module PlotModule
                     J1 = gBitMapInfo%height - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(Xptr(I, J1) * latVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = FLOOR(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -2518,7 +2474,7 @@ module PlotModule
                 CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
                 ! 2. Calculate borders by comparing current pixel to its neighbors.
                 ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping X_Overlay to the upper half of the screen
+                ! Mapping latVertCrossSec%hovMap to the upper half of the screen
                 do J = 1, gBitMapInfo%height - 1
 
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
@@ -2526,9 +2482,9 @@ module PlotModule
                     do I = 1, gBitMapInfo%width - 1
         
                         ! Calculate interval bins
-                        iVal      = floor(X_Overlay(I, J1) * latVertCrossSec%contourIntervalInv)
-                        iValRight = floor(X_Overlay(I + 1, J1) * latVertCrossSec%contourIntervalInv)
-                        iValDown  = floor(X_Overlay(I, J1 - 1) * latVertCrossSec%contourIntervalInv)
+                        iVal      = floor(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv)
+                        iValRight = floor(latVertCrossSec%hovMap(I + 1, J1) * latVertCrossSec%contourIntervalInv)
+                        iValDown  = floor(latVertCrossSec%hovMap(I, J1 - 1) * latVertCrossSec%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -2751,14 +2707,9 @@ module PlotModule
             LOGICAL(BOOL) :: bret
             REAL :: cntInt
             type (InterpolationBounds) b
-        
-            REAL, save, ALLOCATABLE, TARGET :: X(:,:), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:,:)
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
-        
             integer(RGB32), target :: Pixels(gBitMapInfo%width)
             integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx
-            
             integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
             integer(c_intptr_t) :: bytesPerRow
             integer(4) :: colorToDraw
@@ -2772,32 +2723,6 @@ module PlotModule
                 call loadLonValues(lonVertCrossSec, N, lonVertCrossSec%tempScales(N))
                 gTransArr%plotFullY(1 : gCurrentDims%IYMAX + 1, N) = gTransArr%GZonal(1 : gCurrentDims%IYMAX + 1)
             end DO
-
-            ! --- RESIZE LOGIC ---
-            ! Check if X needs allocation or resizing based on the DIB size
-            if (lonVertCrossSec%useSolidColor) then
-                if (.not. allocated(X)) then
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
-                else if (size(X, 1) .NE. gBitMapInfo%width .or. size(X, 2) .NE. gBitMapInfo%height) then ! size(X, 1) is size of first dimension
-                    deallocate(X)
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height))
-                end if
-            end if
-            ! Check if X_Overlay needs allocation or resizing based on the DIB size
-            if (.NOT. lonVertCrossSec%useSolidColor) then
-                if (.not. allocated(X_Overlay)) then
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
-                else if (size(X_Overlay, 1) .NE. gBitMapInfo%width .or. size(X_Overlay, 2) .NE. gBitMapInfo%height) then
-                    deallocate(X_Overlay)
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height))
-                end if
-            end if
-        
-            if (lonVertCrossSec%useSolidColor) then
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                Xptr => X_Overlay
-            endif
             ! Interpolate the grid array to a resolution that matches the size of the display of the
             ! weather map on the screen.
             b%il = 1
@@ -2809,13 +2734,8 @@ module PlotModule
             b%LL = 1
             b%LU = gBitMapInfo%height
             b%isPeriodicX = .FALSE.
-            call Interpolate2D(gTransArr%plotFullY, b, Xptr)
-            do j = 1, gBitMapInfo%height
-                do i = 1, gBitMapInfo%width
-                    lonVertCrossSec%hovMap(i, j) = Xptr(i, j)
-                end do
-            end do
-            ! However, we need to map these interpolated values in X to colors for each pixel. We will
+            call Interpolate2D(gTransArr%plotFullY, b, lonVertCrossSec%hovMap)
+            ! However, we need to map these interpolated values in lonVertCrossSec%hovMap to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
             ! the DIBSection.
@@ -2835,7 +2755,7 @@ module PlotModule
                     J1 = gBitMapInfo%height - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(Xptr(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = FLOOR(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -2859,7 +2779,7 @@ module PlotModule
                 CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
                 ! 2. Calculate borders by comparing current pixel to its neighbors.
                 ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping X_Overlay to the upper half of the screen
+                ! Mapping lonVertCrossSec%hovMap to the upper half of the screen
                 do J = 1, gBitMapInfo%height - 1
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
                     J1 = gBitMapInfo%height - J + 1
@@ -2867,9 +2787,9 @@ module PlotModule
                     do I = 1, gBitMapInfo%width - 1
         
                         ! Calculate interval bins
-                        iVal      = floor(X_Overlay(I, J1) * lonVertCrossSec%contourIntervalInv)
-                        iValRight = floor(X_Overlay(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
-                        iValDown  = floor(X_Overlay(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
+                        iVal      = floor(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv)
+                        iValRight = floor(lonVertCrossSec%hovMap(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
+                        iValDown  = floor(lonVertCrossSec%hovMap(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -2992,24 +2912,18 @@ module PlotModule
             real, intent(in) :: inArray(:)
 
             LOGICAL(BOOL) :: bret
-            REAL, save, ALLOCATABLE, TARGET :: X(:, :), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:, :)
+            REAL, save, ALLOCATABLE, TARGET :: X(:, :) ! Array to allow finding line contours
+
             integer(RGB32), pointer :: dibArray(:,:)
 
             integer(RGB32), target :: Pixels(b%KU)
             integer ::  iVal, iValDown, iValLeft, K, L, colorIdx, colorToDraw, currentColumn, prevColumn
 
-            if (hovmollerType%useSolidColor) then
-                if (.not. allocated(X)) allocate(X(b%KU, 3))
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                if (.not. allocated(X_Overlay)) allocate(X_Overlay(b%KU, 3))
-                Xptr => X_Overlay
-            endif
+            if (.not. allocated(X)) allocate(X(b%KU, 3))
 
             currentColumn = MOD(hovmollerType%rowColumn, 3) + 1
-            call Interpolate1D(inArray, b%IL, b%IU, b%KL, b%KU, b%isPeriodicX, Xptr(:, currentColumn)) ! is NOT periodic
-            hovmollerType%hovMap(hovmollerType%rowColumn + 1, :) = Xptr(:, currentColumn)
+            call Interpolate1D(inArray, b%IL, b%IU, b%KL, b%KU, b%isPeriodicX, X(:, currentColumn))
+            hovmollerType%hovMap(hovmollerType%rowColumn + 1, :) = X(:, currentColumn)
             
             ! Get access to the DIBSection 
             call C_F_POINTER(gBitMapInfo%pBits, dibArray, [gBitMapInfo%width, gBitMapInfo%height])
@@ -3017,7 +2931,7 @@ module PlotModule
                 ! Turn X into an integer array of 32-pixel values
                 do K = 1, gBitMapInfo%height
                     ! Calculate value based on the contour interval
-                    iVal = FLOOR(Xptr(K, currentColumn) * hovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                    iVal = FLOOR(X(K, currentColumn) * hovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
                     ! Cycle through the colorRam if iVal exceeds its size
                     ! Use ABS to handle negative iVal if necessary
                     ! Modulo keeps the recylcing postive versus mod which does not
@@ -3025,7 +2939,6 @@ module PlotModule
 
                     Pixels(K) = RAM_COLORS(colorIdx)
                 end do
-
 
                 ! 2. Loop through 'Pixels' array (height) 
                 ! and place each pixel into the DIBSection row-by-row
@@ -3044,9 +2957,9 @@ module PlotModule
                     ! J_next is the row physically below J on the screen (one step South in data)
 
                     ! Calculate interval bins
-                    iVal      = floor(X_Overlay(L, currentColumn) * hovmollerType%contourIntervalInv)
-                    iValDown  = floor(X_Overlay(L - 1, currentColumn) * hovmollerType%contourIntervalInv)
-                    iValLeft  = floor(X_Overlay(L, prevColumn) * hovmollerType%contourIntervalInv)
+                    iVal      = floor(X(L, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValDown  = floor(X(L - 1, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValLeft  = floor(X(L, prevColumn) * hovmollerType%contourIntervalInv)
         
                     ! Detect boundary
                     if (iVal /= iValDown) then
@@ -3081,10 +2994,8 @@ module PlotModule
 
 
 ! PLOT WEATHER MAP -------------------------------------------
-        ! @param Y: the spectral components array
         ! @param invalidate: if true, invalidate rectangle and update to force screen redraw
-        ! @param field: which field to plot, one of HEIGHT, TEMPERATURE, or NO_PLOT
-        ! @param solidColor: if true, draw a solid color contour map, if false, draw line contours
+        ! @param weatherMapType: struct containing all information not dependent upon the integrated values
         subroutine plotWeatherMap(invalidate, weatherMapType)
             USE IFWIN
             USE GDI32
@@ -3100,17 +3011,13 @@ module PlotModule
 
             IMPLICIT NONE
 
-
             LOGICAL, intent(in) :: invalidate
             type(WeatherMap), intent(inout) :: weatherMapType
-
 
             LOGICAL(BOOL)   :: bret
             REAL :: cntInt
             type (InterpolationBounds) b
         
-            REAL, save, ALLOCATABLE, TARGET :: X(:,:), X_Overlay(:, :)  ! Created on the heap
-            REAL, POINTER :: Xptr(:,:)
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
         
             integer(RGB32), target :: Pixels(gBitMapInfo%width)
@@ -3127,31 +3034,6 @@ module PlotModule
             ! This routine also dimensionalizes the values
             call createGrid(gTransArr%plotFull, weatherMapType)
             
-            ! --- RESIZE LOGIC ---
-            ! Check if X needs allocation or resizing based on the DIB size
-            if (weatherMapType%useSolidColor) then
-                if (.not. allocated(X)) then
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
-                else if (size(X, 1) /= gBitMapInfo%width .or. size(X, 2) /= gBitMapInfo%height / 2) then ! size(X, 1) is size of first dimension
-                    deallocate(X)
-                    allocate(X(gBitMapInfo%width, gBitMapInfo%height / 2))
-                end if
-            end if
-            ! Check if X_Overlay needs allocation or resizing based on the DIB size
-            if (.NOT. weatherMapType%useSolidColor) then
-                if (.not. allocated(X_Overlay)) then
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height / 2))
-                else if (size(X_Overlay, 1) /= gBitMapInfo%width .or. size(X_Overlay, 2) /= gBitMapInfo%height / 2) then
-                    deallocate(X_Overlay)
-                    allocate(X_Overlay(gBitMapInfo%width, gBitMapInfo%height / 2))
-                end if
-            end if
-        
-            if (weatherMapType%useSolidColor) then
-                Xptr => X        ! Note the pointer and not the equals! Not like C!
-            else
-                Xptr => X_Overlay
-            endif
             ! Interpolate the grid array to a resolution that matches the size of the display of the
             ! weather map on the screen.
             b%il = 1
@@ -3163,13 +3045,10 @@ module PlotModule
             b%LL = 1
             b%LU = gBitMapInfo%height / 2
             b%isPeriodicX = .TRUE.
-            call Interpolate2D(gTransArr%plotFull, b, Xptr)
-            do j = 1, gBitMapInfo%height / 2
-                do i = 1, gBitMapInfo%width
-                    weatherMapType%wxMap(i, j) = Xptr(i, j)
-                end do
-            end do
-            ! However, we need to map these interpolated values in X to colors for each pixel. We will
+
+            call Interpolate2D(gTransArr%plotFull, b, weatherMapType%wxMap)
+
+            ! However, we need to map these interpolated values in weatherMapType%wxMap to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
             ! the DIBSection.
@@ -3184,12 +3063,12 @@ module PlotModule
             baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
 
             if (weatherMapType%useSolidColor) then
-                ! Turn X into an integer array of 32-pixel values
+                ! Turn weatherMapType%wxMap into an integer array of 32-pixel values
                 do J = gBitMapInfo%height / 2, 1, -1
                     J1 = gBitMapInfo%height / 2 - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(Xptr(I, J1) * weatherMapType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = FLOOR(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -3213,16 +3092,16 @@ module PlotModule
                 CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
                 ! 2. Calculate borders by comparing current pixel to its neighbors.
                 ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping X_Overlay to the upper half of the screen
+                ! Mapping weatherMapType%wxMap to the upper half of the screen
                 do J = 1, (gBitMapInfo%height / 2) - 1
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
                     J1 = (gBitMapInfo%height / 2) - J + 1
 
                     do I = 1, gBitMapInfo%width - 1
                         ! Calculate interval bins
-                        iVal      = floor(X_Overlay(I, J1) * weatherMapType%contourIntervalInv)
-                        iValRight = floor(X_Overlay(I + 1, J1) * weatherMapType%contourIntervalInv)
-                        iValDown  = floor(X_Overlay(I, J1 - 1) * weatherMapType%contourIntervalInv)
+                        iVal      = floor(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv)
+                        iValRight = floor(weatherMapType%wxMap(I + 1, J1) * weatherMapType%contourIntervalInv)
+                        iValDown  = floor(weatherMapType%wxMap(I, J1 - 1) * weatherMapType%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
