@@ -971,7 +971,7 @@ module PlotModule
             ! timeScale * gModRealParams%delt gives the length of each time step in seconds. We divide by secondsPerDay to give days
             ! 'Days' may generate too big of a number - go to years and days
             gElapsedTime%days = REAL(gElapsedTime%timeSteps) * gElapsedTime%dimensionalTime
-            gElapsedTime%years = Floor(gElapsedTime%days / 365.0_wp)
+            gElapsedTime%years = dbin(gElapsedTime%days / 365.0_wp)
             gElapsedTime%days = gElapsedTime%days - gElapsedTime%years * 365
             ! Use an internal write to format the string
 
@@ -1454,7 +1454,7 @@ module PlotModule
                     J1 = gBitMapInfo%height / 2 - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(Xptr(I, J1) / contourInterval) + NUM_RAM_COLORS / 2
+                        iVal = bin(Xptr(I, J1) / contourInterval) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -1485,13 +1485,12 @@ module PlotModule
                     J1 = (gBitMapInfo%height / 2) - J + 1
                     ! J_next is the row physically below J on the screen (one step South in data)
                     !J_next = J_data - 1
-        
+                    iVal = bin(X_Overlay(1, J1) / contourInterval)
                     do I = 1, gBitMapInfo%width - 1
         
                         ! Calculate interval bins
-                        iVal      = floor(X_Overlay(I, J1) / contourInterval)
-                        iValRight = floor(X_Overlay(I + 1, J1) / contourInterval)
-                        iValDown  = floor(X_Overlay(I, J1 - 1) * contourInterval)
+                        iValRight = bin(X_Overlay(I + 1, J1) / contourInterval)
+                        iValDown  = bin(X_Overlay(I, J1 - 1) * contourInterval)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -1507,6 +1506,7 @@ module PlotModule
                             ! J=1 is the top row of the pixelArray
                             pixelArray(I, J) = colorToDraw
                         end if
+                        iVal = iValRight
                     end do
                 end do
             endif
@@ -2239,7 +2239,7 @@ module PlotModule
         
                         ! 2. Draw Text Label which will be years:days.fraction
                         days =  REAL(i) * REAL(gElapsedTime%dimensionalTime)
-                        years = Floor(days / 365.0_wp)
+                        years = dbin(days / 365.0_wp)
                         days = days - years * 365
                         write(timeStr, '( I0, ":", F0.2)') years, days
                         bret = SetTextAlign(gBitMapInfo%hMemDC, TA_CENTER)
@@ -2300,7 +2300,7 @@ module PlotModule
                 ! Turn X into an integer array of 32-pixel values
                 do K = 1, gBitMapInfo%width
                     ! Calculate value based on the contour interval
-                    iVal = FLOOR(X(K, currentRow) * latHovmoller%contourIntervalInv) + 9
+                    iVal = bin(X(K, currentRow) * latHovmoller%contourIntervalInv) + 9
                     ! Cycle through the colorRam if iVal exceeds its size
                     ! Use ABS to handle negative iVal if necessary
                     ! Modulo keeps the recylcing postive versus mod which does not
@@ -2331,13 +2331,10 @@ module PlotModule
                 !    Search through the row from 'left' to  'right'
                 prevRow = currentRow - 1
                 if (prevRow < 1) prevRow = 3
+                iVal      = bin(X(1, currentRow) * latHovmoller%contourIntervalInv)
                 do K = 1, gBitMapInfo%width - 1
-
-                    !L = gBitMapInfo%width - K + 1
-
-                    iVal      = floor(X(K, currentRow) * latHovmoller%contourIntervalInv)
-                    iValRight  = floor(X(K + 1, currentRow) * latHovmoller%contourIntervalInv)
-                    iValUp    = floor(X(K, prevRow) * latHovmoller%contourIntervalInv)
+                    iValRight  = bin(X(K + 1, currentRow) * latHovmoller%contourIntervalInv)
+                    iValUp    = bin(X(K, prevRow) * latHovmoller%contourIntervalInv)
                     ! Detect boundary
                     if (iVal /= iValRight) then
                         colorIdx = max(iVal, iValRight)    ! reuse colorIdx for the max level
@@ -2365,7 +2362,7 @@ module PlotModule
 
                         dibArray(K, latHovmoller%rowColumn + 1) = colorToDraw
                     end if
-                    
+                    iVal = iValRight
                 end do
             endif
 
@@ -2450,7 +2447,7 @@ module PlotModule
                     J1 = gBitMapInfo%height - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = bin(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -2479,12 +2476,12 @@ module PlotModule
 
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
                     J1 = gBitMapInfo%height - J + 1
+                    iVal      = bin(latVertCrossSec%hovMap(1, J1) * latVertCrossSec%contourIntervalInv)
                     do I = 1, gBitMapInfo%width - 1
         
                         ! Calculate interval bins
-                        iVal      = floor(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv)
-                        iValRight = floor(latVertCrossSec%hovMap(I + 1, J1) * latVertCrossSec%contourIntervalInv)
-                        iValDown  = floor(latVertCrossSec%hovMap(I, J1 - 1) * latVertCrossSec%contourIntervalInv)
+                        iValRight = bin(latVertCrossSec%hovMap(I + 1, J1) * latVertCrossSec%contourIntervalInv)
+                        iValDown  = bin(latVertCrossSec%hovMap(I, J1 - 1) * latVertCrossSec%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -2500,6 +2497,7 @@ module PlotModule
                             ! J=1 is the top row of the pixelArray
                             pixelArray(I, J) = colorToDraw
                         end if
+                        iVal = iValRight
                     end do
                 end do
             endif
@@ -2755,7 +2753,7 @@ module PlotModule
                     J1 = gBitMapInfo%height - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = bin(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -2783,13 +2781,12 @@ module PlotModule
                 do J = 1, gBitMapInfo%height - 1
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
                     J1 = gBitMapInfo%height - J + 1
-
+                    iVal = bin(lonVertCrossSec%hovMap(1, J1) * lonVertCrossSec%contourIntervalInv)
                     do I = 1, gBitMapInfo%width - 1
         
                         ! Calculate interval bins
-                        iVal      = floor(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv)
-                        iValRight = floor(lonVertCrossSec%hovMap(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
-                        iValDown  = floor(lonVertCrossSec%hovMap(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
+                        iValRight = bin(lonVertCrossSec%hovMap(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
+                        iValDown  = bin(lonVertCrossSec%hovMap(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -2805,6 +2802,7 @@ module PlotModule
                             ! J=1 is the top row of the pixelArray
                             pixelArray(I, J) = colorToDraw
                         end if
+                        iVal = iValRight
                     end do
                 end do
             endif
@@ -2931,7 +2929,7 @@ module PlotModule
                 ! Turn X into an integer array of 32-pixel values
                 do K = 1, gBitMapInfo%height
                     ! Calculate value based on the contour interval
-                    iVal = FLOOR(X(K, currentColumn) * hovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                    iVal = bin(X(K, currentColumn) * hovmollerType%contourIntervalInv) + NUM_RAM_COLORS / 2
                     ! Cycle through the colorRam if iVal exceeds its size
                     ! Use ABS to handle negative iVal if necessary
                     ! Modulo keeps the recylcing postive versus mod which does not
@@ -2957,9 +2955,9 @@ module PlotModule
                     ! J_next is the row physically below J on the screen (one step South in data)
 
                     ! Calculate interval bins
-                    iVal      = floor(X(L, currentColumn) * hovmollerType%contourIntervalInv)
-                    iValDown  = floor(X(L - 1, currentColumn) * hovmollerType%contourIntervalInv)
-                    iValLeft  = floor(X(L, prevColumn) * hovmollerType%contourIntervalInv)
+                    iVal      = bin(X(L, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValDown  = bin(X(L - 1, currentColumn) * hovmollerType%contourIntervalInv)
+                    iValLeft  = bin(X(L, prevColumn) * hovmollerType%contourIntervalInv)
         
                     ! Detect boundary
                     if (iVal /= iValDown) then
@@ -3068,7 +3066,7 @@ module PlotModule
                     J1 = gBitMapInfo%height / 2 - J + 1
                     do I = 1, gBitMapInfo%width
                         ! Calculate value based on the contour interval
-                        iVal = FLOOR(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv) + NUM_RAM_COLORS / 2
+                        iVal = bin(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv) + NUM_RAM_COLORS / 2
                         ! Cycle through the colorRam if iVal exceeds its size
                         ! Use ABS to handle negative iVal if necessary
                         ! Modulo keeps the recycling positive versus mod which does not
@@ -3096,12 +3094,11 @@ module PlotModule
                 do J = 1, (gBitMapInfo%height / 2) - 1
                     ! J_data maps Screen Top (J=1) to Array North (Height/2)
                     J1 = (gBitMapInfo%height / 2) - J + 1
-
+                    iVal = bin(weatherMapType%wxMap(1, J1) * weatherMapType%contourIntervalInv)
                     do I = 1, gBitMapInfo%width - 1
                         ! Calculate interval bins
-                        iVal      = floor(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv)
-                        iValRight = floor(weatherMapType%wxMap(I + 1, J1) * weatherMapType%contourIntervalInv)
-                        iValDown  = floor(weatherMapType%wxMap(I, J1 - 1) * weatherMapType%contourIntervalInv)
+                        iValRight = bin(weatherMapType%wxMap(I + 1, J1) * weatherMapType%contourIntervalInv)
+                        iValDown  = bin(weatherMapType%wxMap(I, J1 - 1) * weatherMapType%contourIntervalInv)
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
@@ -3117,6 +3114,7 @@ module PlotModule
                             ! J=1 is the top row of the pixelArray
                             pixelArray(I, J) = colorToDraw
                         end if
+                        iVal = iValRight
                     end do
                 end do
             endif
@@ -3125,6 +3123,24 @@ module PlotModule
             !call inverseTransform(gTransArr%G1plot, weatherMapType)
 
         end subroutine plotWeatherMap
+
+        ! Function to replace slow an inefficient Floor()
+        pure integer function bin(val)
+            implicit none
+            real, intent(in) :: val
+
+            bin = int(val)
+            if (val < 0.0) bin = bin - 1
+        end function
+
+        pure integer function dbin(val)
+            use ConstantsModule, only: wp
+            implicit none
+            real(wp), intent(in) :: val
+
+            dbin = int(val)
+            if (val < 0.0) dbin = dbin - 1
+        end function
 
         SUBROUTINE PumpMessages()
             USE IFWINTY
