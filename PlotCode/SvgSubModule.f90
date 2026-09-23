@@ -61,13 +61,26 @@ SUBMODULE (PlotModule) SvgSubmodule
 
         module subroutine GenerateSVG()
             use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
-                               ZONAL_WAVE_ENERGY, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PLOTTING_OFF
+                               ZONAL_WAVE_ENERGY, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, WEATHER_STN, PLOTTING_OFF
             use ModelParamsModule, only: gModIntParams, FileStruct
             use NLevQGModelGlobals, only: gBitMapInfo
             implicit None
             
             REAL :: contourIntervalInv1, contourIntervalInv2
             type(FileStruct) :: svgFileInfo
+
+            if (gModIntParams%plotType == WEATHER_STN ) then
+                if (gModIntParams%field1 .NE. PLOTTING_OFF) then
+                    ! Note 'color' here is AARRGGBB and SVG uses RRGGBB or RRGGBBAA.
+                    call CreateLineSVG(gWeatherStation1%timeSeriesBuf%plot_pts, gWeatherStation1%timeSeriesBuf%count, &
+                        gBitMapInfo%width, gBitMapInfo%height, svgFileInfo, gModIntParams%field2 == PLOTTING_OFF, gWeatherStation1%color)
+                endif
+                if (gModIntParams%field2 .NE. PLOTTING_OFF)then
+                     call CreateLineSVG(gWeatherStation2%timeSeriesBuf%plot_pts, gWeatherStation2%timeSeriesBuf%count, &
+                        gBitMapInfo%width, gBitMapInfo%height, svgFileInfo, .true., gWeatherStation2%color)
+                endif
+                return
+            endif
 
             contourIntervalInv1 = 0.0
             contourIntervalInv2 = 0.0
@@ -107,6 +120,57 @@ SUBMODULE (PlotModule) SvgSubmodule
             endif
 
         end subroutine GenerateSVG
+
+        subroutine CreateLineSVG(points, length, width, height, svgFileInfo, closeFile, color)
+            use ModelParamsModule, only: FileStruct
+
+            implicit none
+
+            type(T_POINT), intent(in) :: points(:)
+            integer, intent(in) :: length, width, height
+            type(FileStruct), intent(inout) :: svgFileInfo
+            logical, intent(in) :: closeFile
+            integer*4, intent(in) :: color
+
+            character(len=32) :: filename, colorHex
+            integer :: i, ios, y
+
+            character(6) :: hex
+
+            write(hex,'(Z6.6)') color  ! Convert color value to a HEX string, but only the lowest 24 bits for RRGGBB
+
+            if (svgFileInfo%fileHandle .EQ. -1) then
+                call GenerateUniqueFilename(svgFileInfo%fileName) ! Uses current time to create a unique filename
+            
+                open(newunit=svgFileInfo%fileHandle, file=trim(svgFileInfo%fileName), status='REPLACE', form='FORMATTED', iostat=ios)
+                if (ios .NE. 0) return
+
+                ! 1. Write the opening SVG tag with the correct W3C namespace URL and viewbox integers
+                ! We use the I0 format descriptor to cleanly embed the numbers.
+                write(svgFileInfo%fileHandle, '(A, I0, A, I0, A)') '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ', width, ' ', height, '">'
+                ! Paint the background white.
+                write(svgFileInfo%fileHandle, '(A)') '<rect width="100%" height="100%" fill="#FFFFFF"/>'
+            endif
+
+            ! THis is to stop a potential draw of a line from (0,0) to the first point on the far right.
+            ! write(svgFileInfo%fileHandle,'(A)', advance='no') '<path d="M '
+            
+            ! ! First point
+            ! write(svgFileInfo%fileHandle,'(I0, A, I0, A)', advance='no') points(1)%x, ' ', points(1)%y, '>'
+
+            
+            write(svgFileInfo%fileHandle,'(A)', advance='no') '<polyline points="'
+            do i = 1, length
+                write(svgFileInfo%fileHandle,'(I0, A, I0, A)', advance='no') points(i)%x, ',', points(i)%y, ' '
+            end do
+            write(svgFileInfo%fileHandle,'(A, A, A)') '" stroke="#', hex, '" fill="none"/>'
+            
+            if (closeFile) then
+                write(svgFileInfo%fileHandle, '(A)') '</svg>'
+                close(svgFileInfo%fileHandle)
+            endif
+
+        end subroutine CreateLineSVG
 
     
         subroutine CreateSVG(X, width, height, contourIntervalInv, svgFileInfo, closeFile, useSolidColor)

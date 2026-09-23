@@ -2144,7 +2144,7 @@ module PlotModule
             ! 1. Update Circular Buffer (1-based)
             timeSeriesBuf%head_idx = MOD(timeSeriesBuf%head_idx, gBitMapInfo%width) + 1
             timeSeriesBuf%data_buffer(timeSeriesBuf%head_idx) = value
-            timeSeriesBuf%count = MIN(timeSeriesBuf%count + 1, gBitMapInfo%width) ! Keep a count of how many points are loaded. This is to stop the sprious 
+            timeSeriesBuf%count = MIN(timeSeriesBuf%count + 1, gBitMapInfo%width) ! Keep a count of how many points are loaded. This is to stop the spurious 
                                                                                   ! zero points at the start when the buffer has not been filled. So count will
                                                                                   ! will go from 0 to screen width. ONce at the screen width it will stay there
                                                                                   ! until reset.
@@ -2156,6 +2156,8 @@ module PlotModule
                 if (read_idx < 1) read_idx = read_idx + gBitMapInfo%width
                 !read_idx = read_idx + 1 ! Back to 1-based
         
+                ! This places the first point on the far right of the screen. When the buffer is full, the
+                ! first point will be on the far left.
                 timeSeriesBuf%plot_pts(i)%x = (gBitMapInfo%width - timeSeriesBuf%count) + (i - 1)
                 ! NOTE: Flip and Scale Y. Windows Y=0 is top. 
                 ! This positions the y-axis = 0
@@ -2167,7 +2169,6 @@ module PlotModule
             if (clearScreen) iret = PatBlt(gBitMapInfo%hMemDC, 0, 0, gBitMapInfo%width, gBitMapInfo%height, PATCOPY)
         
             ! 6. Draw lines (Optional: using your brush color or a pen)
-            ! [Insert your MoveToEx/LineTo axes code here if desired]
             if (drawLines) then
                 ! Create a Solid Pen: PS_SOLID, Width=2, Color=Yellow (RGB 255, 255, 0)
                 hPen = CreatePen(PS_SOLID, 0, color) ! 0  = 1-pixel wide line regardless of GDI logical units
@@ -2179,6 +2180,7 @@ module PlotModule
                 ! Cleanup GDI Objects
                 hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
                 bret = DeleteObject(hPen)
+            ! 6. Plot points
             else
                 bret = GdiFlush()
                 CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
