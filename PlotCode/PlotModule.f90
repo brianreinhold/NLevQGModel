@@ -62,6 +62,14 @@ module PlotModule
     integer(kind=4), parameter :: SPRD_TEMP_COLOR = Z'00775577'               ! RGB(119, 85, 119)
     integer(kind=4), parameter :: BFIT_TEMP_COLOR = Z'0000AAFF'               ! RGB(255, 170, 0)
     
+    integer(kind=4), parameter :: BLACK = Z'00000000'                         ! RGB(0, 0, 0)
+    integer(kind=4), parameter :: BACKGROUND_COLOR = Z'00001E0A'              ! RGB(0, 30, 10)
+    integer(kind=4), parameter :: AXIS_COLOR = Z'00282828'                    ! RGB(40, 40, 40)
+    integer(kind=4), parameter :: X_Y_AXIS_COLOR = Z'00323232'                ! RGB(50, 50, 50)
+    integer(kind=4), parameter :: DARKEST_TEXT = Z'003C3C3C'                  ! RGB(60, 60, 60)
+    integer(kind=4), parameter :: DARK_TEXT = Z'005A5A5A'                     ! RGB(90, 90, 90)
+    integer(kind=4), parameter :: GRAY_TEXT = Z'00646464'                     ! RGB(100, 100, 100)
+    
     REAL, POINTER :: X1(:,:), X2(:, :)  ! These are the arrays containing interpolated values for 2-d plots.
                                         ! These arrays allow mouse over values to be displayed and provide the
                                         ! the data source to generate SVG plot files. We have only two such arrays as we only plot
@@ -942,7 +950,7 @@ module PlotModule
             energyHovmollerType%hovMap => X
             energyHovmollerType%hovMap = 0.0
             energyHovmollerType%isInitialized = .true.
-    end subroutine initializeEnergyHovmollerType
+        end subroutine initializeEnergyHovmollerType
 
 !=========================================== OUTPUT PLOT
         !> This method determines what to plot depending upon the setting of gModIntParams%plotType
@@ -1382,7 +1390,7 @@ module PlotModule
             
             logical :: useSolidColor = true
 
-    !! ===========  NOT USING THIS NOW
+            !! ===========  NOT USING THIS NOW
             return
 
             saveField = gModIntParams%field1
@@ -1494,17 +1502,8 @@ module PlotModule
         
                         ! Detect boundary
                         if (iVal /= iValRight .or. iVal /= iValDown) then
-                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
-                            if (colorIdx > 0) then
-                                colorToDraw = z'00DD0077' ! Reddish-pink
-                            else if (colorIdx < 0) then
-                                colorToDraw = z'000000FF' ! Blue
-                            else 
-                                colorToDraw = z'00000000' ! White for the 0-contour
-                            end if
-                            
                             ! J=1 is the top row of the pixelArray
-                            pixelArray(I, J) = colorToDraw
+                            pixelArray(I, J) = getBoundaryColor(iVal, iValRight, iValDown)
                         end if
                         iVal = iValRight
                     end do
@@ -1519,7 +1518,7 @@ module PlotModule
             gModIntParams%field2 = saveField2
 
         end subroutine plotDiagnostic
-        
+       
         subroutine pauseRun()
             use ConstantsModule, only: PAUSED
             use ModelParamsModule, only: gModelState
@@ -1581,7 +1580,7 @@ module PlotModule
             integer(HANDLE) :: hBrush, hOldBrush
 
 
-            hBrush = CreateSolidBrush(RGB(0, 30, 10))       ! Create the color brush
+            hBrush = CreateSolidBrush(BACKGROUND_COLOR)       ! Create the color brush
             hOldBrush = SelectObject(gBitMapInfo%hMemDC, hBrush) ! Put it in the DC
 
             ! 6. Clear the canvas to dark green initially
@@ -1600,11 +1599,11 @@ module PlotModule
                 ! Do heights on right
                 call DrawHorizontalLines(gWeatherStation2%field == PLOTTING_OFF, &     ! No screen update if false
                                          .true., &       ! put labels on left
-                                         Z'0000DD00', &  ! color of labels
+                                         GRAY_TEXT, &  ! color of labels
                                          gWeatherStation1)     ! isHeight is true for heights so draw horizontal lines         
                 call DrawHorizontalLines(.true., &      ! true means force screen update. 
                                          .false., &     ! false means draw labels on right side
-                                         Z'000055EE', &
+                                         GRAY_TEXT, &
                                          gWeatherStation2)
             !else if (gModIntParams%plotType == ENERGY_TIME_SERIES .OR. gModIntParams%plotType == STATISTICS) then
             !    ! Clear the time series buffers
@@ -2164,7 +2163,7 @@ module PlotModule
                 timeSeriesBuf%plot_pts(i)%y = yzero_axis - NINT(timeSeriesBuf%data_buffer(read_idx))
             END DO
             ! 5. Clear Background (Dark Green)
-            hBrush = CreateSolidBrush(RGB(0, 30, 10))
+            hBrush = CreateSolidBrush(BACKGROUND_COLOR)
             hOldBrush = SelectObject(gBitMapInfo%hMemDC, hBrush)
             if (clearScreen) iret = PatBlt(gBitMapInfo%hMemDC, 0, 0, gBitMapInfo%width, gBitMapInfo%height, PATCOPY)
         
@@ -2220,7 +2219,7 @@ module PlotModule
                 ! How many pixels represent the gap between lines
                 gridInterval = gBitMapInfo%width / 20 
             
-                ! The distance between lines in units of 'obsK'
+                ! The distance between lines 
                 ! If you plot every 10 steps, a 50-pixel gap represents 500 steps
                 kInterval = gridInterval * gModIntParams%outputInterval
 
@@ -2269,7 +2268,7 @@ module PlotModule
             USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
             use ConstantsModule, only: HORIZONTAL
             use ArrayDimensionsModule, only: gCurrentDims
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gHorzArr, gTransArr
             use ModelParamsModule, only: gModIntParams
 
@@ -2339,56 +2338,64 @@ module PlotModule
                     iValUp    = bin(X(K, prevRow) * latHovmoller%contourIntervalInv)
                     ! Detect boundary
                     if (iVal /= iValRight) then
-                        colorIdx = max(iVal, iValRight)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
                         ! J=1 is the top row of the pixelArray
 
-                        dibArray(K, latHovmoller%rowColumn + 1) = colorToDraw
+                        dibArray(K, latHovmoller%rowColumn + 1) = getBoundaryColor(iVal, iValRight)
                     end if
                     if (iVal /= iValUp .AND. latHovmoller%rowColumn > 0) then
-                        colorIdx = max(iVal, iValUp)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
                         ! J=1 is the top row of the pixelArray
-
-                        dibArray(K, latHovmoller%rowColumn + 1) = colorToDraw
+                        dibArray(K, latHovmoller%rowColumn + 1) = getBoundaryColor(iVal, iValUp)
                     end if
                     iVal = iValRight
                 end do
             endif
-
             latHovmoller%rowColumn = mod(latHovmoller%rowColumn + 1, gBitMapInfo%height)
             call DrawLineOnScreen(latHovmoller%rowColumn, HORIZONTAL)
             call labelPlotsAndDisplayTime(.false.)
             call DrawVerticalLines(invalidate) ! True invalidates window and forces redraw
         
         end subroutine plotLatHovmoller
+
+        ! This function simply returns a color value of a magenta hue if the boundary is
+        ! in a region where the field is positive, blue if the field is negative and
+        ! black if the field is at the negative-positive boundary. This method is used
+        ! to help draw contours in Hovmoller diagrams
+        function getBoundaryColor(iVal, iValNext, iValNext2) result(colorToDraw)
+            implicit None
+
+            integer, intent(in) :: iVal, iValNext ! The values of two neighboring points. This function
+                                                  ! is only called if the two values are not equal. Since
+                                                  ! this is for contours, the real values of the fields has
+                                                  ! been converted to integers scaled by the contour interval.
+                                                  ! Thus a difference of 1 may be 60 meters or 4 degrees, etc.
+            integer, optional, intent(in) :: iValNext2
+
+            integer :: fieldValue  ! The value which is the larger of iVal, iValNext
+            integer(kind=4) :: colorToDraw
+
+            if (present(iValNext2)) then
+                fieldValue = max(iVal, iValNext, iValNext2)
+            else
+                fieldValue = max(iVal, iValNext)    ! Find the color value with the largest number
+            endif
+            if (fieldValue > 0) then
+                colorToDraw = z'00DD0077' ! Reddish-pink
+            else if (fieldValue < 0) then
+                colorToDraw = z'000000FF' ! Blue
+            else 
+                colorToDraw = BLACK ! Black for the 0-contour
+            end if
+        end function getBoundaryColor
         
 ! PLOT VERT CROSS SECTION AT LATITUDE -------------------------------------------
         ! Plot a vertical cross section at a specified latitude on the screen
         ! @Param: latVertCrossSec: The structure containing the info not dependent upon new values.
         ! @Param: invalidate: If true, a screen redraw is forced.
         subroutine plotLatVertCrossSec(latVertCrossSec, invalidate)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc, C_F_POINTER
-            use Kernel32, only: RtlMoveMemory
             
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: PLOTTING_OFF
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr, gTransArr, gVertArr
             use ModelParamsModule, only: gModIntParams
 
@@ -2397,15 +2404,9 @@ module PlotModule
             LOGICAL, intent(in) :: invalidate
             type(VertCrossSection), intent(inout) :: latVertCrossSec
 
-            LOGICAL(BOOL) :: bret
-            REAL :: cntInt
             type (InterpolationBounds) b
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection        
-            integer(RGB32), target :: Pixels(gBitMapInfo%width)
-            integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx            
-            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
-            integer(c_intptr_t) :: bytesPerRow
-            integer(4) :: colorToDraw
+            integer ::  N
             
             if (latVertCrossSec%field == PLOTTING_OFF) return    ! Do nothing
             
@@ -2437,71 +2438,10 @@ module PlotModule
             ! In order to make contours instead of color that continuously transition for each value,
             ! We create a color ram of 18 values and let the user determine the contour interval. 
             
-            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
-            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
-            ! 2. Calculate base address
-            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
-
             if (latVertCrossSec%useSolidColor) then
-                ! Turn X into an integer array of 32-pixel values
-                do J = gBitMapInfo%height, 1, -1
-                    J1 = gBitMapInfo%height - J + 1
-                    do I = 1, gBitMapInfo%width
-                        ! Calculate value based on the contour interval
-                        iVal = bin(latVertCrossSec%hovMap(I, J1) * latVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
-                        ! Cycle through the colorRam if iVal exceeds its size
-                        ! Use ABS to handle negative iVal if necessary
-                        ! Modulo keeps the recycling positive versus mod which does not
-                        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
-                        Pixels(I) = RAM_COLORS(colorIdx)
-                    end do
-                    ! 2. Calculate memory address for the desired row 'targetY'
-                    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-                    targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
-
-                    ! 3. Get the address of your source array
-                    ! Pixels must have the TARGET attribute
-                    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
-        
-                    ! 4. Move the interpolated array of Pixels into the DIBSection memory
-                    ! Call the Intel-defined interface
-                    ! Since the interface defines these as integers, pass them directly.
-                    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
-                end do
+                call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height, latVertCrossSec%hovMap, latVertCrossSec%contourIntervalInv)
             else
-                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
-                ! 2. Calculate borders by comparing current pixel to its neighbors.
-                ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping latVertCrossSec%hovMap to the upper half of the screen
-                do J = 1, gBitMapInfo%height - 1
-
-                    ! J_data maps Screen Top (J=1) to Array North (Height/2)
-                    J1 = gBitMapInfo%height - J + 1
-                    iVal      = bin(latVertCrossSec%hovMap(1, J1) * latVertCrossSec%contourIntervalInv)
-                    do I = 1, gBitMapInfo%width - 1
-        
-                        ! Calculate interval bins
-                        iValRight = bin(latVertCrossSec%hovMap(I + 1, J1) * latVertCrossSec%contourIntervalInv)
-                        iValDown  = bin(latVertCrossSec%hovMap(I, J1 - 1) * latVertCrossSec%contourIntervalInv)
-        
-                        ! Detect boundary
-                        if (iVal /= iValRight .or. iVal /= iValDown) then
-                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
-                            if (colorIdx > 0) then
-                                colorToDraw = z'00DD0077' ! Reddish-pink
-                            else if (colorIdx < 0) then
-                                colorToDraw = z'000000FF' ! Blue
-                            else 
-                                colorToDraw = z'00000000' ! White for the 0-contour
-                            end if
-                            
-                            ! J=1 is the top row of the pixelArray
-                            pixelArray(I, J) = colorToDraw
-                        end if
-                        iVal = iValRight
-                    end do
-                end do
+                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, latVertCrossSec%hovMap, latVertCrossSec%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.true., invalidate)
@@ -2611,7 +2551,7 @@ module PlotModule
             lonHovmoller%rowColumn = mod(lonHovmoller%rowColumn + 1, gBitMapInfo%width)
             call DrawLineOnScreen(lonHovmoller%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(.true., .true., Z'00000000') ! True invalidates window and forces redraw #00646464
+            call DrawHorizontalLines(.true., .true., BLACK) ! True invalidates window and forces redraw #00646464
 
         end subroutine plotLonHovmoller
 
@@ -2689,30 +2629,19 @@ module PlotModule
 
 ! PLOT VERTICAL CROSS SECTION AT LONGITUDE -------------------------------------------
         subroutine plotLonVertCrossSec(lonVertCrossSec, invalidate)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
             use ArrayDimensionsModule, only: gCurrentDims
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr, gVertArr
             use ModelParamsModule, only: gModIntParams
 
             IMPLICIT NONE
 
-            type(VertCrossSection), intent(inout) :: lonVertCrossSec  ! Need the out as the 'row' is kept track of here.
-                                                            ! However, row is really the column
+            type(VertCrossSection), intent(inout) :: lonVertCrossSec  ! Need the out as the 'rowColumn' is kept track of here.
             LOGICAL, intent(in) :: invalidate
 
-            LOGICAL(BOOL) :: bret
-            REAL :: cntInt
             type (InterpolationBounds) b
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
-            integer(RGB32), target :: Pixels(gBitMapInfo%width)
-            integer ::  LEVS, N, iVal, iValRight, iValDown, i, j, J1, colorIdx
-            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
-            integer(c_intptr_t) :: bytesPerRow
-            integer(4) :: colorToDraw
+            integer ::  N
             
             if (lonVertCrossSec%field == PLOTTING_OFF) return    ! Do nothing
             
@@ -2743,70 +2672,10 @@ module PlotModule
             ! In order to make contours instead of color that continuously transition for each value,
             ! We create a color ram of 18 values and let the user determine the contour interval. 
             
-            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
-            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
-            ! 2. Calculate base address
-            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
-
             if (lonVertCrossSec%useSolidColor) then
-                ! Turn X into an integer array of 32-pixel values
-                do J = gBitMapInfo%height, 1, -1
-                    J1 = gBitMapInfo%height - J + 1
-                    do I = 1, gBitMapInfo%width
-                        ! Calculate value based on the contour interval
-                        iVal = bin(lonVertCrossSec%hovMap(I, J1) * lonVertCrossSec%contourIntervalInv) + NUM_RAM_COLORS / 2
-                        ! Cycle through the colorRam if iVal exceeds its size
-                        ! Use ABS to handle negative iVal if necessary
-                        ! Modulo keeps the recycling positive versus mod which does not
-                        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
-                        Pixels(I) = RAM_COLORS(colorIdx)
-                    end do
-                    ! 2. Calculate memory address for the desired row 'targetY'
-                    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-                    targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
-
-                    ! 3. Get the address of your source array
-                    ! Pixels must have the TARGET attribute
-                    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
-        
-                    ! 4. Move the interpolated array of Pixels into the DIBSection memory
-                    ! Call the Intel-defined interface
-                    ! Since the interface defines these as integers, pass them directly.
-                    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
-                end do
+                call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height, lonVertCrossSec%hovMap, lonVertCrossSec%contourIntervalInv)
             else
-                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
-                ! 2. Calculate borders by comparing current pixel to its neighbors.
-                ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping lonVertCrossSec%hovMap to the upper half of the screen
-                do J = 1, gBitMapInfo%height - 1
-                    ! J_data maps Screen Top (J=1) to Array North (Height/2)
-                    J1 = gBitMapInfo%height - J + 1
-                    iVal = bin(lonVertCrossSec%hovMap(1, J1) * lonVertCrossSec%contourIntervalInv)
-                    do I = 1, gBitMapInfo%width - 1
-        
-                        ! Calculate interval bins
-                        iValRight = bin(lonVertCrossSec%hovMap(I + 1, J1) * lonVertCrossSec%contourIntervalInv)
-                        iValDown  = bin(lonVertCrossSec%hovMap(I, J1 - 1) * lonVertCrossSec%contourIntervalInv)
-        
-                        ! Detect boundary
-                        if (iVal /= iValRight .or. iVal /= iValDown) then
-                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
-                            if (colorIdx > 0) then
-                                colorToDraw = z'00DD0077' ! Reddish-pink
-                            else if (colorIdx < 0) then
-                                colorToDraw = z'000000FF' ! Blue
-                            else 
-                                colorToDraw = z'00000000' ! White for the 0-contour
-                            end if
-                            
-                            ! J=1 is the top row of the pixelArray
-                            pixelArray(I, J) = colorToDraw
-                        end if
-                        iVal = iValRight
-                    end do
-                end do
+                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, lonVertCrossSec%hovMap, lonVertCrossSec%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.true., invalidate)
@@ -2852,7 +2721,7 @@ module PlotModule
             vertHovmollerType%rowColumn = mod(vertHovmollerType%rowColumn + 1, gBitMapInfo%width)
             call DrawLineOnScreen(vertHovmollerType%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
+            call DrawHorizontalLines(invalidate, .true., BLACK) ! True invalidates window and forces redraw
         end subroutine plotVertHovmoller
 
 ! PLOT ZONAL WAVE ENERGY SPECTRUM -------------------------------------------
@@ -2890,7 +2759,7 @@ module PlotModule
             energyHovmollerType%rowColumn = mod(energyHovmollerType%rowColumn + 1, gBitMapInfo%width)
             call DrawLineOnScreen(energyHovmollerType%rowColumn, VERTICAL)
             call labelPlotsAndDisplayTime(.false.)
-            call DrawHorizontalLines(invalidate, .true., Z'00000000') ! True invalidates window and forces redraw
+            call DrawHorizontalLines(invalidate, .true., BLACK) ! True invalidates window and forces redraw
 
         end subroutine plotZonalWaveEnergySpectrum
         
@@ -2963,30 +2832,12 @@ module PlotModule
         
                     ! Detect boundary
                     if (iVal /= iValDown) then
-                        colorIdx = max(iVal, iValDown)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
-                            
                         ! J=1 is the leftmost column of the pixelArray
-                        dibArray(hovmollerType%rowColumn + 1, K) = colorToDraw
+                        dibArray(hovmollerType%rowColumn + 1, K) = getBoundaryColor(iVal, iValDown)
                     end if
                     if (iVal /= iValLeft .AND. hovmollerType%rowColumn > 0) then
-                        colorIdx = max(iVal, iValLeft)    ! reuse colorIdx for the max level
-                        if (colorIdx > 0) then
-                            colorToDraw = z'00DD0077' ! Reddish-pink
-                        else if (colorIdx < 0) then
-                            colorToDraw = z'000000FF' ! Blue
-                        else 
-                            colorToDraw = z'00000000' ! White for the 0-contour
-                        end if
                         ! J=1 is the top row of the pixelArray
-
-                        dibArray(hovmollerType%rowColumn + 1, K) = colorToDraw
+                        dibArray(hovmollerType%rowColumn + 1, K) = getBoundaryColor(iVal, iValLeft)
                     end if
                 end do
             endif
@@ -2997,16 +2848,10 @@ module PlotModule
         ! @param invalidate: if true, invalidate rectangle and update to force screen redraw
         ! @param weatherMapType: struct containing all information not dependent upon the integrated values
         subroutine plotWeatherMap(invalidate, weatherMapType)
-            USE IFWIN
-            USE GDI32
-            USE USER32
-            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc, C_F_POINTER
-            use Kernel32, only: RtlMoveMemory
-            
             use ArrayDimensionsModule, only: gCurrentDims
             use ConstantsModule, only: PLOTTING_OFF, wp
-            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-            use ModelFieldsModule, only: gTransArr, gTransArr
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ModelFieldsModule, only: gTransArr
             use ModelParamsModule, only: gModIntParams
 
             IMPLICIT NONE
@@ -3015,18 +2860,10 @@ module PlotModule
             type(WeatherMap), intent(inout) :: weatherMapType
 
             LOGICAL(BOOL)   :: bret
-            REAL :: cntInt
             type (InterpolationBounds) b
         
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
-        
-            integer(RGB32), target :: Pixels(gBitMapInfo%width)
-            integer ::  iVal, iValRight, iValDown, i, j, J1, colorIdx
-            
-            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
-            integer(c_intptr_t) :: bytesPerRow
-            integer(4) :: colorToDraw
-            
+                   
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
             
             call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP, weatherMapType%interpArrSelection)
@@ -3051,80 +2888,113 @@ module PlotModule
             ! However, we need to map these interpolated values in weatherMapType%wxMap to colors for each pixel. We will
             ! fill a row (Pixels) with pixel color values and then copy it to the DIBSection. This is
             ! a lot more efficient than creating a 2d array of color values and then writing that to
-            ! the DIBSection.
+            ! the DIBSection. That is done in drawSolidColors()
             
             ! In order to make contours instead of color that continuously transition for each value,
             ! We create a color ram of 18 values and let the user determine the contour interval. 
             
-            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
-            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
-            ! 2. Calculate base address
-            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
-
             if (weatherMapType%useSolidColor) then
-                ! Turn weatherMapType%wxMap into an integer array of 32-pixel values
-                do J = gBitMapInfo%height / 2, 1, -1
-                    J1 = gBitMapInfo%height / 2 - J + 1
-                    do I = 1, gBitMapInfo%width
-                        ! Calculate value based on the contour interval
-                        iVal = bin(weatherMapType%wxMap(I, J1) * weatherMapType%contourIntervalInv) + NUM_RAM_COLORS / 2
-                        ! Cycle through the colorRam if iVal exceeds its size
-                        ! Use ABS to handle negative iVal if necessary
-                        ! Modulo keeps the recycling positive versus mod which does not
-                        colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
-                        Pixels(I) = RAM_COLORS(colorIdx)
-                    end do
-                    ! 2. Calculate memory address for the desired row 'targetY'
-                    ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
-                    targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
-
-                    ! 3. Get the address of your source array
-                    ! Pixels must have the TARGET attribute
-                    srcAddr = transfer(c_loc(Pixels(1)), srcAddr)
-        
-                    ! 4. Move the interpolated array of Pixels into the DIBSection memory
-                    ! Call the Intel-defined interface
-                    ! Since the interface defines these as integers, pass them directly.
-                    call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
-                end do
+                call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height / 2, weatherMapType%wxMap, weatherMapType%contourIntervalInv)
             else
-                CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
-                ! 2. Calculate borders by comparing current pixel to its neighbors.
-                ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
-                ! Mapping weatherMapType%wxMap to the upper half of the screen
-                do J = 1, (gBitMapInfo%height / 2) - 1
-                    ! J_data maps Screen Top (J=1) to Array North (Height/2)
-                    J1 = (gBitMapInfo%height / 2) - J + 1
-                    iVal = bin(weatherMapType%wxMap(1, J1) * weatherMapType%contourIntervalInv)
-                    do I = 1, gBitMapInfo%width - 1
-                        ! Calculate interval bins
-                        iValRight = bin(weatherMapType%wxMap(I + 1, J1) * weatherMapType%contourIntervalInv)
-                        iValDown  = bin(weatherMapType%wxMap(I, J1 - 1) * weatherMapType%contourIntervalInv)
-        
-                        ! Detect boundary
-                        if (iVal /= iValRight .or. iVal /= iValDown) then
-                            colorIdx = max(iVal, iValRight, iValDown)    ! reuse colorIdx for the max level
-                            if (colorIdx > 0) then
-                                colorToDraw = z'00DD0077' ! Reddish-pink
-                            else if (colorIdx < 0) then
-                                colorToDraw = z'000000FF' ! Blue
-                            else 
-                                colorToDraw = z'00000000' ! White for the 0-contour
-                            end if
-                            
-                            ! J=1 is the top row of the pixelArray
-                            pixelArray(I, J) = colorToDraw
-                        end if
-                        iVal = iValRight
-                    end do
-                end do
+                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height / 2, weatherMapType%wxMap, weatherMapType%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.false., invalidate)
             !call inverseTransform(gTransArr%G1plot, weatherMapType)
 
         end subroutine plotWeatherMap
+
+        !! Routine to draw solid contours in a 2-d grid
+        subroutine drawSolidContours(width, height, dataMap, cntInv)
+            use NLevQGModelGlobals, only: gBitMapInfo
+            USE IFWIN
+            USE, INTRINSIC :: iso_c_binding, only: c_intptr_t, c_loc
+            use Kernel32, only: RtlMoveMemory
+
+            implicit none
+
+            integer, intent(in) :: width, height
+            real, intent(in) :: dataMap(:, :)
+            real, intent(in) :: cntInv
+
+            integer(RGB32), target :: pixels(gBitMapInfo%width)
+            integer ::  iVal, i, j, J1, colorIdx
+            
+            integer(c_intptr_t) :: baseAddr, targetAddr, srcAddr
+            integer(c_intptr_t) :: bytesPerRow
+
+            ! 1. Width * 4 bytes per pixel (32-bit DIBs have no padding)
+            bytesPerRow = int(gBitMapInfo%width, c_intptr_t) * 4
+            ! 2. Calculate base address
+            ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+            baseAddr = transfer(gBitMapInfo%pBits, baseAddr)
+            ! Turn weatherMapType%wxMap into an integer array of 32-pixel values
+            do J = 1, height
+                J1 = height - J + 1
+                do I = 1, width
+                    ! Calculate value based on the contour interval
+                    iVal = bin(dataMap(I, J1) * cntInv) + NUM_RAM_COLORS / 2
+                    ! Cycle through the colorRam if iVal exceeds its size
+                    ! Use ABS to handle negative iVal if necessary
+                    ! Modulo keeps the recycling positive versus mod which does not
+                    colorIdx = modulo(iVal, NUM_RAM_COLORS) + 1
+                    Pixels(I) = RAM_COLORS(colorIdx)
+                end do
+                ! 2. Calculate memory address for the desired row 'targetY'
+                ! y=0 is the top row because 'bmi%bmiHeader%biHeight' is negative
+                targetAddr = baseAddr + (int(J - 1, c_intptr_t) * bytesPerRow)
+
+                ! 3. Get the address of your source array
+                ! pixels must have the TARGET attribute
+                srcAddr = transfer(c_loc(pixels(1)), srcAddr)
+    
+                ! 4. Move the interpolated array of Pixels into the DIBSection memory
+                ! Call the Intel-defined interface
+                ! Since the interface defines these as integers, pass them directly.
+                call RtlMoveMemory(targetAddr, srcAddr, bytesPerRow)
+            end do
+        end subroutine drawSolidContours
+
+        !! Routine to draw line contours in both a 2-d grid and a 3-striped
+        !! Hovmoller grid.
+        subroutine drawContours(pixelArray, width, height, dataMap, cntInv)
+            use NLevQGModelGlobals, only: gBitMapInfo
+            USE, INTRINSIC :: iso_c_binding, only: C_F_POINTER
+            implicit none
+
+            integer(kind=4), intent(inout) :: pixelArray(:, :)
+            integer, intent(in) :: width, height
+            real, intent(in) :: dataMap(:, :)
+            real, intent(in) :: cntInv
+
+            ! Calculate borders by comparing current pixel to its neighbors.
+            ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
+            ! Mapping lonVertCrossSec%hovMap to the upper half of the screen
+
+            integer :: I, J, J1, iVal, iValRight, iValDown
+
+            CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
+            ! 2. Calculate borders by comparing current pixel to its neighbors.
+            ! We stop at Width-1 and Height-1 to prevent "out of bounds" on the iVal checks.
+            ! Mapping weatherMapType%wxMap to the upper half of the screen
+            do J = 1, height - 1
+                ! J_data maps Screen Top (J=1) to Array North (Height/2)
+                J1 = height - J + 1
+                iVal = bin(dataMap(1, J1) * cntInv)
+                do I = 1, width - 1
+                    ! Calculate interval bins
+                    iValRight = bin(dataMap(I + 1, J1) * cntInv)
+                    iValDown  = bin(dataMap(I, J1 - 1) * cntInv)
+    
+                    ! Detect boundary
+                    if (iVal /= iValRight .or. iVal /= iValDown) then
+                        ! J=1 is the top row of the pixelArray
+                        pixelArray(I, J) = getBoundaryColor(iVal, iValRight, iValDown)
+                    end if
+                    iVal = iValRight
+                end do
+            end do
+        end subroutine drawContours
 
         ! Function to replace slow an inefficient Floor()
         pure integer function bin(val)

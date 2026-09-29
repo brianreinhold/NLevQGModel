@@ -60,7 +60,7 @@ SUBMODULE (PlotModule) SvgSubmodule
     CONTAINS
 
         module subroutine GenerateSVG()
-            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
+            use ConstantsModule, only: WEATHER_MAP, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, PHASE_SPACE, &
                                ZONAL_WAVE_ENERGY, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, WEATHER_STN, PLOTTING_OFF
             use ModelParamsModule, only: gModIntParams, FileStruct
             use NLevQGModelGlobals, only: gBitMapInfo
@@ -79,6 +79,10 @@ SUBMODULE (PlotModule) SvgSubmodule
                      call CreateLineSVG(gWeatherStation2%timeSeriesBuf%plot_pts, gWeatherStation2%timeSeriesBuf%count, &
                         gBitMapInfo%width, gBitMapInfo%height, svgFileInfo, .true., gWeatherStation2%color)
                 endif
+                return
+            endif
+            if (gModIntParams%plotType == PHASE_SPACE) then
+                call CreatePointSVG()
                 return
             endif
 
@@ -120,6 +124,51 @@ SUBMODULE (PlotModule) SvgSubmodule
             endif
 
         end subroutine GenerateSVG
+
+        subroutine CreatePointSVG()
+            use NLevQGModelGlobals, only: gBitMapInfo
+            use ModelParamsModule, only: FileStruct
+
+            implicit none
+
+            type(FileStruct) :: svgFileInfo
+            INTEGER(4), POINTER :: pixelArray(:, :)
+            integer(4) :: color, backgroundColor
+            integer :: i, j, ios
+            character(6) :: hex
+
+            CALL C_F_POINTER(gBitMapInfo%pBits, pixelArray, [gBitMapInfo%width, gBitMapInfo%height])
+
+            call GenerateUniqueFilename(svgFileInfo%fileName) ! Uses current time to create a unique filename
+        
+            open(newunit=svgFileInfo%fileHandle, file=trim(svgFileInfo%fileName), status='REPLACE', form='FORMATTED', iostat=ios)
+            if (ios .NE. 0) return
+
+            ! 1. Write the opening SVG tag with the correct W3C namespace URL and viewbox integers
+            ! We use the I0 format descriptor to cleanly embed the numbers.
+            write(svgFileInfo%fileHandle, '(A, I0, A, I0, A)') '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ', gBitMapInfo%width, ' ', gBitMapInfo%height, '">'
+            ! Paint the background white.
+            write(svgFileInfo%fileHandle, '(A)') '<rect width="100%" height="100%" fill="#FFFFFF"/>'
+
+            do j = 1, gBitMapInfo%height
+                do i = 1, gBitMapInfo%width
+                    color = pixelArray(i, j)
+                    if (color /= BACKGROUND_COLOR) then
+                        ! Emit SVG point
+                        color = iand(color, Z'00FFFFFF')  ! At the moment this is not necessary as I always have the AA part 0.
+                        write(hex,'(Z6.6)') color
+                        ! write(svgFileInfo%fileHandle,'(A, I0, A, I0, A, A, A)') &
+                        ! '<rect x="', i, '" y="', j, '" width="1" height="1" fill="#', hex, '" />'
+                        write(svgFileInfo%fileHandle,'(A, I0, A, I0, A, A, A)') &
+                        '<circle cx="', i, '" cy="', j, '" r="0.5" fill="#', hex, '" />'
+                    end if
+                end do
+            end do
+
+            write(svgFileInfo%fileHandle, '(A)') '</svg>'
+            close(svgFileInfo%fileHandle)
+
+        end subroutine CreatePointSVG
 
         subroutine CreateLineSVG(points, length, width, height, svgFileInfo, closeFile, color)
             use ModelParamsModule, only: FileStruct

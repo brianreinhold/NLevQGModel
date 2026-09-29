@@ -402,7 +402,7 @@ SUBMODULE (PlotModule) AxesSubmodule
             character(len=16) :: units
         
             ! 2. Create and select a pen (dark gray, 1 pixels wide)
-            hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
+            hAxisPen = CreatePen(PS_SOLID, 1, AXIS_COLOR)
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
             
             ! Align text so the coordinate (x,y) is the top-left of the text
@@ -494,7 +494,7 @@ SUBMODULE (PlotModule) AxesSubmodule
             type(T_POINT) :: oldPoint
             
             ! 1. Create and select a pen (dark gray, 1 pixels wide)
-            hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
+            hAxisPen = CreatePen(PS_SOLID, 1, AXIS_COLOR)
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
 
             ! 2. Draw line based on the direction specified
@@ -544,10 +544,10 @@ SUBMODULE (PlotModule) AxesSubmodule
 
             ! 2. No pen needed for Text
             if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
-                bret = SetTextColor(gBitMapInfo%hMemDC, RGB(60, 60, 60))
+                bret = SetTextColor(gBitMapInfo%hMemDC, DARKEST_TEXT)
                 X_coord = 25
             else 
-                bret = SetTextColor(gBitMapInfo%hMemDC, RGB(100, 100, 100))
+                bret = SetTextColor(gBitMapInfo%hMemDC, GRAY_TEXT)
                 X_coord = 200
             endif
             ! Align text so the coordinate (x,y) is the top-left of the text
