@@ -501,7 +501,7 @@ module ModelControlDialogModule
                 ! 3. If 'viewOnly' is set and 'viewAverages' is also checked, the average flows of most recent model run can be viewed
                 !    Again, as in the 'viewOnly' case only the 2-d plots can be viewed.
                 subroutine setupAndRunModel()
-                use ConstantsModule, only: ERR_NUMERIC_INSTABILITY, PAUSED, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
+                    use ConstantsModule, only: ERR_NUMERIC_INSTABILITY, PAUSED, PHASE_AND_MAP, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON
                     use ArrayDimensionsModule, only: gCurrentDims
                     use ModelFieldsModule, only: ZeroEnergyArrays, gEnergyArr
                     use ModelParamsModule, only: gModelState
@@ -545,9 +545,9 @@ module ModelControlDialogModule
                     bret = EnableWindow(hDlg, .FALSE.)
                     gElapsedTime%dimensionalTime = 4.0 * CORIOLIS_INVERSE * gModRealParams%DELT / SECONDS_PER_DAY
                     gElapsedTime%timeSteps = 0
+                    call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     call ClearScreen()
                     bret = SetFocus(ghwndMain)
-                    call initializePlot() ! Sets up all the plot type structure for computations that do not need to be repeated every time step plotted.
                     if (viewOnly) then
                         gModelState%runState = PAUSED
                         if (viewAverages) then

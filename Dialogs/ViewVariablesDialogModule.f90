@@ -127,6 +127,9 @@ module ViewVariablesDialogModule
                             case (IDC_COMBO_VIEW_LEVELS)
                                 levelIndex = GetComboIndex(hDlg, IDC_COMBO_VIEW_LEVELS) + 1
                                 call populateListControls(levelIndex)
+                            case (IDC_COMBO_VIEW_COMPONENT)
+                                componentIndex = GetComboIndex(hDlg, IDC_COMBO_VIEW_COMPONENT) + 1
+                                call populateListControls(componentIndex)
                         end select
                     end if
 

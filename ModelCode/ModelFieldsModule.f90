@@ -228,6 +228,7 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: ZonalAPE_Pool(:)
     REAL, ALLOCATABLE, TARGET :: PS_AMP_FAS_Pool(:)
     REAL, ALLOCATABLE, TARGET :: WW_AMP_FAS_Pool(:)
+    REAL, ALLOCATABLE, TARGET :: PS_VARIANCE(:)
     type(WelfordType), allocatable, target :: WelfordKE_Pool(:)
     type(WelfordType), allocatable, target :: WelfordPS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordTH_Pool(:)
@@ -235,6 +236,7 @@ MODULE ModelFieldsModule
     type(WelfordType), allocatable, target :: WelfordWW_AMP_FAS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordADS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordADT_Pool(:)
+    type(WelfordType), allocatable, target :: WelfordPS_VAR_Pool(:)
     
     type :: EnergyArrays
         LOGICAL :: allocated = .FALSE.   ! Flag to indicate if arrays are allocated
@@ -258,6 +260,7 @@ MODULE ModelFieldsModule
         type(WelfordType), pointer :: Welford_WW_AMP_FAS(:, :)   ! This array holds the WelfordType for each of the Omega spectral amplitudes and phases at each level.
         type(WelfordType), pointer :: WelfordADS(:, :)
         type(WelfordType), pointer :: WelfordADT(:, :)
+        type(WelfordType), pointer :: WelfordPS_VAR(:, :, :)     ! This array holds the Welford type for the PS variance field which has to be grid points
 
     end type EnergyArrays
     
@@ -356,6 +359,11 @@ MODULE ModelFieldsModule
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
+            allocate(WelfordPS_VAR_Pool(gArrayDims%KX * gArrayDims%LY * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
 
             gEnergyArr%allocated = .TRUE. ! Set allocated flag to true
 
@@ -376,13 +384,14 @@ MODULE ModelFieldsModule
             WelfordPS_AMP_FAS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordADS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordADT_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
+            WelfordPS_VAR_Pool(1 : gCurrentDims%kx * gCurrentDims%ly * gModIntParams%nlev) = WelfordType()
         end subroutine ZeroEnergyArrays
 
-        function createEnergyArr(kmax, lmax, nlev) RESULT(status)
+        function createEnergyArr(kmax, lmax, nlev, kx, ly) RESULT(status)
 
             implicit none
 
-            integer, intent(in) :: kmax, lmax, nlev
+            integer, intent(in) :: kmax, lmax, nlev, kx, ly
 
             integer :: status, itot
 
@@ -407,6 +416,7 @@ MODULE ModelFieldsModule
             gEnergyArr%Welford_WW_AMP_FAS(1 : itot, 1 : nlev)  => WelfordWW_AMP_FAS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordADS(1 : itot, 1 : nlev)  => WelfordADS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordADT(1 : itot, 1 : nlev)  => WelfordADT_Pool(1 : itot * nlev)
+            gEnergyArr%WelfordPS_VAR(1 : kx, 1 : ly, 1 : nlev)  => WelfordPS_VAR_Pool(1 : kx * ly * nlev)
 
             gEnergyArr%defined = .TRUE. ! Set defined flag to true
         end function createEnergyArr
@@ -427,6 +437,7 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(WelfordWW_AMP_FAS_Pool)) DEALLOCATE(WelfordWW_AMP_FAS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordADS_Pool)) DEALLOCATE(WelfordADS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordADT_Pool)) DEALLOCATE(WelfordADT_Pool, STAT = statusErr)
+            IF (ALLOCATED(WelfordPS_VAR_Pool)) DEALLOCATE(WelfordPS_VAR_Pool, STAT = statusErr)
             NULLIFY(gEnergyArr%KWaveKE)
             NULLIFY(gEnergyArr%KWaveAPE)
             NULLIFY(gEnergyArr%ZonalKE)
@@ -439,6 +450,7 @@ MODULE ModelFieldsModule
             NULLIFY(gEnergyArr%Welford_WW_AMP_FAS)
             NULLIFY(gEnergyArr%WelfordADS)
             NULLIFY(gEnergyArr%WelfordADT)
+            NULLIFY(gEnergyArr%WelfordPS_VAR)
 
             gEnergyArr%allocated = .FALSE. ! Set allocated flag to false
             gEnergyArr%defined = .FALSE. ! Set allocated flag to false

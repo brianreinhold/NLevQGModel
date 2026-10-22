@@ -18,7 +18,7 @@
 		</Configuration>
 		<Configuration Name="Debug|x64" UseCompiler="ifxCompiler">
 			<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" AdditionalIncludeDirectories="C:\Program Files (x86)\Intel\oneAPI\mkl\2026.1\include\fftw" SourceFileFormat="fileFormatFree" F2003Semantics="true" WarnUncalled="true" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebug" UseWindowsLibs="true"/>
-			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="..\FortranLibraries\FFTW3" GenerateDebugInformation="true" SubSystem="subSystemWindows" AdditionalDependencies="libfftw3-3.lib libfftw3f-3.lib libfftw3l-3.lib"/>
+			<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="..\FortranLibraries\FFTW3" GenerateDebugInformation="true" SubSystem="subSystemWindows" AdditionalDependencies="mkl_intel_lp64.lib&#xA; mkl_sequential.lib &#xA;mkl_core.lib"/>
 			<Tool Name="VFResourceCompilerTool" AdditionalIncludeDirectories="&quot;C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\winres.h&quot;"/>
 			<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64" HeaderFileName="$(InputName).h"/>
 			<Tool Name="VFCustomBuildTool"/>
@@ -56,7 +56,8 @@
 		</Filter>
 		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe">
 			<File RelativePath=".\NLevQGModel.ico"/>
-			<File RelativePath=".\NLevQGModel.rc"/>
+			<File RelativePath=".\NLevQGModel.rc">
+			</File>
 		</Filter>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 			<Filter Name="Dialogs">
@@ -69,7 +70,8 @@
 				<File RelativePath=".\Dialogs\ModelControlDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\SettingsDialogModule.f90"/>
 				<File RelativePath=".\Dialogs\VerticalParamsDialogModule.f90"/>
-				<File RelativePath=".\Dialogs\ViewVariablesDialogModule.f90"/>
+				<File RelativePath=".\Dialogs\ViewVariablesDialogModule.f90">
+				</File>
 			</Filter>
 			<Filter Name="Libraries">
 				<File RelativePath=".\Libraries\fftw3.f03"/>
@@ -95,6 +97,7 @@
 				<File RelativePath=".\PlotCode\PlotModule.f90"/>
 				<File RelativePath=".\PlotCode\SvgSubModule.f90"/>
 			</Filter>
+			<File RelativePath=".\HelpDialogModule.f90"/>
 			<File RelativePath=".\NLevQGModel.f90"/>
 			<File RelativePath=".\NLevQGModelglobals.f90"/>
 			<File RelativePath=".\WndProcInterfacesModule.f90"/>

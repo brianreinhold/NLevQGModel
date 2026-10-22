@@ -155,6 +155,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !> the gUserSettings and gModIntParams fields have been set to values read from a file or the defaults.
         function newAllocation() result(error)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, AllocateEnergyArrays, &
                        createHorzArr, createTransArr, createVertArr, createEnergyArr, &
                        DeallocateHorizontalArrays, DeallocateTransformArrays, DeallocateVerticalArrays, DeallocateEnergyArrays, DeallocateStatsArrays
@@ -190,7 +191,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             error = DeallocateEnergyArrays()
             error = AllocateEnergyArrays()
             if (error .NE. 0) return
-            error = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+            error = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims%KX, gCurrentDims%LY)
             if (error .NE. 0) return
             
             error = DeallocateStatsArrays()
@@ -507,6 +508,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !! @returns 0 on success. Any other value means the user should check.
         function CheckUserSettingsChanges() result(errorCode)
             use ConstantsModule, only: USE_INTERACTION_COEFFICIENTS
+            use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gUserSettings, gUserSettingsPrev, gModIntParams, gModRealParams
             use ModelFieldsModule, only: AllocateHorizontalArrays, AllocateTransformArrays, AllocateVerticalArrays, AllocateStatsArrays, AllocateEnergyArrays, &
                        createHorzArr, createTransArr, createVertArr, createEnergyArr, &
@@ -519,6 +521,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
             logical :: boolHorzResult, boolVertResult, boolCoeffResult, boolStatsResult
             integer :: errorCode, index
+            real :: TF(gModIntParams%NLEV)
 
             errorCode = 0   ! No error
             boolHorzResult = .false.
@@ -548,6 +551,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 gArrayDims = setDimensions(gUserSettings%maxZonalWaves, gUserSettings%maxMeridWaves, gUserSettings%maxLevels)
                 gCurrentDims = setDimensions(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
 
+                if (.NOT. boolVertResult) then  ! Save TF*(1, N) [cosy] for each level
+                    TF(:) = gHorzArr%TF(1, :)
+                endif
+
                 ! Handle horizontal array changes (which includes vertical dimensions):
                 if (gHorzArr%allocated) errorCode = DeallocateHorizontalArrays()  ! Deallocate horizontal arrays if allocated
 
@@ -559,6 +566,10 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 if(errorCode .NE. 0) then
                     return
+                endif
+
+                if (.NOT. boolVertResult) then  ! Save TF*(1, N) [cosy] for each level
+                    gHorzArr%TF(1, :) = TF(:)
                 endif
                 
                 ! Handle transform array changes
@@ -577,7 +588,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
                 errorCode = AllocateEnergyArrays()    ! Reallocate transform arrays
                 if(errorCode .NE. 0) return
 
-                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims%KX, gCurrentDims%LY)
                 if(errorCode .NE. 0) return
             end if
             if ((gUserSettings%integrationMethod == USE_INTERACTION_COEFFICIENTS) .AND. & ! If we are using interaction coefficients and
@@ -849,7 +860,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
 
                 errorCode = createHorzArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims)
                 errorCode = createTransArr(gCurrentDims)
-                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV)
+                errorCode = createEnergyArr(gModIntParams%KMAX2, gModIntParams%LMAX2, gModIntParams%NLEV, gCurrentDims%KX, gCurrentDims%LY)
                 gHorzArr%TF = 0.0
                 gHorzArr%SF = 0.0
                 do N = 1, min(gModIntParams%NLEV, prevLevels)
@@ -1178,12 +1189,13 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
         !------------------------------Stop convection at Tropopause
                 IF(gVertArr%PV(N) .GT. gVertArr%tropopauseLevel) THEN
                     gVertArr%G(N) = gScaleFactors%dissipation / R
+                    gVertArr%FJ(N) = gScaleFactors%dissipation / 20.0
                 ELSE
-                    gVertArr%G(N) = gScaleFactors%dissipation / 20. ! 20 day time scale
+                    gVertArr%G(N) = 0. ! No mixing
+                    gVertArr%FJ(N) = 0. ! No mixing
                 ENDIF
             END DO
-            !  Vort mix=Constant=20 days:
-            gVertArr%FJ(1:gModIntParams%NLEV) = gScaleFactors%dissipation / 20.0  ! This gives the same value for all N of 20 days
+            gVertArr%FJ(gModIntParams%NLEV) = 0.0
 
         !====================================================Compute PP,DPI,A,AU,SIG
             CALL ComputeVerticalProfiles()
@@ -1879,7 +1891,7 @@ module SetUpModule      ! Formerly NLEVSUB2.f90
             P0 = gVertArr%PP(1)
             Y = PI - ASIN(gModRealParams%AMPT / gModRealParams%AMPS)
             Y = ALOG(2.0 * Y / PI) / ALOG(P0 / gVertArr%tropopauseLevel)
-            J = gModIntParams%LMAX2 + 2 * (gModIntParams%bombZonalWave - 1) * gModIntParams%LMAX2 + gModIntParams%bombMeridWave
+            J = gModIntParams%LMAX2 + 2 * (gModIntParams%bombZonalWave - 1) * gModIntParams%LMAX2 + (gModIntParams%bombMeridWave - 1) * 2 + 1
             IF (gModIntParams%bombZonalWave .EQ. 0) J = gModIntParams%bombMeridWave
             angs = gModRealParams%ANGS / REAL(gModIntParams%bombZonalWave)
             DO N = 1, gModIntParams%NLEV

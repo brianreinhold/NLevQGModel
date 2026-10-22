@@ -9,6 +9,8 @@
 #define IDD_CONTOURS                    112
 #define IDD_VIEW_VARIABLES              114
 #define IDD_BOMB                        116
+#define IDD_DIALOG1                     118
+#define IDD_HELP_DIALOG                 118
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
 #define IDC_COMBO_USERSETTINGS1         1013
@@ -52,6 +54,7 @@
 #define IDC_EDIT_VERTICAL               1046
 #define IDC_EDIT_HORZ                   1046
 #define IDC_EDIT_BOMB_ZONAL_WAVE        1046
+#define IDC_EDIT_HELP_TEXT              1046
 #define IDC_BUTTON_VIEW_STATISTICS2     1047
 #define IDC_LIST_TEMPERATURES           1047
 #define IDC_EDIT_BOMB_MERID_WAVE        1047
@@ -153,9 +156,9 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        118
+#define _APS_NEXT_RESOURCE_VALUE        120
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1110
+#define _APS_NEXT_CONTROL_VALUE         1111
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

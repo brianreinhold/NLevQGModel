@@ -19,10 +19,12 @@
       integer, parameter :: IDC_CHECK_BOMB_ADD = 1081
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
       integer, parameter :: IDC_COMBO_COMPONENT = 1105
+      integer, parameter :: IDD_DIALOG1 = 118
       integer, parameter :: IDC_CHECK_VIEW_AVERAGES = 1106
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
       integer, parameter :: IDC_REALVALUES = 1023
       integer, parameter :: IDD_VERTICAL_PARAMS = 108
+      integer, parameter :: IDD_HELP_DIALOG = 118
       integer, parameter :: IDC_BUTTON_EXIT_INIT_VARIABLES = 1063
       integer, parameter :: IDC_CHECK_VIEW_COMPONENT_LEVEL_TOGGLE = 1107
       integer, parameter :: IDC_USERSETTINGS = 1008
@@ -84,6 +86,7 @@
       integer, parameter :: IDC_STATIC_COMBO_FIELD3 = 1038
       integer, parameter :: IDC_COMBO_PHASE_SPACE_Y = 1074
       integer, parameter :: IDC_LIST_TURB_MIXING = 1051
+      integer, parameter :: IDC_EDIT_HELP_TEXT = 1046
       integer, parameter :: IDC_STATIC_BOMB_TIMESTEPS_DELAY = 1096
       integer, parameter :: IDC_EDIT_BOMB_READ_ONLY = 1099
       integer, parameter :: IDC_LIST_CONTOURS = 1075

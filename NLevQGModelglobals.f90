@@ -20,6 +20,9 @@ module NLevQGModelGlobals
     integer(HANDLE)		ghModule
     integer(HANDLE)		ghwndMain
     integer(HANDLE)		ghMenu
+
+    integer(kind=4)     gFrameX          ! Space around the plots
+    integer(kind=4)     gFrameY          ! Space around the plots
     
     ! For drawing into main window
     TYPE BitMapInfo
@@ -49,6 +52,7 @@ module NLevQGModelGlobals
     integer(HANDLE) ::     ghContoursAndRangesDlg
     integer(HANDLE) ::     ghViewVariablesDlg
     integer(HANDLE) ::     ghBombDlg
+    integer(HANDLE) ::     ghHelpDlg = NULL
     
     integer(HANDLE) ::     ghCurrentDlg             ! For anytime we need to refer to the "current" dialog
                                                     ! for example in winmain procedure when returning to calling dialog
@@ -80,7 +84,7 @@ module NLevQGModelGlobals
             ret = 0
 
             WRITE(errStr, '(I0)') number  ! Converts 'err' integer to string
-                                        ! WRITE won’t work directly on a c_char character variable so
+                                        ! WRITE wonï¿½t work directly on a c_char character variable so
                                         ! need two variables, errStr and errMsg. The latter is declared
                                         ! as a c-type character, errStr is not.
                                         ! Note that Fortran requires a separate buffer for integer-to-string conversion.

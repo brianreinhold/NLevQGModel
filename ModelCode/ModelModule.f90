@@ -918,7 +918,7 @@ module ModelModule
                 temp_calc_k = temp_calc * gHorzArr%RK(K) * gModRealParams%RN
         
                 do L = 1, LMAX2
-                    ! Linear vector index calculations matching your layout
+                    ! Linear vector index calculations matching layout
                     index = LMAX2 + (K - 1) * (LMAX2 * 2) + (L - 1) * 2 + 1
             
                     wave_cos = A(index) * temp_calc_k      ! A(index) is the cosknxsinly part of the streamfunction spectral coefficient

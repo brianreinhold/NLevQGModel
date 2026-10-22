@@ -153,7 +153,7 @@ SUBMODULE (PlotModule) SvgSubmodule
             do j = 1, gBitMapInfo%height
                 do i = 1, gBitMapInfo%width
                     color = pixelArray(i, j)
-                    if (color /= BACKGROUND_COLOR) then
+                    if (color /= BACKGROUND_COLOR_REV) then
                         ! Emit SVG point
                         color = iand(color, Z'00FFFFFF')  ! At the moment this is not necessary as I always have the AA part 0.
                         write(hex,'(Z6.6)') color
@@ -164,6 +164,7 @@ SUBMODULE (PlotModule) SvgSubmodule
                     end if
                 end do
             end do
+            call SvgCartesianAxes(svgFileInfo%fileHandle, gPhaseSpace1, gPhaseSpace2)
 
             write(svgFileInfo%fileHandle, '(A)') '</svg>'
             close(svgFileInfo%fileHandle)
@@ -609,6 +610,7 @@ SUBMODULE (PlotModule) SvgSubmodule
 
         subroutine FillContourBand(fileUnit, X, width, height, contourIntervalInv, binMin, binMax, fillColor)
             implicit none
+
             integer, intent(in)          :: fileUnit
             real, intent(in)             :: X(:,:)
             integer, intent(in)          :: width, height
@@ -664,6 +666,113 @@ SUBMODULE (PlotModule) SvgSubmodule
             end do
             write(fileUnit, '(A)'), '</g>'
         end subroutine FillContourBand
+
+        ! drawn once at the start of the plot as only points are drawn each time step on the same background.
+        subroutine SvgCartesianAxes(fileUnit, phaseSpace1, phaseSpace2)
+            USE IFWINA
+            use ConstantsModule, only: HEIGHT, TEMPERATURE, PHASE_SPACE, PHASE_AND_MAP, PLOTTING_OFF
+            use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
+            use ModelParamsModule, only: gModIntParams, gContourIntervals
+            implicit none
+        
+            integer, parameter :: NUMBER_OF_DIVISIONS = 20 ! Number of divisions in the shortest dimension
+            
+            ! Arguments
+            integer, intent(in)          :: fileUnit
+            TYPE(PhaseSpace), intent(in) :: phaseSpace1, phaseSpace2
+        
+            ! Local variables
+            integer(4) :: x_len       ! Length of X-axis in pixels
+            integer(4) :: y_len       ! Length of Y-axis in pixels
+            integer(4) :: i           ! tick_size = 5           ! Size of tick marks in pixels
+            real       :: interval, x, dx
+            character(6) :: hex
+        
+            type(CartesianData) :: cartData
+        
+            ! For labels
+            character(len=16) :: label
+            integer(4) :: x_anchor, y_anchor, y_pos, x_pos, n_left, n_right, n_up, n_down
+            type(T_SIZE) :: sz
+        
+            cartData%x_origin  = phaseSpace1%xcenter  ! X-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
+            cartData%y_origin  = phaseSpace1%ycenter  ! Y-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
+            if (gModIntParams%plotType == PHASE_SPACE) then
+                cartData%x_origin  = phaseSpace1%xcenter  ! X-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
+                cartData%y_origin  = phaseSpace1%ycenter  ! Y-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
+                x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
+                y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
+            else if (gModIntParams%plotType == PHASE_AND_MAP) then
+                x_len     = gBitMapInfo%width / 2       ! Length of X-axis in pixels
+                y_len     = gBitMapInfo%height / 2       ! Length of Y-axis in pixels
+            endif
+            
+        
+            ! Calculate pixel step for ticks (using the shorter axis for scaling)
+            dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+        
+            ! --- Draw Vertical Grid Lines (X-axis ticks) ---
+            write(hex,'(Z6.6)') AXIS_COLOR
+            n_left  = int(cartData%x_origin / dx)
+            n_right = int((x_len - cartData%x_origin) / dx)
+        
+            ! --- Draw Vertical Grid Lines (X-axis ticks) ---
+            do i = -n_left, n_right
+                if (i == 0) cycle  ! skip central axis
+        
+                x = int(cartData%x_origin + i * dx)
+                write(fileUnit,'(A, I0, A, I0, A, I0, A, I0, A, A, A)') &
+                    '<line x1="', int(cartData%x_origin + i * dx), '" y1="', cartData%y_origin + y_len / 2, &
+                        '" x2="', int(cartData%x_origin + i * dx), '" y2="', cartData%y_origin + y_len / 2, &
+                        '" stroke="#', hex, '" stroke-width="1"/>'
+            end do
+            
+            !do i = -cartData%num_ticks_x, cartData%num_ticks_x
+            !    if (i == 0) cycle  ! skip central axis
+            !    write(fileUnit,'(A, I0, A, I0, A, I0, A, I0, A, A, A)') &
+            !        '<line x1="', int(cartData%x_origin + i * cartData%dx), '" y1="', cartData%y_origin + y_len / 2, &
+            !            '" x2="', int(cartData%x_origin + i * cartData%dx), '" y2="', cartData%y_origin + y_len / 2, &
+            !            '" stroke="#', hex, '" stroke-width="1"/>'
+            !end do
+        
+            ! --- Draw Horizontal Grid Lines (Y-axis ticks) ---
+            do i = -n_up, n_down
+                if (i == 0) cycle ! skip central axis
+                x = int(cartData%y_origin + i * dx)
+                ! Move to left side, draw to right side
+                write(fileUnit,'(A, I0, A, I0, A, I0, A, I0, A, A, A)') &
+                    '<line x1="', cartData%x_origin - x_len / 2, '" y1="', int(cartData%y_origin + i * dx), &
+                        '" x2="', cartData%x_origin + x_len / 2, '" y2="', int(cartData%y_origin + i * dx), &
+                        '" stroke="#', hex, '" stroke-width="1"/>'
+            end do
+        
+            ! 3. Do labels
+            ! The interval is specified as 2 * range / 20 (which simplifies to range / 10)
+            if (gModIntparams%field1 .NE. PLOTTING_OFF) then
+                interval = 2. * gContourIntervals%Ranges(gModIntparams%field1) / REAL(NUMBER_OF_DIVISIONS)
+                !call labelCartesianAxes(cartData, interval, .true., phaseSpace1%gDCcolor)
+            endif
+            if (gModIntparams%field2) then
+                interval = 2.0 * gContourIntervals%Ranges(gModIntparams%field2) / REAL(NUMBER_OF_DIVISIONS)
+                !call labelCartesianAxes(cartData, interval, .false., phaseSpace2%gDCcolor)
+            endif
+        
+            write(hex,'(Z6.6)') X_Y_AXIS_COLOR
+            !  Now to draw the main axes.
+        
+            ! 6. Draw X-axis
+            write(fileUnit,'(A, I0, A, I0, A, I0, A, I0, A, A, A)') &
+                '<line x1="', cartData%x_origin - (x_len / 2), '" y1="', cartData%y_origin, &
+                    '" x2="', cartData%x_origin + (x_len / 2), '" y2="', cartData%y_origin, &
+                    '" stroke="#', hex, '" stroke-width="2"/>'
+        
+            ! 7. Draw Y-axis
+            write(fileUnit,'(A, I0, A, I0, A, I0, A, I0, A, A, A)') &
+                '<line x1="', cartData%x_origin, '" y1="', cartData%y_origin - (y_len / 2), &
+                    '" x2="', cartData%x_origin, '" y2="', cartData%y_origin + (y_len / 2), &
+                    '" stroke="#', hex, '" stroke-width="2"/>'
+                
+        end subroutine SvgCartesianAxes
     
 
     end submodule SvgSubmodule

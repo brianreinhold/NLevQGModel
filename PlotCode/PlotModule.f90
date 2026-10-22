@@ -6,6 +6,7 @@ module PlotModule
     implicit none
     
     public  ! Makes everything in the module public (unless otherwise specified)
+            ! Do not 'USE' anything from ModelModule as it will introduce potential circular dependencies.
     
     ! Creating a parameter color ram for Hovmoller diagrams and weather maps.
     integer, parameter :: RGB32 = c_int32_t
@@ -64,6 +65,7 @@ module PlotModule
     
     integer(kind=4), parameter :: BLACK = Z'00000000'                         ! RGB(0, 0, 0)
     integer(kind=4), parameter :: BACKGROUND_COLOR = Z'00001E0A'              ! RGB(0, 30, 10)
+    integer(kind=4), parameter :: BACKGROUND_COLOR_REV = Z'000A1E00'
     integer(kind=4), parameter :: AXIS_COLOR = Z'00282828'                    ! RGB(40, 40, 40)
     integer(kind=4), parameter :: X_Y_AXIS_COLOR = Z'00323232'                ! RGB(50, 50, 50)
     integer(kind=4), parameter :: DARKEST_TEXT = Z'003C3C3C'                  ! RGB(60, 60, 60)
@@ -89,6 +91,29 @@ module PlotModule
         INTEGER(4) :: count
         LOGICAL :: is_initialized
     end type TimeSeriesBuffer
+
+    !type :: CartesianData
+    !    integer(4) :: x_origin      ! x-coordinate of origin on screen
+    !    integer(4) :: y_origin      ! y-coordinate of origin on screen
+    !    integer(4) :: startX        ! Left edge of drawing area on screen
+    !    integer(4) :: startY        ! Top edge of drawing area on screen
+    !    integer(4) :: endX          ! Right edge of drawing area on screen
+    !    integer(4) :: endY          ! Bottom edge of drawing area on screen
+    !    integer(4) :: n_left        ! number of axis (vertical) lines to the left of the origin (these will have negative values)
+    !    integer(4) :: n_right       ! number of axis (vertical) lines to the right of the origin (these will have positive values)
+    !    integer(4) :: n_up          ! number of axis (horizontal) lines above the origin (these will have positive values)
+    !    integer(4) :: n_down        ! number of axis (horizontal) lines below the origin (these will have negative values)
+    !    real       :: dx            ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+    !                                ! x_len = endX - startX  and y_len = endY - startY
+    !end type CartesianData
+    
+    type :: CartesianData           ! Currently used only for drawing the axes of the phase space plots.
+        integer(4) :: x_origin
+        integer(4) :: y_origin
+        integer(4) :: num_ticks_x
+        integer(4) :: num_ticks_y
+        real       :: tick_step_px  ! This is used to make sure that the interval delta X and delta Y on the screen are the same given screens are typcially not square.
+    end type CartesianData
     
     type :: PhaseSpace
         LOGICAL :: isInitialized = .FALSE.    ! Indicates that this structure has been initialized and is ready to use when true
@@ -221,14 +246,6 @@ module PlotModule
     REAL, ALLOCATABLE :: gPressure(:) ! Array containing the pressure values interpolated from gVertArr%LVS to screen heights
                                       ! This array will be used only by the vertical cross sections and the vertical hovmollers
 
- 
-    type :: CartesianData           ! Currently used only for drawing the axes of the phase space plots.
-        integer(4) :: x_origin
-        integer(4) :: y_origin
-        integer(4) :: num_ticks_x
-        integer(4) :: num_ticks_y
-        real       :: tick_step_px  ! This is used to make sure that the interval delta X and delta Y on the screen are the same given screens are typcially not square.
-    end type CartesianData
 
     type :: InterpolationBounds
         integer :: IL       ! Lower range in x of the input array to be interpolated
@@ -539,7 +556,7 @@ module PlotModule
         !>               as the legend.
         subroutine initializePhaseSpaceType(field, phaseSpaceType, colorLead, color)
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ConstantsModule, only: SQRT2, PHASE_AND_MAP
+            use ConstantsModule, only: SQRT2, PHASE_AND_MAP, PHASE_SPACE
             use ModelParamsModule, only: gModIntParams, gPlotScales, gContourIntervals, gIsTemperature
             use ModelFieldsModule, only: gVertArr
 
@@ -1092,19 +1109,133 @@ module PlotModule
             if (gLonVertCrossSec2%field == field) xSecType = gLonVertCrossSec2
         end function getLonCrossSectionType
 
-        !> This routine creates the two dimensional grid representing the actual
-        !> values of the height or temperature field in the channel. Those array points
-        !> are calculated at only GRID(33, 17) points. GRID(33, 17) is part of this
-        !> module. Normally this would be done with an FFT but since only 10 spectral 
-        !> amplitudes are involved, doing the computations via brute force probably saves
-        !> time. This is sped up as the cos and sin functions are precalculated for 32 points in
-        !> the period. These pre-calculated functions are in gPlotConfig%rcos and gPlotConfig%rsin. 
-        !> Of course this is FAR too few points to generate a plot on the screen which
-        !> has more than a thousand points in both directions. Thus the array GRID(33, 17))
-        !> created by this routine is interpolated using two dimensional bipolar cubic 
-        !> splines to create each pixel value.
-        subroutine createGrid(grid, weatherMapType)
-            use ConstantsModule, only: PLOTTING_OFF, SQRT22
+        ! subroutine createGrid(grid, weatherMapType)
+        !     use ConstantsModule, only: PLOTTING_OFF!, SQRT22
+        !     ! use ArrayDimensionsModule, only: gCurrentDims
+        !     ! use ModelParamsModule, only: gModIntParams
+        !     ! use ModelFieldsModule, only: gTransArr
+        !     ! use Fftw3HelpersModule, only: norm_fwd, norm_cosly, norm_inv_wave, plan_x_c2r_1d, plan_c2r_2d
+        !     ! use, intrinsic :: ieee_arithmetic
+        
+        !     implicit none
+            
+        !     ! include 'fftw3.f03'
+
+        !     real, intent(inout) :: grid(:, :)
+        !     type(WeatherMap), intent(in) :: weatherMapType
+
+
+
+        !     ! integer :: index, K, L, IXMAX, IYMAX, KMIN, LMIN, KMAX, LMAX
+        !     ! REAL :: temp_calc, wave_cos, wave_sin, zonal_val
+
+        !     if (weatherMapType%field == PLOTTING_OFF) then
+        !         return
+        !     endif
+        !     call computeGrid(weatherMapType%value, grid, weatherMapType%scale)
+            
+        !     ! IXMAX = gCurrentDims%IXMAX
+        !     ! IYMAX = gCurrentDims%IYMAX
+        !     ! KMIN = gModIntParams%lowerZonalWave
+        !     ! LMIN = gModIntParams%lowerMeridWave
+        !     ! KMAX = gModIntParams%upperZonalWave
+        !     ! LMAX = gModIntParams%upperMeridWave
+            
+        !     ! gTransArr%plot = 0.0        !FFTw3 forces us to define two whole arrays JUST for plotting an extra row
+        !     ! grid = 0.0                  ! Fortran short cut to zero an entire array in all dimensions. This is the output array for the grid
+        !     ! gTransArr%Gc(:, :) = CMPLX(0.0_C_FLOAT, 0.0_C_FLOAT, kind=C_FLOAT)
+
+        !     ! if (LMIN > 0) then
+        !     !     ! 1. Load ac(k,l)cosknxsinly and as(k,l)sinknxsinly into the imaginary and real parts of Gc for each L
+        !     !     ! In two dimensions the spectral coeffcients A(k,l) would be
+        !     !     ! A(k,l) = (ac(k,l)*2*cosknx + as(k,l)*2*sinknx)sinly + sqrt(2)*az(l)*cosly
+        !     !     ! However, our arrays for the horizonal field are compacted into one dimension such that
+        !     !     ! the first LMAX2 components are the zonal az(L) sqrt(2)cosLy part. 
+        !     !     ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
+        !     !     temp_calc = SQRT22 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+            
+        !     !     ! ====================================================================
+        !     !     ! PART A: LOAD THE ZONAL MODES (cosLy only)
+        !     !     ! ====================================================================
+        !     !     ! The first LMAX entries in your linear array are your pure zonal components.
+        !     !     ! They occupy the K=0 frequency (Column 1 in Fortran's 1-based indexing).
+        !     !     !DO L = 1, LMAX2
+        !     !     !    ! Extract value from the linear array (1 to LMAX2 block) weatherMapType%value(L)
+        !     !     !    ! Map to 2D complex array: K=0 implies column 1.
+        !     !     !    ! Zonal-only modes are cosLy, so place entirely in the REAL part.
+        !     !     !    ! Note: Add +1 to L if your physical grid index L=0 is reserved for mean flow
+        !     !     !    gTransArr%Gc(1, L + 1) = CMPLX(temp_calc *weatherMapType%value(L), 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+        !     !     !end do
+            
+        !     !     do L = LMIN, LMAX
+        !     !         zonal_val = temp_calc * weatherMapType%value(L)
+    
+        !     !         ! Positive frequency (+L)
+        !     !         gTransArr%Gc(1, L + 1)         = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+        !     !         ! Negative frequency (-L) matches exactly because cosine is symmetric: cos(-Ly) = cos(Ly)
+        !     !         gTransArr%Gc(1, IYMAX - L + 1) = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
+        !     !     end do
+        !     ! else 
+        !     !     if (KMIN > 0) LMIN = 1
+        !     ! endif
+
+        !     ! if (KMIN > 0) then
+        !     !     !! ====================================================================
+        !     !     ! PART B: LOAD THE WAVE MODES (cosKx and sinKx for sinLy)
+        !     !     ! ====================================================================
+        !     !     ! These follow the LMAX2 block. They cycle through all L for each K.
+        !     !     ! Each unique (K, L) combination contains a pair of entries: [Cos, Sin]
+        !     !     temp_calc = 0.5 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+            
+        !     !     DO K = KMIN, KMAX
+        !     !         DO L = LMIN, LMAX
+        
+        !     !             ! 1. Calculate the exact index in your linear storage vector
+        !     !             index = gModIntParams%LMAX2 &                         ! Step past Zonal block
+        !     !                   + (K - 1) * (gModIntParams%LMAX2 * 2) &          ! Step past completed K channels
+        !     !                   + (L - 1) * 2 &                   ! Step past completed L pairs in current K
+        !     !                   + 1                               ! Pointer to the Cos entry
+        
+        !     !             ! Extract the unscaled wave amplitudes
+        !     !             wave_cos = weatherMapType%value(index) * temp_calc      ! The cosknxsinly part
+        !     !             wave_sin = weatherMapType%value(index + 1) * temp_calc  ! The sinknxsinly part
+        
+        !     !             ! 2. --- Interaction with positive Y-frequency (+L slot) ---
+        !     !             ! For cos(Kx)*sin(Ly) -> Sits in Imaginary part, with a negative sign
+        !     !             ! For sin(Kx)*sin(Ly) -> Sits in Real part, with a negative sign
+        !     !             gTransArr%Gc(K + 1, L + 1) = CMPLX(-wave_sin, -wave_cos, kind=C_FLOAT)
+        
+        !     !             ! 3. --- Interaction with negative Y-frequency (-L slot) ---
+        !     !             ! Because sin(-Ly) = -sin(Ly), the signs reverse across the wrap-around boundary.
+        !     !             ! This forces the unwanted cross-terms to cancel out during the 2D transform!
+        !     !             gTransArr%Gc(K + 1, IYMAX - L + 1) = CMPLX(wave_sin, wave_cos, kind=C_FLOAT)
+        
+        !     !         END DO
+        !     !     END DO
+        !     ! endif
+            
+        !     ! ! ====================================================================
+        !     ! ! PART C: EXECUTE THE 2D COMPLEX-TO-REAL TRANSFORM
+        !     ! ! ====================================================================
+        !     ! ! Gc (Input):  Complex array of size (IXMAX/2 + 1, IYMAX)
+        !     ! ! plot (Output): Real array of size (IXMAX, IYMAX)
+
+        !     ! call fftwf_execute_dft_c2r(plan_c2r_2d, gTransArr%Gc, gTransArr%plot)
+
+
+        !     ! ! Copy the first column to the column just after the FFT data
+        !     ! ! where the FFT data occupies indices 1 to IXMAX
+        !     ! ! Do loop is more efficient when copying non-contiguous data like this than array slicing
+        !     ! ! 1. Copy the core un-padded grid from FFTW into your extended plotting grid
+        !     ! grid(1:IXMAX, 1:IYMAX) = gTransArr%plot(1:IXMAX, 1:IYMAX)
+
+        !     ! ! 2. Instantly replicate the periodic boundary column in one line (No DO loop!)
+        !     ! grid(IXMAX + 1, 1:IYMAX) = grid(1, 1:IYMAX)
+        !     ! !call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
+        ! end subroutine createGrid
+        
+       subroutine computeGrid(PS, grid, scale)
+            use ConstantsModule, only: SQRT22
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelParamsModule, only: gModIntParams
             use ModelFieldsModule, only: gTransArr
@@ -1116,14 +1247,11 @@ module PlotModule
             include 'fftw3.f03'
 
             real, intent(inout) :: grid(:, :)
-            type(WeatherMap), intent(in) :: weatherMapType
+            real, intent(in) :: PS(:)
+            real, optional, intent(in) :: scale
 
             integer :: index, K, L, IXMAX, IYMAX, KMIN, LMIN, KMAX, LMAX
             REAL :: temp_calc, wave_cos, wave_sin, zonal_val
-
-            if (weatherMapType%field == PLOTTING_OFF) then
-                return
-            endif
             
             IXMAX = gCurrentDims%IXMAX
             IYMAX = gCurrentDims%IYMAX
@@ -1143,7 +1271,8 @@ module PlotModule
                 ! However, our arrays for the horizonal field are compacted into one dimension such that
                 ! the first LMAX2 components are the zonal az(L) sqrt(2)cosLy part. 
                 ! Then the remainder of the array is has cosx, sinx for all sinLy, then cos2x, sin2x for all sinLy, etc.
-                temp_calc = SQRT22 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+                temp_calc = SQRT22 ! Do the normalization first so we dont have to normalize after the transform
+                if (present(scale)) temp_calc = temp_calc * scale
             
                 ! ====================================================================
                 ! PART A: LOAD THE ZONAL MODES (cosLy only)
@@ -1159,7 +1288,7 @@ module PlotModule
                 !end do
             
                 do L = LMIN, LMAX
-                    zonal_val = temp_calc * weatherMapType%value(L)
+                    zonal_val = temp_calc * PS(L)
     
                     ! Positive frequency (+L)
                     gTransArr%Gc(1, L + 1)         = CMPLX(zonal_val, 0.0_C_FLOAT, kind=C_FLOAT_COMPLEX)
@@ -1176,7 +1305,8 @@ module PlotModule
                 ! ====================================================================
                 ! These follow the LMAX2 block. They cycle through all L for each K.
                 ! Each unique (K, L) combination contains a pair of entries: [Cos, Sin]
-                temp_calc = 0.5 * weatherMapType%scale ! Do the normalization first so we dont have to normalize after the transform
+                temp_calc = 0.5 ! Do the normalization first so we dont have to normalize after the transform
+                if (present(scale)) temp_calc = temp_calc * scale
             
                 DO K = KMIN, KMAX
                     DO L = LMIN, LMAX
@@ -1188,8 +1318,8 @@ module PlotModule
                               + 1                               ! Pointer to the Cos entry
         
                         ! Extract the unscaled wave amplitudes
-                        wave_cos = weatherMapType%value(index) * temp_calc      ! The cosknxsinly part
-                        wave_sin = weatherMapType%value(index + 1) * temp_calc  ! The sinknxsinly part
+                        wave_cos = PS(index) * temp_calc      ! The cosknxsinly part
+                        wave_sin = PS(index + 1) * temp_calc  ! The sinknxsinly part
         
                         ! 2. --- Interaction with positive Y-frequency (+L slot) ---
                         ! For cos(Kx)*sin(Ly) -> Sits in Imaginary part, with a negative sign
@@ -1222,8 +1352,7 @@ module PlotModule
 
             ! 2. Instantly replicate the periodic boundary column in one line (No DO loop!)
             grid(IXMAX + 1, 1:IYMAX) = grid(1, 1:IYMAX)
-            !call InverseTransform(weatherMapType) ! This creates the 1D array of the latitudinal profile at the weather station latitude for the hovmoller diagram
-        end subroutine createGrid
+        end subroutine computeGrid
 
         subroutine InverseTransform(weatherMapType)
             use ArrayDimensionsModule, only: gCurrentDims
@@ -2869,7 +2998,8 @@ module PlotModule
             call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP, weatherMapType%interpArrSelection)
         
             ! This routine also dimensionalizes the values
-            call createGrid(gTransArr%plotFull, weatherMapType)
+            call computeGrid(weatherMapType%value, gTransArr%plotFull, weatherMapType%scale)
+            !call createGrid(gTransArr%plotFull, weatherMapType)
             
             ! Interpolate the grid array to a resolution that matches the size of the display of the
             ! weather map on the screen.

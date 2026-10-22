@@ -66,7 +66,7 @@ function WinMain( hInstance, hPrevInstance, lpszCmdLine, nCmdShow )
     use gdi32
     
     use NLevQGModelGlobals, only: ghInstance, ghModule, ghWndMain, gBitMapInfo, ghLogMain, ghSettingsDlg, WriteMessageBox, SIZEOFAPPNAME, &
-                                    LogMessage, StartTimer
+                                    LogMessage, StartTimer, gFrameX, gFrameY
     use WndProcInterfacesModule, only: MainWndProc, LogWndProc
     use DlgProcInterfacesModule, only: SettingsDlgProc
 
@@ -156,6 +156,9 @@ function WinMain( hInstance, hPrevInstance, lpszCmdLine, nCmdShow )
     
     ! Get Screen data
     lret = SystemParametersInfo(SPI_GETWORKAREA, 0, LOC(rcWork), 0)
+    
+    gFrameX = 0
+    gFrameY = 0
 
     gBitMapInfo%rect = rcWork
     gBitMapInfo%width = rcWork%right - rcWork%left
@@ -427,10 +430,12 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
     use ifwin       ! For GetCurrentThreadId
     use user32
-    use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow
+    use NLevQGModelGlobals, only: ghInstance, ghWndMain, gBitMapInfo, ghCurrentDlg, WriteMessageBox, SIZEOFAPPNAME, LogMessage, CenterWindow, ghHelpDlg, &
+        gFrameX, gFrameY
     use ConstantsModule, only: RUNNING, PAUSED, STOPPED, WEATHER_MAP, PHASE_AND_MAP, WEATHER_STN, VERT_CROSS_SEC_AT_LAT, VERT_CROSS_SEC_AT_LON, &
                                ZONAL_WAVE_ENERGY, PHASE_SPACE, VERT_HOV_AT_WEATHER_STN, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, NO_PLOT, DEGREES_TO_RAD, &
                                VORTICITY, PLOTTING_OFF, ONE, TWO
+    use HelpDialogModule, only: HelpDlgProc
     use UtilitiesModule, only: openModelFile
     use SetUpModule, only: SaveModelState, SetModRealParamsDimensionalState
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
@@ -511,10 +516,10 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             lret =  GetClientRect(hWnd, rect)
             
             gBitMapInfo%rect = rect
-            gBitMapInfo%width = rect%right - rect%left
-            gBitMapInfo%height = rect%bottom - rect%top
-            gBitMapInfo%startX = rect%left
-            gBitMapInfo%startY = rect%top
+            gBitMapInfo%width = gBitMapInfo%rect%right - gBitMapInfo%rect%left - gFrameX       ! remove frame on left and right from window width
+            gBitMapInfo%height = gBitMapInfo%rect%bottom - gBitMapInfo%rect%top - gFrameY / 2  ! Makes the frame on bottom same width as frame on left
+            gBitMapInfo%startX = gBitMapInfo%rect%left + gFrameX / 2
+            gBitMapInfo%startY = gBitMapInfo%rect%top + gFrameY / 2                                      ! Windows puts a frame on top that I cannot get rid of. So leave 0
 
             ! 3. Create the Bitmap using the pre-populated width/height
             bmi%bmiHeader%biSize        = SIZEOF(bmi%bmiHeader)
@@ -557,7 +562,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             hdc = BeginPaint(hWnd, ps)
  
             ! 2. Copy the entire persistent black canvas from memory to the screen
-            lret = BitBlt(hdc, 0, 0, gBitMapInfo%width, gBitMapInfo%height, gBitMapInfo%hMemDC, 0, 0, SRCCOPY)
+            lret = BitBlt(hdc, gBitMapInfo%startX, 0, gBitMapInfo%width, gBitMapInfo%height, gBitMapInfo%hMemDC, 0, 0, SRCCOPY)
             
 ! =============================== MOUSE OVER CODE
             ! THis mess prints the moused-over value 'current_val' of the weather map to the screen in a separate 
@@ -722,6 +727,9 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     ret = EnableWindow(ghCurrentDlg, .TRUE.)
                     ret = SetFocus(ghCurrentDlg)
                     ret = SetActiveWindow(ghCurrentDlg)
+                    if (ghHelpDlg /= NULL) then
+                        bret = DestroyWindow(ghHelpDlg)
+                    end if
 
                     gElapsedTime%timeSteps = 0 ! Reset the elapsed time displayed in plots
                 endif
@@ -734,7 +742,18 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             select case (wParam)
     ! H Help key -----------------------
                 case (Z'48')  ! <--- THIS CATCHES 'H' or 'h' REGARDLESS OF CASE. Windows passes hex 48 (ASCII 72) for the physical H key
-                    lret = MessageBox(hWnd, PLOT_HELP_TEXT, "Help"C, MB_OK)
+                    !lret = MessageBox(hWnd, PLOT_HELP_TEXT, "Help"C, MB_OK)
+                if (ghHelpDlg == NULL) then
+                    ghHelpDlg = CreateDialogParam(ghInstance, INT(IDD_HELP_DIALOG, LONG_PTR), &
+                                                NULL, LOC(HelpDlgProc), 0_LONG_PTR)
+                    if (ghHelpDlg /= 0) then
+                        bret = ShowWindow(ghHelpDlg, SW_SHOW)
+                        bret = UpdateWindow(ghHelpDlg)
+                    end if
+                else
+                    ! Bring existing help window to front
+                    bret = SetForegroundWindow(ghHelpDlg)
+                end if
     ! F1: PAUSE/RESUME -----------------------
                 case (VK_F1)
                     if (gViewOnly) return
@@ -779,6 +798,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         endif
                     end if
                     current_val1 = -1.0
+                    if (gModRealParams%isDimensionalized) call SetModRealParamsDimensionalState(.false.)
                     call initializePlot()
                     call ClearScreen()
                     if (gViewOnly) call outputPlot(gViewOnly)
@@ -946,8 +966,23 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                     call initializePlot()
                     call ClearScreen()
                     if (gViewOnly) call outputPlot(gViewOnly)
+                    
+    ! + -: Change contour intervals
+                case (VK_ADD)            ! Keypad +
+                    call changeScale(.true., GetKeyState(VK_SHIFT) < 0)
+
+                case (VK_SUBTRACT)       ! Keypad -
+                    call changeScale(.false., GetKeyState(VK_SHIFT) < 0)
+
+                case (VK_OEM_PLUS)       ! Main keyboard +  No need for shift key - this gets the key code
+                    call changeScale(.true., GetKeyState(VK_SHIFT) < 0)
+
+                case (VK_OEM_MINUS)      ! Main keyboard -
+                    call changeScale(.false., GetKeyState(VK_SHIFT) < 0)
+
                 case (VK_ESCAPE)
                     call PostQuitMessage(0)
+
                 case (ICHAR('A'))
                     ! If we are integrating the model [gViewOnly = false), allow toggling between plotting the instantaneous versus running mean value
                     if (.NOT. gViewOnly) gShowRunningMean = .NOT. gShowRunningMean
@@ -1127,6 +1162,101 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
                         gModIntParams%plotType == VERT_CROSS_SEC_AT_LON)
         end function isMapPlot
+        
+        subroutine changeScale(increase, hasShift)
+            use ConstantsModule, only: WEATHER_MAP, HEIGHT, TEMPERATURE, HOV_DIAG_AT_LAT, HOV_DIAG_AT_LON, PHASE_AND_MAP, WEATHER_STN, &
+                                   PHASE_SPACE, NO_PLOT, PLOTTING_OFF
+            use PlotModule, only: gEnergyHovmoller1, gVertHovmoller1, gVertHovmoller2
+            use ModelParamsModule, only: gContourIntervals
+            implicit none
+
+            logical, intent(in) :: increase, hasShift
+
+            ! If 'increase' is true, we double the scale, otherwise we halve the scale
+            ! If 'hasShift' is true, we change the scale for field 2, otherwise we change the scale for field1
+
+            integer :: field
+
+            ! Nothing to do cases:
+            if (gModIntParams%field2 == PLOTTING_OFF .AND. hasShift) return
+            if (gModIntParams%field1 == PLOTTING_OFF .AND. .NOT. hasShift) return
+
+            if (hasShift) then
+                field = gModIntParams%field2
+            else
+                field = gModIntParams%field1
+            endif
+
+            if (gModIntParams%plotType == WEATHER_MAP .OR. &
+                gModIntParams%plotType == PHASE_AND_MAP .OR. &
+                gModIntParams%plotType == VERT_CROSS_SEC_AT_LAT .OR. &
+                gModIntParams%plotType == HOV_DIAG_AT_LAT .OR. &
+                gModIntParams%plotType == VERT_CROSS_SEC_AT_LON .OR. &
+                gModIntParams%plotType == HOV_DIAG_AT_LON) then
+
+                if (increase) then
+                    gContourIntervals%Contours(field) = 2.0 * gContourIntervals%Contours(field)
+                else
+                    gContourIntervals%Contours(field) = 0.5 * gContourIntervals%Contours(field)
+                endif
+
+                if (gModIntParams%plotType == PHASE_AND_MAP) then
+                    if (increase) then
+                        gContourIntervals%Ranges(field) = 2.0 * gContourIntervals%Ranges(field)
+                    else
+                        gContourIntervals%Ranges(field) = 0.5 * gContourIntervals%Ranges(field)
+                    endif
+                endif
+            else if (gModIntParams%plotType == PHASE_SPACE .OR. &
+                     gModIntParams%plotType == WEATHER_STN) then
+                if (increase) then
+                    gContourIntervals%Ranges(field) = 2.0 * gContourIntervals%Ranges(field)
+                else
+                    gContourIntervals%Ranges(field) = 0.5 * gContourIntervals%Ranges(field)
+                endif
+            ! We do these Homvoller changes differently; the base values of the contours are not changed,
+            ! only the contour interval in the initialization structure is changed. In this manner we do
+            ! not need to re-initialize the structures which allows us to continue on to the next
+            ! row or column in the Hovmollers. The change is much faster that way. However, there
+            ! will be a discontinuity in the plot where the contour intervals change!
+            else if (gModIntParams%plotType == VERT_HOV_AT_WEATHER_STN) then
+                if (increase) then
+                    if (gModIntParams%field1 == field) then  ! Note this is the inverse! So doubling means halving.
+                        gVertHovmoller1%contourIntervalInv = 0.5 * gVertHovmoller1%contourIntervalInv
+                    else
+                        gVertHovmoller2%contourIntervalInv = 0.5 * gVertHovmoller2%contourIntervalInv
+                    endif
+                else
+                    if (gModIntParams%field1 == field) then
+                        gVertHovmoller1%contourIntervalInv = 2.0 * gVertHovmoller1%contourIntervalInv
+                    !else
+                        gVertHovmoller2%contourIntervalInv = 2.0 * gVertHovmoller2%contourIntervalInv
+                    endif
+                endif
+                return
+            else if (gModIntParams%plotType == ZONAL_WAVE_ENERGY) then
+                if (increase) then
+                    if (gModIntParams%field1 == field) then  ! Note this is the inverse! So doubling means halving.
+                        gEnergyHovmoller1%contourIntervalInv = 0.5 * gEnergyHovmoller1%contourIntervalInv
+                    !else
+                        !gEnergyHovmoller2%contourIntervalInv = 0.5 * gEnergyHovmoller2%contourIntervalInv
+                    endif
+                else
+                    if (gModIntParams%field1 == field) then
+                        gEnergyHovmoller1%contourIntervalInv = 2.0 * gEnergyHovmoller1%contourIntervalInv
+                    !else
+                    !    gEnergyHovmoller2%contourIntervalInv = 2.0 * gEnergyHovmoller2%contourIntervalInv
+                    endif
+                endif
+                return
+            else
+                return
+            endif
+
+            call initializePlot()
+            call ClearScreen()
+            if (gViewOnly) call outputPlot(gViewOnly)
+        end subroutine changeScale
 
 end function MainWndProc
 
