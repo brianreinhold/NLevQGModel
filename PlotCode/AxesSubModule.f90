@@ -4,7 +4,7 @@ SUBMODULE (PlotModule) AxesSubmodule
 
         ! This is for the axes in phase space plots. Unlike most of the axes drawn this is
         ! drawn once at the start of the plot as only points are drawn each time step on the same background.
-        Module subroutine DrawCartesianAxes(invalidate, phaseSpace1, phaseSpace2)
+        Module subroutine DrawCartesianAxes(invalidate, fasRymd)
             USE IFWINA
             use ConstantsModule, only: HEIGHT, TEMPERATURE, PHASE_SPACE, PHASE_AND_MAP, PLOTTING_OFF
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
@@ -14,9 +14,10 @@ SUBMODULE (PlotModule) AxesSubmodule
             integer, parameter :: NUMBER_OF_DIVISIONS = 20 ! Number of divisions in the shortest dimension
             ! Arguments
             logical, intent(in) :: invalidate  ! Force redraw flag
-            TYPE(PhaseSpace), intent(in) :: phaseSpace1, phaseSpace2
+            TYPE(PhaseSpace), intent(in) :: fasRymd
         
             ! Local variables
+            type(CartesianData) cartData
             integer(4) :: x_len       ! Length of X-axis in pixels
             integer(4) :: y_len       ! Length of Y-axis in pixels
             INTEGER(BOOL) :: bret
@@ -25,24 +26,28 @@ SUBMODULE (PlotModule) AxesSubmodule
         
             integer(HANDLE) :: hOldPen, hAxisPen
             type(T_POINT) :: oldPoint
-            type(CartesianData) :: cartData
 
             ! For labels
             character(len=16) :: label
             integer(4) :: x_anchor, y_anchor, y_pos, x_pos
             type(T_SIZE) :: sz
 
-            if (gModIntParams%plotType == PHASE_SPACE) then
-                cartData%x_origin  = gBitMapInfo%width / 2  ! X-coordinate of origin in pixels
-                cartData%y_origin  = gBitMapInfo%height / 2  ! Y-coordinate of origin in pixels
-                x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
-                y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
-            else if (gModIntParams%plotType == PHASE_AND_MAP) then
-                cartData%x_origin  = 3 * gBitMapInfo%width / 4  ! X-coordinate of origin in pixels
-                cartData%y_origin  = 3 * gBitMapInfo%height / 4  ! Y-coordinate of origin in pixels
-                x_len     = gBitMapInfo%width / 2       ! Length of X-axis in pixels
-                y_len     = gBitMapInfo%height / 2       ! Length of Y-axis in pixels
-            endif
+            cartData = fasRymd%cartData
+
+            x_len = fasRymd%cartData%endX - fasRymd%cartData%startX        ! Length of X-axis in pixels
+            y_len = fasRymd%cartData%endY - fasRymd%cartData%startY       ! Length of Y-axis in pixels
+
+            ! if (gModIntParams%plotType == PHASE_SPACE) then
+            !     cartData%x_origin  = gBitMapInfo%width / 2  ! X-coordinate of origin in pixels
+            !     cartData%y_origin  = gBitMapInfo%height / 2  ! Y-coordinate of origin in pixels
+            !     x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
+            !     y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
+            ! else if (gModIntParams%plotType == PHASE_AND_MAP) then
+            !     cartData%x_origin  = 3 * gBitMapInfo%width / 4  ! X-coordinate of origin in pixels
+            !     cartData%y_origin  = 3 * gBitMapInfo%height / 4  ! Y-coordinate of origin in pixels
+            !     x_len     = gBitMapInfo%width / 2       ! Length of X-axis in pixels
+            !     y_len     = gBitMapInfo%height / 2       ! Length of Y-axis in pixels
+            ! endif
             
             ! 1. Create 2nd pen 1 pixel thick and select it
             hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
@@ -73,14 +78,14 @@ SUBMODULE (PlotModule) AxesSubmodule
         
             ! 3. Do labels
             ! The interval is specified as 2 * range / 20 (which simplifies to range / 10)
-            if (gModIntparams%field1 .NE. PLOTTING_OFF) then
-                interval = 2. * gContourIntervals%Ranges(gModIntparams%field1) / REAL(NUMBER_OF_DIVISIONS)
-                call labelCartesianAxes(cartData, interval, .true., phaseSpace1%gDCcolor)
+            if (fasRymd%field .NE. PLOTTING_OFF) then
+                interval = 2. * gContourIntervals%Ranges(fasRymd%field) / REAL(NUMBER_OF_DIVISIONS)
+                call labelCartesianAxes(cartData, interval, (fasRymd%field == gModIntParams%field1), fasRymd%gDCcolor)
             endif
-            if (gModIntparams%field2) then
-                interval = 2.0 * gContourIntervals%Ranges(gModIntparams%field2) / REAL(NUMBER_OF_DIVISIONS)
-                call labelCartesianAxes(cartData, interval, .false., phaseSpace2%gDCcolor)
-            endif
+            ! if (gModIntparams%field2) then
+            !     interval = 2.0 * gContourIntervals%Ranges(gModIntparams%field2) / REAL(NUMBER_OF_DIVISIONS)
+            !     call labelCartesianAxes(cartData, interval, .false., phaseSpace2%gDCcolor)
+            ! endif
         
             ! 4. Cleanup: Restore old pen and delete the one created
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
@@ -633,12 +638,22 @@ SUBMODULE (PlotModule) AxesSubmodule
                 Y_temp = Y_coord + 20
                 ! Converts 0x00BBGGRR (Polyline) to 0x00RRGGBB (DIB)
 
-                if (gModIntParams%field1 .NE. PLOTTING_OFF) then
-                    call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace1%gDCcolor, gFieldLabels(gPhaseSpace1%field)%s)
-                    Y_temp = Y_temp + 20 ! Step down for next item
-                endif
-                if (gModIntParams%field2 .NE. PLOTTING_OFF) then
-                    call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace2%gDCcolor, gFieldLabels(gPhaseSpace2%field)%s)
+                if (gModIntParams%plotType == PHASE_SPACE) then
+                    if (gModIntParams%field1 .NE. PLOTTING_OFF) then
+                        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace1%gDCcolor, gFieldLabels(gPhaseSpace1%field)%s)
+                        Y_temp = Y_temp + 20 ! Step down for next item
+                    endif
+                    if (gModIntParams%field2 .NE. PLOTTING_OFF) then
+                        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace2%gDCcolor, gFieldLabels(gPhaseSpace2%field)%s)
+                    endif
+                else if (gModIntParams%plotType == PHASE_AND_MAP) then
+                    if (gModIntParams%field1 .NE. PLOTTING_OFF) then
+                        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace3%gDCcolor, gFieldLabels(gPhaseSpace3%field)%s)
+                        Y_temp = Y_temp + 20 ! Step down for next item
+                    endif
+                    if (gModIntParams%field2 .NE. PLOTTING_OFF) then
+                        call DrawLegendItem(gBitMapInfo%hMemDC, X_coord, Y_temp, gPhaseSpace4%gDCcolor, gFieldLabels(gPhaseSpace4%field)%s)
+                    endif
                 endif
                 ! Use that sampled color to set the DC's background color
                 useTransparent = .false.

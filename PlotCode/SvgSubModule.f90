@@ -126,8 +126,9 @@ SUBMODULE (PlotModule) SvgSubmodule
         end subroutine GenerateSVG
 
         subroutine CreatePointSVG()
+        use ConstantsModule, only: PHASE_SPACE
             use NLevQGModelGlobals, only: gBitMapInfo
-            use ModelParamsModule, only: FileStruct
+            use ModelParamsModule, only: gModIntParams, FileStruct
 
             implicit none
 
@@ -164,7 +165,11 @@ SUBMODULE (PlotModule) SvgSubmodule
                     end if
                 end do
             end do
-            call SvgCartesianAxes(svgFileInfo%fileHandle, gPhaseSpace1, gPhaseSpace2)
+            if (gModIntParams%plotType == PHASE_SPACE) then
+                call SvgCartesianAxes(svgFileInfo%fileHandle, gPhaseSpace1, gPhaseSpace2)
+            else
+                call SvgCartesianAxes(svgFileInfo%fileHandle, gPhaseSpace3, gPhaseSpace4)
+            endif
 
             write(svgFileInfo%fileHandle, '(A)') '</svg>'
             close(svgFileInfo%fileHandle)

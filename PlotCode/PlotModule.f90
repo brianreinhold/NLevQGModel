@@ -2,7 +2,7 @@ module PlotModule
     USE IFWINTY
     USE, INTRINSIC :: ISO_C_BINDING
     use ConstantsModule, only: PLOTTING_OFF, wp
-    
+
     implicit none
     
     public  ! Makes everything in the module public (unless otherwise specified)
@@ -92,29 +92,24 @@ module PlotModule
         LOGICAL :: is_initialized
     end type TimeSeriesBuffer
 
-    !type :: CartesianData
-    !    integer(4) :: x_origin      ! x-coordinate of origin on screen
-    !    integer(4) :: y_origin      ! y-coordinate of origin on screen
-    !    integer(4) :: startX        ! Left edge of drawing area on screen
-    !    integer(4) :: startY        ! Top edge of drawing area on screen
-    !    integer(4) :: endX          ! Right edge of drawing area on screen
-    !    integer(4) :: endY          ! Bottom edge of drawing area on screen
-    !    integer(4) :: n_left        ! number of axis (vertical) lines to the left of the origin (these will have negative values)
-    !    integer(4) :: n_right       ! number of axis (vertical) lines to the right of the origin (these will have positive values)
-    !    integer(4) :: n_up          ! number of axis (horizontal) lines above the origin (these will have positive values)
-    !    integer(4) :: n_down        ! number of axis (horizontal) lines below the origin (these will have negative values)
-    !    real       :: dx            ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
-    !                                ! x_len = endX - startX  and y_len = endY - startY
-    !end type CartesianData
-    
-    type :: CartesianData           ! Currently used only for drawing the axes of the phase space plots.
-        integer(4) :: x_origin
-        integer(4) :: y_origin
-        integer(4) :: num_ticks_x
-        integer(4) :: num_ticks_y
-        real       :: tick_step_px  ! This is used to make sure that the interval delta X and delta Y on the screen are the same given screens are typcially not square.
+    type :: CartesianData
+       integer(4) :: x_origin = -1 ! x-coordinate of origin in the cliet window. The client window is established in the Main Window creation.
+                                   ! The coordinate (0,0) is the upper left corner of the client window.
+       integer(4) :: y_origin = -1 ! y-coordinate of origin on screen (client area)
+       integer(4) :: startX        ! Left edge of drawing area on screen (client area)
+       integer(4) :: startY        ! Top edge of drawing area on screen (client area)
+       integer(4) :: endX          ! Right edge of drawing area on screen (client area)
+       integer(4) :: endY          ! Bottom edge of drawing area on screen (client area)
+       integer(4) :: num_ticks_x
+       integer(4) :: num_ticks_y
+       integer(4) :: n_left        ! number of axis (vertical) lines to the left of the origin (these will have negative values)
+       integer(4) :: n_right       ! number of axis (vertical) lines to the right of the origin (these will have positive values)
+       integer(4) :: n_up          ! number of axis (horizontal) lines above the origin (these will have positive values)
+       integer(4) :: n_down        ! number of axis (horizontal) lines below the origin (these will have negative values)
+       real       :: tick_step_px  ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+                                   ! x_len = endX - startX  and y_len = endY - startY
     end type CartesianData
-    
+
     type :: PhaseSpace
         LOGICAL :: isInitialized = .FALSE.    ! Indicates that this structure has been initialized and is ready to use when true
         real, pointer :: x(:)       ! Points to the variable to be plotted on the x-axis at a certain level
@@ -141,6 +136,7 @@ module PlotModule
         integer :: prev_x = 0
         integer :: prev_y = 0 
         integer :: interpArrSelection
+        type(CartesianData) :: cartData
     end type PhaseSpace
     
     type :: TrigTable
@@ -218,8 +214,10 @@ module PlotModule
     ! (field number 2) it will be line contours overlaying the solid color plot. The weather station time series can be displayed as points or lines
     ! (the points are connected). 
 
-    type(PhaseSpace) :: gPhaseSpace1            ! Global type for displaying the phase space point of field number 1
-    type(PhaseSpace) :: gPhaseSpace2            ! Global type for displaying the phase space point of field number 2
+    type(PhaseSpace) :: gPhaseSpace1            ! Global type for displaying the phase space point of field number 1 in 'full window' mode.
+    type(PhaseSpace) :: gPhaseSpace2            ! Global type for displaying the phase space point of field number 2 in 'full window' mode
+    type(PhaseSpace) :: gPhaseSpace3            ! Global type for displaying the phase space point of field number 1 with weather map
+    type(PhaseSpace) :: gPhaseSpace4            ! Global type for displaying the phase space point of field number 2 with weather map 
     type(WeatherMap) :: gWeatherMap1            ! Global type for displaying a weather map of field number 1.
     type(WeatherMap) :: gWeatherMap2            ! Global type for displaying a weather map of field number 2.
     type(VertCrossSection) :: gLatVertCrossSec1 ! Global type for displaying a vertical cross section along a latitude line of field number 1.
@@ -303,9 +301,9 @@ module PlotModule
 
 ! ----------------------- Axes submodule interfaces
     INTERFACE
-        MODULE SUBROUTINE DrawCartesianAxes(invalidate, phaseSpace1, phaseSpace2)
+        MODULE SUBROUTINE DrawCartesianAxes(invalidate, fasRymd)
             LOGICAL, INTENT(IN)  :: invalidate
-            TYPE(PhaseSpace), intent(in) :: phaseSpace1, phaseSpace2
+            TYPE(PhaseSpace), intent(in) :: fasRymd
         END SUBROUTINE DrawCartesianAxes
     END INTERFACE
 
@@ -382,7 +380,7 @@ module PlotModule
             if (associated(X2)) deallocate(X2)
 
 ! ------ PHASE SPACE -----------------------------
-            if (gModIntParams%plotType == PHASE_SPACE .OR. gModIntParams%plotType == PHASE_AND_MAP) then
+            if (gModIntParams%plotType == PHASE_SPACE) then
                 gPhaseSpace1%field = gModIntParams%field1
                 if (gModIntParams%field1 < PLOTTING_OFF) then
                     if (gIsTemperature(gModIntParams%field1)) then
@@ -393,6 +391,14 @@ module PlotModule
                         color = PHASE_SPACE_HEIGHT_COLOR
                     endif
                     gPhaseSpace1%interpArrSelection = ONE
+                    if (gPhaseSpace1%cartData%x_origin == -1) then
+                        gPhaseSpace1%cartData%x_origin = gBitMapInfo%width / 2
+                        gPhaseSpace1%cartData%y_origin = gBitMapInfo%height / 2
+                        gPhaseSpace1%cartData%startX = 0
+                        gPhaseSpace1%cartData%startY = 0
+                        gPhaseSpace1%cartData%endX = gBitMapInfo%width - 1
+                        gPhaseSpace1%cartData%endY = gBitMapInfo%height - 1
+                    endif
                     call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace1, leadColor, color)
                 endif
                 gPhaseSpace2%field = gModIntParams%field2
@@ -407,9 +413,66 @@ module PlotModule
                         color = PHASE_SPACE_TEMP_COLOR
                     endif
                     gPhaseSpace2%interpArrSelection = TWO
+                    if (gPhaseSpace2%cartData%x_origin == -1) then
+                        gPhaseSpace2%cartData%x_origin = gBitMapInfo%width / 2
+                        gPhaseSpace2%cartData%y_origin = gBitMapInfo%height / 2
+                        gPhaseSpace2%cartData%startX = 0
+                        gPhaseSpace2%cartData%startY = 0
+                        gPhaseSpace2%cartData%endX = gBitMapInfo%width - 1
+                        gPhaseSpace2%cartData%endY = gBitMapInfo%height - 1
+                    endif
                     call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace2, leadColor, color)
                 endif
-                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
+                !call DrawCartesianAxes(.false., gPhaseSpace1)
+                !call DrawCartesianAxes(.false., gPhaseSpace2)
+                
+! ------ PHASE_AND_MAP -----------------------------
+            else if (gModIntParams%plotType == PHASE_AND_MAP) then
+                gPhaseSpace3%field = gModIntParams%field1
+                if (gModIntParams%field1 < PLOTTING_OFF) then
+                    if (gIsTemperature(gModIntParams%field1)) then
+                        leadColor = PHASE_SPACE_TEMP_LEAD_COLOR
+                        color = PHASE_SPACE_TEMP_COLOR
+                    else
+                        leadColor = PHASE_SPACE_HEIGHT_LEAD_COLOR
+                        color = PHASE_SPACE_HEIGHT_COLOR
+                    endif
+                    gPhaseSpace3%interpArrSelection = ONE
+
+                    if (gPhaseSpace3%cartData%x_origin == -1) then
+                        gPhaseSpace3%cartData%x_origin = 3 * gBitMapInfo%width / 4
+                        gPhaseSpace3%cartData%y_origin = 3 * gBitMapInfo%height / 4
+                        gPhaseSpace3%cartData%startX = gBitMapInfo%width / 2
+                        gPhaseSpace3%cartData%startY = gBitMapInfo%height / 2
+                        gPhaseSpace3%cartData%endX = gBitMapInfo%width - 1
+                        gPhaseSpace3%cartData%endY = gBitMapInfo%height - 1
+                    endif
+                    call initializePhaseSpaceType(gModIntParams%field1, gPhaseSpace3, leadColor, color)
+                endif
+                gPhaseSpace4%field = gModIntParams%field2
+                if (gModIntParams%field2 < PLOTTING_OFF) then
+                    ! Make sure the two colors are different in case two height-related or temperature-related fields are plotted
+                    ! Otherwise we will plot a height related field with blue and temperature orange.
+                    if (leadColor == PHASE_SPACE_TEMP_LEAD_COLOR) then
+                        leadColor = PHASE_SPACE_HEIGHT_LEAD_COLOR
+                        color = PHASE_SPACE_HEIGHT_COLOR
+                    else
+                        leadColor = PHASE_SPACE_TEMP_LEAD_COLOR
+                        color = PHASE_SPACE_TEMP_COLOR
+                    endif
+                    gPhaseSpace4%interpArrSelection = TWO
+                    if (gPhaseSpace4%cartData%x_origin == -1) then
+                        gPhaseSpace4%cartData%x_origin = 3 * gBitMapInfo%width / 4
+                        gPhaseSpace4%cartData%y_origin = 3 * gBitMapInfo%height / 4
+                        gPhaseSpace4%cartData%startX = gBitMapInfo%width / 2
+                        gPhaseSpace4%cartData%startY = gBitMapInfo%height / 2
+                        gPhaseSpace4%cartData%endX = gBitMapInfo%width - 1
+                        gPhaseSpace4%cartData%endY = gBitMapInfo%height - 1
+                    endif
+                    call initializePhaseSpaceType(gModIntParams%field2, gPhaseSpace4, leadColor, color)
+                endif
+                !call DrawCartesianAxes(.false., gPhaseSpace3)
+                !call DrawCartesianAxes(.false., gPhaseSpace4)
  
 ! ------ WEATHER STN -----------------------------
             else if (gModIntParams%plotType == WEATHER_STN) then
@@ -537,7 +600,6 @@ module PlotModule
                     allocate(X2(gBitMapInfo%width, gBitMapInfo%height/2))
                     call initializeWeatherMapType(gModIntParams%field2, gWeatherMap2, gModIntParams%field1 == PLOTTING_OFF, X2)
                 endif
-                if (gModIntParams%plotType == PHASE_AND_MAP) call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
             endif
         end subroutine initializePlot
 
@@ -566,7 +628,7 @@ module PlotModule
             type(PhaseSpace), intent(inout) :: phaseSpaceType
             integer(4), intent(in) :: colorLead, color
             
-            integer :: factor
+            integer :: factor, pixels
             
             phaseSpaceType%field = field
             
@@ -612,19 +674,20 @@ module PlotModule
                     phaseSpaceType%yScale = SQRT2 * gPlotScales(field)
                 endif
             endif
-            factor = 2
-            if (gModIntParams%plotType == PHASE_AND_MAP) factor = 4
+            !factor = 2
+            ! if (gModIntParams%plotType == PHASE_AND_MAP) factor = 4
             ! Now take into account the screen size and the range that it is supposed to represent.
-            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (REAL(factor) * gContourIntervals%Ranges(field))
-            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(min(gBitMapInfo%height, gBitMapInfo%width)) / (REAL(factor) * gContourIntervals%Ranges(field))
+            pixels = min((phaseSpaceType%cartData%endX - phaseSpaceType%cartData%startX), (phaseSpaceType%cartData%endY - phaseSpaceType%cartData%startY))
+            phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(pixels) / (gContourIntervals%Ranges(field))
+            phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(pixels) / (gContourIntervals%Ranges(field))
             
-            phaseSpaceType%xcenter = gBitMapInfo%width / factor
-            phaseSpaceType%ycenter = gBitMapInfo%height / factor
+            ! phaseSpaceType%xcenter = gBitMapInfo%width / factor
+            ! phaseSpaceType%ycenter = gBitMapInfo%height / factor
             
-            if (gModIntParams%plotType == PHASE_AND_MAP) then
-                phaseSpaceType%xcenter = 3 * gBitMapInfo%width / factor
-                phaseSpaceType%ycenter = 3 * gBitMapInfo%height / factor
-            endif
+            ! if (gModIntParams%plotType == PHASE_AND_MAP) then
+            !     phaseSpaceType%xcenter = 3 * gBitMapInfo%width / factor
+            !     phaseSpaceType%ycenter = 3 * gBitMapInfo%height / factor
+            ! endif
 
             ! No need to call these anymore - They have to be called every time step because of interpolation
             ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
@@ -1066,8 +1129,8 @@ module PlotModule
             elseif (gModIntParams%plotType == PHASE_AND_MAP) then
                 call plotWeatherMap((gModIntParams%field2 == PLOTTING_OFF), gWeatherMap1)
                 call plotWeatherMap(.true., gWeatherMap2)
-                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace1, gModIntParams%field2 == PLOTTING_OFF)
-                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace2, .TRUE.)
+                if(gModIntParams%field1 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace3, gModIntParams%field2 == PLOTTING_OFF)
+                if(gModIntParams%field2 .NE. PLOTTING_OFF) call plotPhaseSpace(gPhaseSpace4, .TRUE.)
             endif
 
             gElapsedTime%timeSteps = gElapsedTime%timeSteps + gModIntParams%outputInterval
@@ -1749,7 +1812,8 @@ module PlotModule
             !    call DrawHorizontalLines(.false., .true., .false., #00323232) ! The isHeight parameter is not used in this case
 
             else if (gModIntParams%plotType == PHASE_SPACE) then
-                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
+                call DrawCartesianAxes(.false., gPhaseSpace1)
+                call DrawCartesianAxes(.false., gPhaseSpace2)
             else if (gModIntParams%plotType == HOV_DIAG_AT_LAT) then
                 gLatHovmoller1%rowColumn = 0
                 gLatHovmoller2%rowColumn = 0
@@ -1765,7 +1829,8 @@ module PlotModule
                 call DrawGridLines(.false., .false.)
             else if (gModIntParams%plotType == PHASE_AND_MAP) then
                 call DrawGridLines(.false., .false.)
-                call DrawCartesianAxes(.false., gPhaseSpace1, gPhaseSpace2)
+                call DrawCartesianAxes(.false., gPhaseSpace3)
+                call DrawCartesianAxes(.false., gPhaseSpace4)
             else if (gModIntParams%plotType == NO_PLOT) then
                 call labelPlotsAndDisplayTime(.false.)
             endif
@@ -2136,8 +2201,9 @@ module PlotModule
             xc = phaseSpaceType%x(phaseSpaceType%xIndex) * phaseSpaceType%xScale
             yc = phaseSpaceType%y(phaseSpaceType%yIndex) * phaseSpaceType%yScale
 
-            x_pix = phaseSpaceType%xcenter + INT(xc)   ! Note screen coordinates are 0-based.
-            y_pix = phaseSpaceType%ycenter - INT(yc)
+            ! Make sure you don't go outside the DIBSection.
+            x_pix = phaseSpaceType%cartData%x_origin + INT(xc)   ! Note screen coordinates are 0-based.
+            y_pix = phaseSpaceType%cartData%y_origin - INT(yc)
             if (x_pix < 0) x_pix = 0
             if (y_pix < 0) y_pix = 0
             if (x_pix >= gBitMapInfo%width) x_pix = gBitMapInfo%width - 1

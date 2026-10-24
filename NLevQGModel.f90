@@ -153,19 +153,7 @@ function WinMain( hInstance, hPrevInstance, lpszCmdLine, nCmdShow )
     !if (ghMenu == 0) goto 99999
     !haccel = LoadAccelerators(hInstance, LOC(lpszAccelName))
     !if (haccel == 0) goto 99999
-    
-    ! Get Screen data
-    lret = SystemParametersInfo(SPI_GETWORKAREA, 0, LOC(rcWork), 0)
-    
-    gFrameX = 0
-    gFrameY = 0
-
-    gBitMapInfo%rect = rcWork
-    gBitMapInfo%width = rcWork%right - rcWork%left
-    gBitMapInfo%height = rcWork%bottom - rcWork%top
-    gBitMapInfo%startX = rcWork%left
-    gBitMapInfo%startY = rcWork%top
-    
+         
     ghLogMain = CreateWindowEx(  0, lpszLogClassName,     &
                                  lpszLogAppName,           &   ! Window name
                                  INT(WS_OVERLAPPEDWINDOW),  &   ! style
@@ -195,6 +183,18 @@ function WinMain( hInstance, hPrevInstance, lpszCmdLine, nCmdShow )
     !  [in, optional] HINSTANCE hInstance,
     !  [in, optional] LPVOID    lpParam
     !);
+
+    ! Get Screen data
+    lret = SystemParametersInfo(SPI_GETWORKAREA, 0, LOC(rcWork), 0)
+
+    gFrameX = 0
+    gFrameY = 0
+
+    gBitMapInfo%rect = rcWork
+    gBitMapInfo%width = rcWork%right - rcWork%left
+    gBitMapInfo%height = rcWork%bottom - rcWork%top
+    gBitMapInfo%startX = rcWork%left
+    gBitMapInfo%startY = rcWork%top
     ghwndMain = CreateWindowEx(  0, lpszClassName,                 &
                                  lpszAppName,                      &
                                  IOR(WS_POPUP, IOR(WS_THICKFRAME, WS_VISIBLE)), & !INT(WS_OVERLAPPEDWINDOW),         &
