@@ -100,12 +100,11 @@ module PlotModule
        integer(4) :: startY        ! Top edge of drawing area on screen (client area)
        integer(4) :: endX          ! Right edge of drawing area on screen (client area)
        integer(4) :: endY          ! Bottom edge of drawing area on screen (client area)
-       integer(4) :: num_ticks_x
-       integer(4) :: num_ticks_y
        integer(4) :: n_left        ! number of axis (vertical) lines to the left of the origin (these will have negative values)
        integer(4) :: n_right       ! number of axis (vertical) lines to the right of the origin (these will have positive values)
        integer(4) :: n_up          ! number of axis (horizontal) lines above the origin (these will have positive values)
        integer(4) :: n_down        ! number of axis (horizontal) lines below the origin (these will have negative values)
+       real       :: interval      ! The interval value between the axis lines in both directions
        real       :: tick_step_px  ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
                                    ! x_len = endX - startX  and y_len = endY - startY
     end type CartesianData
@@ -127,8 +126,6 @@ module PlotModule
         integer(4) :: colorLead ! Color of the point when first plotted
         integer(4) :: color     ! Color of the point next time
         integer(4) :: gDCcolor  ! Reverse byte order do use in GDC calls. DIB sections use reverse order
-        integer :: xcenter      ! x-Coordinate of the origin on the screen
-        integer :: ycenter      ! y-coordinate of the origin on the screen
 
         ! This will be set to the position plotted x_pix, y_pix. x_pix, y_pix will be computed from the current values. We do not
         ! need to keep those. x_pix, y_pix will be plotted with color 'colorLead'. In the routine, prev_x, prev_y will be plotted
@@ -234,12 +231,6 @@ module PlotModule
     type(WeatherStation) :: gWeatherStation2    ! Global type for displaying a time series of the value at a given point (lat, lon, press) for field number 2.
     
     type(EnergyHovmoller) :: gEnergyHovmoller1  ! A 'hovmoller' for displaying the total energy as a function of the zonal wave (all L modes for a given K).
-
-    !type(TimeSeriesBuffer) :: gHeightStatsTimeSeriesBuffer  ! Currently unused
-    !type(TimeSeriesBuffer) :: gTempStatsTimeSeriesBuffer    ! Currently unused
-    !type(TimeSeriesBuffer) :: gKeTimeSeriesBuffer           ! Currently unused
-    !type(TimeSeriesBuffer) :: gApeTimeSeriesBuffer          ! Currently unused
-    !type(TimeSeriesBuffer) :: gTotTimeSeriesBuffer          ! Currently unused
 
     REAL, ALLOCATABLE :: gPressure(:) ! Array containing the pressure values interpolated from gVertArr%LVS to screen heights
                                       ! This array will be used only by the vertical cross sections and the vertical hovmollers
@@ -399,8 +390,8 @@ module PlotModule
                     endif
                     gPhaseSpace1%interpArrSelection = ONE
                     if (gPhaseSpace1%cartData%x_origin == -1) then
-                        gPhaseSpace1%cartData%x_origin = gBitMapInfo%width / 3
-                        gPhaseSpace1%cartData%y_origin = gBitMapInfo%height / 3
+                        gPhaseSpace1%cartData%x_origin = gBitMapInfo%width / 2
+                        gPhaseSpace1%cartData%y_origin = gBitMapInfo%height / 2
                         gPhaseSpace1%cartData%startX = 0
                         gPhaseSpace1%cartData%startY = 0
                         gPhaseSpace1%cartData%endX = gBitMapInfo%width - 1
@@ -421,8 +412,8 @@ module PlotModule
                     endif
                     gPhaseSpace2%interpArrSelection = TWO
                     if (gPhaseSpace2%cartData%x_origin == -1) then
-                        gPhaseSpace2%cartData%x_origin = gBitMapInfo%width / 3
-                        gPhaseSpace2%cartData%y_origin = gBitMapInfo%height / 3
+                        gPhaseSpace2%cartData%x_origin = gBitMapInfo%width / 2
+                        gPhaseSpace2%cartData%y_origin = gBitMapInfo%height / 2
                         gPhaseSpace2%cartData%startX = 0
                         gPhaseSpace2%cartData%startY = 0
                         gPhaseSpace2%cartData%endX = gBitMapInfo%width - 1
@@ -630,12 +621,13 @@ module PlotModule
             use ModelFieldsModule, only: gVertArr
 
             IMPLICIT NONE
+            integer, parameter :: NUMBER_OF_DIVISIONS = 20 ! Number of divisions in the shortest dimension
 
             integer, intent(in) :: field
             type(PhaseSpace), intent(inout) :: phaseSpaceType
             integer(4), intent(in) :: colorLead, color
             
-            integer :: factor, pixels
+            integer :: factor, pixels, x_len, y_len
             
             phaseSpaceType%field = field
             
@@ -681,27 +673,28 @@ module PlotModule
                     phaseSpaceType%yScale = SQRT2 * gPlotScales(field)
                 endif
             endif
-            !factor = 2
-            ! if (gModIntParams%plotType == PHASE_AND_MAP) factor = 4
+            
+            ! This gives the change in the value between axis lines. Used to label the values of the axes
+            phaseSpaceType%cartData%interval = 2. * gContourIntervals%Ranges(field) / REAL(NUMBER_OF_DIVISIONS)
             ! Now take into account the screen size and the range that it is supposed to represent.
             pixels = min((phaseSpaceType%cartData%endX - phaseSpaceType%cartData%startX), (phaseSpaceType%cartData%endY - phaseSpaceType%cartData%startY))
             phaseSpaceType%xScale = phaseSpaceType%xScale * REAL(pixels) / (gContourIntervals%Ranges(field))
             phaseSpaceType%yScale = phaseSpaceType%yScale * REAL(pixels) / (gContourIntervals%Ranges(field))
             
-            ! phaseSpaceType%xcenter = gBitMapInfo%width / factor
-            ! phaseSpaceType%ycenter = gBitMapInfo%height / factor
-            
-            ! if (gModIntParams%plotType == PHASE_AND_MAP) then
-            !     phaseSpaceType%xcenter = 3 * gBitMapInfo%width / factor
-            !     phaseSpaceType%ycenter = 3 * gBitMapInfo%height / factor
-            ! endif
+            x_len = phaseSpaceType%cartData%endX - phaseSpaceType%cartData%startX       ! Length of X-axis in pixels
+            y_len = phaseSpaceType%cartData%endY - phaseSpaceType%cartData%startY       ! Length of Y-axis in pixels
 
-            ! No need to call these anymore - They have to be called every time step because of interpolation
-            ! Now get the variable to be plotted along the x-axis. That will be gModIntParams%field1. 
-            !call loadFields( phaseSpaceType%x, field, gModIntParams%LEVP, ONE)
-                
-            ! Now get the variable to be plotted along the y-axis. That will be gModIntParams%field1. 
-            !call loadFields( phaseSpaceType%y, field, gModIntParams%LEVP, TWO)
+            ! This ensures the grid fills the entire x_len and y_len provided
+            phaseSpaceType%cartData%tick_step_px = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+        
+            ! This gives the number of axis intervals from the origin to the left most axis and the origin to the right most axis
+            phaseSpaceType%cartData%n_left = int(REAL(phaseSpaceType%cartData%x_origin - phaseSpaceType%cartData%startX) / phaseSpaceType%cartData%tick_step_px)
+            phaseSpaceType%cartData%n_right = int(REAL(phaseSpaceType%cartData%endX - phaseSpaceType%cartData%x_origin) / phaseSpaceType%cartData%tick_step_px)
+            
+            ! This gives the number of axis intervals from the origin to the top most axis and the origin to the bottom most axis
+            phaseSpaceType%cartData%n_up = int(REAL(phaseSpaceType%cartData%y_origin - phaseSpaceType%cartData%startY) / phaseSpaceType%cartData%tick_step_px)
+            phaseSpaceType%cartData%n_down = int(REAL(phaseSpaceType%cartData%endY - phaseSpaceType%cartData%y_origin) / phaseSpaceType%cartData%tick_step_px)
+
 
             phaseSpaceType%colorLead = IOR(ISHFT(IAND(colorLead, Z'000000FF'), 16), & ! R: bit 0 -> 16
                         IOR(IAND(colorLead, Z'0000FF00'), &            ! G: bit 8 -> 8 (stays)

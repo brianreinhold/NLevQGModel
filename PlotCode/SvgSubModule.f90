@@ -699,12 +699,8 @@ SUBMODULE (PlotModule) SvgSubmodule
             character(len=16) :: label
             integer(4) :: x_anchor, y_anchor, y_pos, x_pos, n_left, n_right, n_up, n_down
             type(T_SIZE) :: sz
-        
-            cartData%x_origin  = phaseSpace1%xcenter  ! X-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
-            cartData%y_origin  = phaseSpace1%ycenter  ! Y-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
+
             if (gModIntParams%plotType == PHASE_SPACE) then
-                cartData%x_origin  = phaseSpace1%xcenter  ! X-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
-                cartData%y_origin  = phaseSpace1%ycenter  ! Y-coordinate of origin in pixels (same for both phaseSpace1 and phaseSpace2)
                 x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
                 y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
             else if (gModIntParams%plotType == PHASE_AND_MAP) then

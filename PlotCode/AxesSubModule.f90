@@ -10,19 +10,17 @@ SUBMODULE (PlotModule) AxesSubmodule
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
             use ModelParamsModule, only: gModIntParams, gContourIntervals
             implicit none
-        
-            integer, parameter :: NUMBER_OF_DIVISIONS = 20 ! Number of divisions in the shortest dimension
+
             ! Arguments
             logical, intent(in) :: invalidate  ! Force redraw flag
             TYPE(PhaseSpace), intent(in) :: fasRymd
-        
+
             ! Local variables
             type(CartesianData) cartData
             integer(4) :: x_len       ! Length of X-axis in pixels
             integer(4) :: y_len       ! Length of Y-axis in pixels
             INTEGER(BOOL) :: bret
-            integer(4) :: i                        !tick_size = 5           ! Size of tick marks in pixels
-            real       :: interval
+            integer(4) :: i
         
             integer(HANDLE) :: hOldPen, hAxisPen
             type(T_POINT) :: oldPoint
@@ -34,32 +32,17 @@ SUBMODULE (PlotModule) AxesSubmodule
 
             cartData = fasRymd%cartData
 
-            x_len = fasRymd%cartData%endX - fasRymd%cartData%startX       ! Length of X-axis in pixels
-            y_len = fasRymd%cartData%endY - fasRymd%cartData%startY       ! Length of Y-axis in pixels
-           
             ! 1. Create 2nd pen 1 pixel thick and select it
             hAxisPen = CreatePen(PS_SOLID, 1, AXIS_COLOR)
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        
-            ! 2. Calculate pixel step for ticks (using the shorter axis for scaling)
-            cartData%tick_step_px = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
-        
-            ! This ensures the grid fills the entire x_len and y_len provided
-            cartData%n_left = int(REAL(cartData%x_origin - cartData%startX) / cartData%tick_step_px)
-            cartData%n_right = int(REAL(cartData%endX - cartData%x_origin) / cartData%tick_step_px)
-            cartData%num_ticks_x = int((x_len / 2.0) / cartData%tick_step_px)
-            cartData%num_ticks_y = int((y_len / 2.0) / cartData%tick_step_px)
-        
+
             ! --- Draw Vertical Grid Lines (X-axis ticks) ---
             do i = -cartData%n_left, cartData%n_right
                 if (i == 0) cycle  ! skip central axis
-                ! Move to top of x_len/y_len box, draw to bottom
+                ! Move to top and draw to bottom
                 bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%startY, oldPoint)
                 bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%endY)
             end do
-
-            cartData%n_up = int(REAL(cartData%y_origin - cartData%startY) / cartData%tick_step_px)
-            cartData%n_down = int(REAL(cartData%endY - cartData%y_origin) / cartData%tick_step_px)
 
             ! --- Draw Horizontal Grid Lines (Y-axis ticks) ---
             do i = cartData%n_down, -cartData%n_up, -1
@@ -69,35 +52,33 @@ SUBMODULE (PlotModule) AxesSubmodule
                 bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, int(cartData%y_origin + i * cartData%tick_step_px))
             end do
 
-            ! 3. Do labels
-            ! The interval is specified as 2 * range / 20 (which simplifies to range / 10)
+            ! 2. Do labels
             if (fasRymd%field .NE. PLOTTING_OFF) then
-                interval = 2. * gContourIntervals%Ranges(fasRymd%field) / REAL(NUMBER_OF_DIVISIONS)
-                call labelCartesianAxes(cartData, interval, (fasRymd%field == gModIntParams%field1), fasRymd%gDCcolor)
+                call labelCartesianAxes(cartData, (fasRymd%field == gModIntParams%field1), fasRymd%gDCcolor)
             endif
 
-            ! 4. Cleanup: Restore old pen and delete the one created
+            ! 3. Cleanup: Restore old pen and delete the one created
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
             bret = DeleteObject(hAxisPen)
 
-            !  Now to draw the main axes.
-            ! 5. Create and select a pen 2 pixels thick. Do main axes last so they are on top
+            !  Now to draw the main origin axes.
+            ! 4. Create and select a pen 2 pixels thick. Do main axes last so they are on top
             hAxisPen = CreatePen(PS_SOLID, 2, RGB(50, 50, 50))
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
 
-            ! 6. Draw X-axis
+            ! 5. Draw X-axis
             bret = MoveToEx(gBitMapInfo%hMemDC, cartData%startX, cartData%y_origin, oldPoint)
             bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, cartData%y_origin)
 
-            ! 7. Draw Y-axis
+            ! 6. Draw Y-axis
             bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin, cartData%startY, oldPoint)
             bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin, cartData%endY)
 
-            ! 8. Cleanup: Restore old pen and delete the one created
+            ! 7. Cleanup: Restore old pen and delete the one created
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
             bret = DeleteObject(hAxisPen)
 
-            ! 9. Redraw if requested
+            ! 8. Redraw if requested
             if(invalidate) then
                 ! Invalidate the window rectangle to trigger a redraw
                 bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
@@ -107,14 +88,13 @@ SUBMODULE (PlotModule) AxesSubmodule
         end subroutine DrawCartesianAxes
 
         ! So far this is only called from this file and therefore the prefix 'module' is not needed, nor is an interface
-        subroutine labelCartesianAxes(cartData, interval, useBottomLeft, textColor)
+        subroutine labelCartesianAxes(cartData, useBottomLeft, textColor)
             USE IFWINA
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
 
             implicit none
 
             type(CartesianData), intent(in) :: cartData
-            real, intent(in) :: interval
             logical, intent(in) :: useBottomLeft
             integer(4), intent(in) :: textColor
 
@@ -138,10 +118,10 @@ SUBMODULE (PlotModule) AxesSubmodule
             endif
 
             do i = cartData%n_up, -cartData%n_down, -2
-                if (interval * i .LE. 999 .AND. interval * i .GE. -999) then
-                    write(label, '(F8.2)') (real(interval * i))
+                if (cartData%interval * i .LE. 999 .AND. cartData%interval * i .GE. -999) then
+                    write(label, '(F8.2)') (real(cartData%interval * i))
                 else
-                    write(label, '(F6.0)') (real(interval * i))
+                    write(label, '(F6.0)') (real(cartData%interval * i))
                 endif
                 y_pos = cartData%y_origin - int(i * cartData%tick_step_px) - 2 ! Top-down: subtract to go "up"
 
@@ -163,10 +143,10 @@ SUBMODULE (PlotModule) AxesSubmodule
             endif
             
             do i = -cartData%n_left, cartData%n_right, 2
-                if (interval * i .LE. 999 .AND. interval * i .GE. -999) then
-                    write(label, '(F8.2)') (real(interval * i))
+                if (cartData%interval * i .LE. 999 .AND. cartData%interval * i .GE. -999) then
+                    write(label, '(F8.2)') (real(cartData%interval * i))
                 else
-                    write(label, '(F6.0)') (real(interval * i))
+                    write(label, '(F6.0)') (real(cartData%interval * i))
                 endif
                 x_pos = cartData%x_origin + int(i * cartData%tick_step_px)
             
