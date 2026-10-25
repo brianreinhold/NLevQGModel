@@ -361,6 +361,13 @@ module PlotModule
 
     contains
 
+        subroutine resetPhaseSpace()
+            gPhaseSpace1%cartData%x_origin = -1
+            gPhaseSpace2%cartData%x_origin = -1
+            gPhaseSpace3%cartData%x_origin = -1
+            gPhaseSpace4%cartData%x_origin = -1
+        end subroutine resetPhaseSpace
+
 !=========================================== INITIALIZE PLOT
         ! Sets up the various plot structures to initialize fields that only need to be set once
         ! during a model run. The user might be able to change some parameters while the model is
@@ -392,8 +399,8 @@ module PlotModule
                     endif
                     gPhaseSpace1%interpArrSelection = ONE
                     if (gPhaseSpace1%cartData%x_origin == -1) then
-                        gPhaseSpace1%cartData%x_origin = gBitMapInfo%width / 2
-                        gPhaseSpace1%cartData%y_origin = gBitMapInfo%height / 2
+                        gPhaseSpace1%cartData%x_origin = gBitMapInfo%width / 3
+                        gPhaseSpace1%cartData%y_origin = gBitMapInfo%height / 3
                         gPhaseSpace1%cartData%startX = 0
                         gPhaseSpace1%cartData%startY = 0
                         gPhaseSpace1%cartData%endX = gBitMapInfo%width - 1
@@ -414,8 +421,8 @@ module PlotModule
                     endif
                     gPhaseSpace2%interpArrSelection = TWO
                     if (gPhaseSpace2%cartData%x_origin == -1) then
-                        gPhaseSpace2%cartData%x_origin = gBitMapInfo%width / 2
-                        gPhaseSpace2%cartData%y_origin = gBitMapInfo%height / 2
+                        gPhaseSpace2%cartData%x_origin = gBitMapInfo%width / 3
+                        gPhaseSpace2%cartData%y_origin = gBitMapInfo%height / 3
                         gPhaseSpace2%cartData%startX = 0
                         gPhaseSpace2%cartData%startY = 0
                         gPhaseSpace2%cartData%endX = gBitMapInfo%width - 1

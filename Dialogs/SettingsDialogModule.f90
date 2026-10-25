@@ -36,6 +36,7 @@ module SettingsDialogModule
             use ContoursAndRangesDialogModule, only: ContoursAndRangesDlgProc
             use UtilitiesModule, only: openModelFile
             use ModelFieldsModule, only: gHorzArr
+            use PlotModule, only: resetPhaseSpace
 
             implicit none
 
@@ -188,6 +189,7 @@ module SettingsDialogModule
                                 call LogMessage("Save file loaded: "// selected_file)
                                 iret = openModelFile(gNLevFile, .true., hDlg)
                                 if (iret == 0) iret = ReadSaveFile(gNLevFile)
+                                call resetPhaseSpace()
                                 call initializeDialog()
                                 gHorzArr%S = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
                                 gHorzArr%T = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state

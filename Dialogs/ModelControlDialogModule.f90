@@ -765,6 +765,8 @@ module ModelControlDialogModule
 
                 !-------- F5: load saved flow
                 subroutine loadSavedFlow
+                    use PlotModule, only: resetPhaseSpace
+                    
                     res = GetNameOfUserSelectedFile(hDlg, gNLevFile)
                     bret = SetFocus(GetDlgItem(hDlg, IDC_BUTTON_LOAD_SAVED_FLOW))
                     call cleanUpEditBoxes()
@@ -773,6 +775,7 @@ module ModelControlDialogModule
                         call LogMessage("Save file loaded: "// selected_file)
                         ret = openModelFile(gNLevFile, .true., hDlg)
                         if (ret == 0) ret = ReadSaveFile(gNLevFile)
+                        call resetPhaseSpace()
                         call initializeDialog()
                         gHorzArr%S = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state
                         gHorzArr%T = 0.0 ! Remove any dissipative or forcing terms that may be in the file since we are just loading a flow state

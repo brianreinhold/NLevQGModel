@@ -34,158 +34,146 @@ SUBMODULE (PlotModule) AxesSubmodule
 
             cartData = fasRymd%cartData
 
-            x_len = fasRymd%cartData%endX - fasRymd%cartData%startX        ! Length of X-axis in pixels
+            x_len = fasRymd%cartData%endX - fasRymd%cartData%startX       ! Length of X-axis in pixels
             y_len = fasRymd%cartData%endY - fasRymd%cartData%startY       ! Length of Y-axis in pixels
-
-            ! if (gModIntParams%plotType == PHASE_SPACE) then
-            !     cartData%x_origin  = gBitMapInfo%width / 2  ! X-coordinate of origin in pixels
-            !     cartData%y_origin  = gBitMapInfo%height / 2  ! Y-coordinate of origin in pixels
-            !     x_len     = gBitMapInfo%width       ! Length of X-axis in pixels
-            !     y_len     = gBitMapInfo%height       ! Length of Y-axis in pixels
-            ! else if (gModIntParams%plotType == PHASE_AND_MAP) then
-            !     cartData%x_origin  = 3 * gBitMapInfo%width / 4  ! X-coordinate of origin in pixels
-            !     cartData%y_origin  = 3 * gBitMapInfo%height / 4  ! Y-coordinate of origin in pixels
-            !     x_len     = gBitMapInfo%width / 2       ! Length of X-axis in pixels
-            !     y_len     = gBitMapInfo%height / 2       ! Length of Y-axis in pixels
-            ! endif
-            
+           
             ! 1. Create 2nd pen 1 pixel thick and select it
-            hAxisPen = CreatePen(PS_SOLID, 1, RGB(40, 40, 40))
+            hAxisPen = CreatePen(PS_SOLID, 1, AXIS_COLOR)
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
         
             ! 2. Calculate pixel step for ticks (using the shorter axis for scaling)
             cartData%tick_step_px = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
         
             ! This ensures the grid fills the entire x_len and y_len provided
+            cartData%n_left = int(REAL(cartData%x_origin - cartData%startX) / cartData%tick_step_px)
+            cartData%n_right = int(REAL(cartData%endX - cartData%x_origin) / cartData%tick_step_px)
             cartData%num_ticks_x = int((x_len / 2.0) / cartData%tick_step_px)
             cartData%num_ticks_y = int((y_len / 2.0) / cartData%tick_step_px)
         
             ! --- Draw Vertical Grid Lines (X-axis ticks) ---
-            do i = -cartData%num_ticks_x, cartData%num_ticks_x
+            do i = -cartData%n_left, cartData%n_right
                 if (i == 0) cycle  ! skip central axis
                 ! Move to top of x_len/y_len box, draw to bottom
-                bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%y_origin - y_len / 2, oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%y_origin + y_len / 2)
+                bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%startY, oldPoint)
+                bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%endY)
             end do
-        
+
+            cartData%n_up = int(REAL(cartData%y_origin - cartData%startY) / cartData%tick_step_px)
+            cartData%n_down = int(REAL(cartData%endY - cartData%y_origin) / cartData%tick_step_px)
+
             ! --- Draw Horizontal Grid Lines (Y-axis ticks) ---
-            do i = -cartData%num_ticks_y, cartData%num_ticks_y
+            do i = cartData%n_down, -cartData%n_up, -1
                 if (i == 0) cycle ! skip central axis
                 ! Move to left side, draw to right side
-                bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin - x_len / 2, int(cartData%y_origin + i * cartData%tick_step_px), oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin + x_len / 2, int(cartData%y_origin + i * cartData%tick_step_px))
+                bret = MoveToEx(gBitMapInfo%hMemDC, cartData%startX, int(cartData%y_origin + i * cartData%tick_step_px), oldPoint)
+                bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, int(cartData%y_origin + i * cartData%tick_step_px))
             end do
-        
+
             ! 3. Do labels
             ! The interval is specified as 2 * range / 20 (which simplifies to range / 10)
             if (fasRymd%field .NE. PLOTTING_OFF) then
                 interval = 2. * gContourIntervals%Ranges(fasRymd%field) / REAL(NUMBER_OF_DIVISIONS)
                 call labelCartesianAxes(cartData, interval, (fasRymd%field == gModIntParams%field1), fasRymd%gDCcolor)
             endif
-            ! if (gModIntparams%field2) then
-            !     interval = 2.0 * gContourIntervals%Ranges(gModIntparams%field2) / REAL(NUMBER_OF_DIVISIONS)
-            !     call labelCartesianAxes(cartData, interval, .false., phaseSpace2%gDCcolor)
-            ! endif
-        
+
             ! 4. Cleanup: Restore old pen and delete the one created
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
             bret = DeleteObject(hAxisPen)
-        
+
             !  Now to draw the main axes.
             ! 5. Create and select a pen 2 pixels thick. Do main axes last so they are on top
             hAxisPen = CreatePen(PS_SOLID, 2, RGB(50, 50, 50))
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hAxisPen)
-        
+
             ! 6. Draw X-axis
-            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin - (x_len / 2), cartData%y_origin, oldPoint)
-            bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin + (x_len / 2), cartData%y_origin)
-        
+            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%startX, cartData%y_origin, oldPoint)
+            bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, cartData%y_origin)
+
             ! 7. Draw Y-axis
-            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin, cartData%y_origin - (y_len / 2), oldPoint)
-            bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin, cartData%y_origin + (y_len / 2))
-        
+            bret = MoveToEx(gBitMapInfo%hMemDC, cartData%x_origin, cartData%startY, oldPoint)
+            bret = LineTo(gBitMapInfo%hMemDC, cartData%x_origin, cartData%endY)
+
             ! 8. Cleanup: Restore old pen and delete the one created
             hOldPen = SelectObject(gBitMapInfo%hMemDC, hOldPen)
             bret = DeleteObject(hAxisPen)
-        
+
             ! 9. Redraw if requested
             if(invalidate) then
                 ! Invalidate the window rectangle to trigger a redraw
                 bret = InvalidateRect(ghwndMain, LOC(gBitMapInfo%rect), 0) ! 0 means do not erase background
                 bret = UpdateWindow(ghwndMain)
             endif
-        
+
         end subroutine DrawCartesianAxes
-        
+
         ! So far this is only called from this file and therefore the prefix 'module' is not needed, nor is an interface
         subroutine labelCartesianAxes(cartData, interval, useBottomLeft, textColor)
             USE IFWINA
             use NLevQGModelGlobals, only: gBitMapInfo, ghwndMain
-        
+
             implicit none
-            
+
             type(CartesianData), intent(in) :: cartData
             real, intent(in) :: interval
             logical, intent(in) :: useBottomLeft
             integer(4), intent(in) :: textColor
-        
+
             integer(bool) :: bret
             ! For labels
             character(len=16) :: label
             integer(4) :: x_anchor, y_anchor, y_pos, x_pos, i
             type(T_SIZE) :: sz
-        
+
             ! Now doing labels. Make the background transparent
             bret = SetBkMode(gBitMapInfo%hMemDC, TRANSPARENT)
             bret = SetTextColor(gBitMapInfo%hMemDC, textColor) ! dark text
-        
+
             ! --- Label the Y-Axis values ---
-        
             if (useBottomLeft) then
                 ! Anchor: To the right of the first 'y axis' (left-most vertical grid line)
-                x_anchor = cartData%x_origin + (-cartData%num_ticks_x) * int(cartData%tick_step_px)
+                x_anchor = cartData%x_origin - cartData%n_left * int(cartData%tick_step_px)
             else
                 ! Anchor: To the left of the last 'y axis' (right-most vertical grid line)
-                x_anchor = cartData%x_origin + (cartData%num_ticks_x - 1) * int(cartData%tick_step_px)
+                x_anchor = cartData%x_origin + (cartData%n_right - 1) * int(cartData%tick_step_px)
             endif
-        
-            do i = -cartData%num_ticks_y, cartData%num_ticks_y, 2
+
+            do i = cartData%n_up, -cartData%n_down, -2
                 if (interval * i .LE. 999 .AND. interval * i .GE. -999) then
                     write(label, '(F8.2)') (real(interval * i))
                 else
                     write(label, '(F6.0)') (real(interval * i))
                 endif
-                y_pos = cartData%y_origin - int(i * cartData%tick_step_px) ! Top-down: subtract to go "up"
-        
+                y_pos = cartData%y_origin - int(i * cartData%tick_step_px) - 2 ! Top-down: subtract to go "up"
+
                 ! Get label dimensions to vertically center it on the tick
                 bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
-        
+
                 ! Draw 5 pixels to the right of the first vertical grid line
                 bret = TextOut(gBitMapInfo%hMemDC, x_anchor + 5, y_pos - (sz%cy / 2), &
                               trim(label), len_trim(label))
             end do
-        
+
             ! --- Label the X-Axis values ---
             if (useBottomLeft) then
                 ! Anchor: Above the last 'x axis' (bottom-most horizontal grid line)
-                y_anchor = cartData%y_origin + (cartData%num_ticks_y) * int(cartData%tick_step_px)
+                y_anchor = cartData%y_origin + cartData%n_down * int(cartData%tick_step_px)
             else
                 ! Anchor: Below the first 'x axis' (top-most horizontal grid line)
-                y_anchor = cartData%y_origin - (cartData%num_ticks_y - 1) * int(cartData%tick_step_px)
+                y_anchor = cartData%y_origin - cartData%n_up * int(cartData%tick_step_px) + 5
             endif
-        
-            do i = -cartData%num_ticks_x, cartData%num_ticks_x, 2
+            
+            do i = -cartData%n_left, cartData%n_right, 2
                 if (interval * i .LE. 999 .AND. interval * i .GE. -999) then
                     write(label, '(F8.2)') (real(interval * i))
                 else
                     write(label, '(F6.0)') (real(interval * i))
                 endif
                 x_pos = cartData%x_origin + int(i * cartData%tick_step_px)
-        
+            
                 bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
-        
+            
                 ! Draw 5 pixels above the bottom-most horizontal grid line
-                bret = TextOut(gBitMapInfo%hMemDC, x_pos - (sz%cx / 2), y_anchor - sz%cy - 5, &
+                bret = TextOut(gBitMapInfo%hMemDC, x_pos - (sz%cx / 2), y_anchor - sz%cy + 5, &
                               trim(label), len_trim(label))
             end do
     end subroutine labelCartesianAxes
