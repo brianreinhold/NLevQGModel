@@ -105,7 +105,7 @@ module PlotModule
        integer(4) :: n_up          ! number of axis (horizontal) lines above the origin (these will have positive values)
        integer(4) :: n_down        ! number of axis (horizontal) lines below the origin (these will have negative values)
        real       :: interval      ! The interval value between the axis lines in both directions
-       real       :: tick_step_px  ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+       real       :: axis_dx  ! the number of pixels between the axis lines (same in both directions). dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
                                    ! x_len = endX - startX  and y_len = endY - startY
     end type CartesianData
 
@@ -674,7 +674,7 @@ module PlotModule
                 endif
             endif
             
-            ! This gives the change in the value between axis lines. Used to label the values of the axes
+            ! This gives the change in the value between every other axis line. Used to label the values of the axes
             phaseSpaceType%cartData%interval = 2. * gContourIntervals%Ranges(field) / REAL(NUMBER_OF_DIVISIONS)
             ! Now take into account the screen size and the range that it is supposed to represent.
             pixels = min((phaseSpaceType%cartData%endX - phaseSpaceType%cartData%startX), (phaseSpaceType%cartData%endY - phaseSpaceType%cartData%startY))
@@ -685,15 +685,15 @@ module PlotModule
             y_len = phaseSpaceType%cartData%endY - phaseSpaceType%cartData%startY       ! Length of Y-axis in pixels
 
             ! This ensures the grid fills the entire x_len and y_len provided
-            phaseSpaceType%cartData%tick_step_px = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
+            phaseSpaceType%cartData%axis_dx = float(min(x_len, y_len)) / REAL(NUMBER_OF_DIVISIONS)
         
             ! This gives the number of axis intervals from the origin to the left most axis and the origin to the right most axis
-            phaseSpaceType%cartData%n_left = int(REAL(phaseSpaceType%cartData%x_origin - phaseSpaceType%cartData%startX) / phaseSpaceType%cartData%tick_step_px)
-            phaseSpaceType%cartData%n_right = int(REAL(phaseSpaceType%cartData%endX - phaseSpaceType%cartData%x_origin) / phaseSpaceType%cartData%tick_step_px)
+            phaseSpaceType%cartData%n_left = int(REAL(phaseSpaceType%cartData%x_origin - phaseSpaceType%cartData%startX) / phaseSpaceType%cartData%axis_dx)
+            phaseSpaceType%cartData%n_right = int(REAL(phaseSpaceType%cartData%endX - phaseSpaceType%cartData%x_origin) / phaseSpaceType%cartData%axis_dx)
             
             ! This gives the number of axis intervals from the origin to the top most axis and the origin to the bottom most axis
-            phaseSpaceType%cartData%n_up = int(REAL(phaseSpaceType%cartData%y_origin - phaseSpaceType%cartData%startY) / phaseSpaceType%cartData%tick_step_px)
-            phaseSpaceType%cartData%n_down = int(REAL(phaseSpaceType%cartData%endY - phaseSpaceType%cartData%y_origin) / phaseSpaceType%cartData%tick_step_px)
+            phaseSpaceType%cartData%n_up = int(REAL(phaseSpaceType%cartData%y_origin - phaseSpaceType%cartData%startY) / phaseSpaceType%cartData%axis_dx)
+            phaseSpaceType%cartData%n_down = int(REAL(phaseSpaceType%cartData%endY - phaseSpaceType%cartData%y_origin) / phaseSpaceType%cartData%axis_dx)
 
 
             phaseSpaceType%colorLead = IOR(ISHFT(IAND(colorLead, Z'000000FF'), 16), & ! R: bit 0 -> 16

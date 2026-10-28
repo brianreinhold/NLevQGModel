@@ -828,7 +828,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         if (gViewOnly) call outputPlot(gViewOnly)
                         call LogMessage("User changed field 1")
                     endif
-    ! F5: Change Field 1 -----------------------
+    ! F5: Change Field 2 -----------------------
                 case (VK_F5)
                     if (gModelState%runState .NE. RUNNING .AND. .NOT. gViewOnly) return
                     if (gModIntParams%plotType .NE. ZONAL_WAVE_ENERGY) then
@@ -844,7 +844,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                         if (gViewOnly) call outputPlot(gViewOnly)
                         call LogMessage("User changed field 2")
                     endif
-    ! F6: Create SVG file from plot -----------------------
+    ! F6: Create SVG file of current plot -----------------------
                 case (VK_F6)
                     if (gModelState%runState .NE. PAUSED) return
                     call GenerateSVG()
@@ -986,6 +986,22 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
                 case (ICHAR('A'))
                     ! If we are integrating the model [gViewOnly = false), allow toggling between plotting the instantaneous versus running mean value
                     if (.NOT. gViewOnly) gShowRunningMean = .NOT. gShowRunningMean
+    ! L, R, U, D: Move phase space x-origin Left, Right and y-origin Up, Down. Change by CartesianData%axis_dx
+                ! Left
+                case (ICHAR('L'))
+                    call MoveAxis('L')
+
+                ! Right
+                case (ICHAR('R'))
+                    call MoveAxis('R')
+
+                ! Up
+                case (ICHAR('U'))
+                    call MoveAxis('U')
+
+                ! Down
+                case (ICHAR('D'))
+                    call MoveAxis('D')
             end select
 
             MainWndProc = 0
@@ -1257,6 +1273,66 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
             call ClearScreen()
             if (gViewOnly) call outputPlot(gViewOnly)
         end subroutine changeScale
+
+        subroutine MoveAxis(key)
+            use PlotModule, only: gPhaseSpace1, gPhaseSpace2, gPhaseSpace3, gPhaseSpace4, CartesianData
+            implicit none
+
+            character, intent(in) :: key
+
+            type(CartesianData) :: cartData
+
+            ! Find the correct phase space option being displayed
+            if (gModIntParams%plotType .NE. PHASE_SPACE .AND. gModIntParams%plotType .NE. PHASE_AND_MAP) return
+
+            ! Make copy of correct CartesianData field
+            if (gModIntParams%plotType == PHASE_SPACE) then
+                ! We get away with using either 1 or 2 since the axes of the two fields are symmetric
+                if (gPhaseSpace1%field /= PLOTTING_OFF) then
+                    cartData = gPhaseSpace1%cartData
+                else if (gPhaseSpace2%field /= PLOTTING_OFF) then
+                    cartData = gPhaseSpace2%cartData
+                else
+                    return
+                endif
+            else
+                if (gPhaseSpace3%field /= PLOTTING_OFF) then
+                    cartData = gPhaseSpace3%cartData
+                else if (gPhaseSpace4%field /= PLOTTING_OFF) then
+                    cartData = gPhaseSpace4%cartData
+                else
+                    return
+                endif
+            endif
+            
+            ! Modify
+            if (key == 'L') then
+                cartData%x_origin = cartData%x_origin - cartData%axis_dx
+            else if (key == 'R') then
+                cartData%x_origin = cartData%x_origin + cartData%axis_dx
+            else if (key == 'U') then
+                cartData%y_origin = cartData%y_origin - cartData%axis_dx
+            else if (key == 'D') then
+                cartData%y_origin = cartData%y_origin + cartData%axis_dx
+            endif
+
+            ! Reload the updated value.
+            if (gModIntParams%plotType == PHASE_SPACE) then
+
+                gPhaseSpace1%cartData%x_origin = cartData%x_origin
+                gPhaseSpace1%cartData%y_origin = cartData%y_origin
+                gPhaseSpace2%cartData%x_origin = cartData%x_origin
+                gPhaseSpace2%cartData%y_origin = cartData%y_origin
+
+            else
+                gPhaseSpace3%cartData%x_origin = cartData%x_origin
+                gPhaseSpace3%cartData%y_origin = cartData%y_origin
+                gPhaseSpace4%cartData%x_origin = cartData%x_origin
+                gPhaseSpace4%cartData%y_origin = cartData%y_origin
+            endif
+            call initializePlot()
+            call ClearScreen()
+        end subroutine MoveAxis
 
 end function MainWndProc
 

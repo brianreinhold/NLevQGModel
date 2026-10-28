@@ -40,16 +40,16 @@ SUBMODULE (PlotModule) AxesSubmodule
             do i = -cartData%n_left, cartData%n_right
                 if (i == 0) cycle  ! skip central axis
                 ! Move to top and draw to bottom
-                bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%startY, oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%tick_step_px), cartData%endY)
+                bret = MoveToEx(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%axis_dx), cartData%startY, oldPoint)
+                bret = LineTo(gBitMapInfo%hMemDC, int(cartData%x_origin + i * cartData%axis_dx), cartData%endY)
             end do
 
             ! --- Draw Horizontal Grid Lines (Y-axis ticks) ---
             do i = cartData%n_down, -cartData%n_up, -1
                 if (i == 0) cycle ! skip central axis
                 ! Move to left side, draw to right side
-                bret = MoveToEx(gBitMapInfo%hMemDC, cartData%startX, int(cartData%y_origin + i * cartData%tick_step_px), oldPoint)
-                bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, int(cartData%y_origin + i * cartData%tick_step_px))
+                bret = MoveToEx(gBitMapInfo%hMemDC, cartData%startX, int(cartData%y_origin + i * cartData%axis_dx), oldPoint)
+                bret = LineTo(gBitMapInfo%hMemDC, cartData%endX, int(cartData%y_origin + i * cartData%axis_dx))
             end do
 
             ! 2. Do labels
@@ -111,10 +111,10 @@ SUBMODULE (PlotModule) AxesSubmodule
             ! --- Label the Y-Axis values ---
             if (useBottomLeft) then
                 ! Anchor: To the right of the first 'y axis' (left-most vertical grid line)
-                x_anchor = cartData%x_origin - cartData%n_left * int(cartData%tick_step_px)
+                x_anchor = cartData%x_origin - cartData%n_left * int(cartData%axis_dx)
             else
                 ! Anchor: To the left of the last 'y axis' (right-most vertical grid line)
-                x_anchor = cartData%x_origin + (cartData%n_right - 1) * int(cartData%tick_step_px)
+                x_anchor = cartData%x_origin + (cartData%n_right - 1) * int(cartData%axis_dx)
             endif
 
             do i = cartData%n_up, -cartData%n_down, -2
@@ -123,7 +123,7 @@ SUBMODULE (PlotModule) AxesSubmodule
                 else
                     write(label, '(F6.0)') (real(cartData%interval * i))
                 endif
-                y_pos = cartData%y_origin - int(i * cartData%tick_step_px) - 2 ! Top-down: subtract to go "up"
+                y_pos = cartData%y_origin - int(i * cartData%axis_dx) - 2 ! Top-down: subtract to go "up"
 
                 ! Get label dimensions to vertically center it on the tick
                 bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
@@ -136,10 +136,10 @@ SUBMODULE (PlotModule) AxesSubmodule
             ! --- Label the X-Axis values ---
             if (useBottomLeft) then
                 ! Anchor: Above the last 'x axis' (bottom-most horizontal grid line)
-                y_anchor = cartData%y_origin + cartData%n_down * int(cartData%tick_step_px)
+                y_anchor = cartData%y_origin + cartData%n_down * int(cartData%axis_dx)
             else
                 ! Anchor: Below the first 'x axis' (top-most horizontal grid line)
-                y_anchor = cartData%y_origin - cartData%n_up * int(cartData%tick_step_px) + 5
+                y_anchor = cartData%y_origin - cartData%n_up * int(cartData%axis_dx) + 5
             endif
             
             do i = -cartData%n_left, cartData%n_right, 2
@@ -148,7 +148,7 @@ SUBMODULE (PlotModule) AxesSubmodule
                 else
                     write(label, '(F6.0)') (real(cartData%interval * i))
                 endif
-                x_pos = cartData%x_origin + int(i * cartData%tick_step_px)
+                x_pos = cartData%x_origin + int(i * cartData%axis_dx)
             
                 bret = GetTextExtentPoint32(gBitMapInfo%hMemDC, trim(label), len_trim(label), sz)
             
