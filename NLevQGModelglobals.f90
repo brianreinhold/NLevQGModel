@@ -126,7 +126,7 @@ module NLevQGModelGlobals
             msgLen = LEN_TRIM(msg) + LEN_TRIM(errMsg) + 15  ! Calculate required length
             ALLOCATE(CHARACTER(msgLen) :: logEntry)  ! Allocate dynamically
             logEntry = "Elapsed Time: " // errMsg // " " // msg // C_NULL_CHAR
-            write(*, '(A, I6, A, A)') "Elapsed Time: ", elapsedMS, " ", trim(msg)  ! Also write to console for debugging (Second A forces output on one line)
+            write(*, '(A, I0, A, A)') "Elapsed Time: ", elapsedMS, " ", trim(msg)  ! Also write to console for debugging (Second A forces output on one line)
             iret = SendMessage(ghLogList, LB_INSERTSTRING, 0, LOC(logEntry)) ! Insert log at TOP of list so latest is first
 
         END SUBROUTINE LogMessage

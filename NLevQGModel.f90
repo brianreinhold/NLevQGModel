@@ -378,7 +378,7 @@ integer(LRESULT) function LogWndProc ( hWnd, mesg, wParam, lParam )
         !  [in] DWORD  iPitchAndFamily,
         !  [in] LPCSTR pszFaceName
         !);
-        gFont = CreateFont(20, &
+        gFont = CreateFont(14, &
             0, &
             0, &
             0, &
@@ -441,7 +441,8 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
     use ModelParamsModule, only: gNLevFile, gModelState, gModIntParams, gModRealParams
     use ModelFieldsModule, only: gVertArr
     use ModelModule, only: StartTimeLoop
-    use PlotModule, only: ClearScreen, initializePlot, outputPlot, getYValues, gElapsedTime, gPressure, gViewOnly, gShowRunningMean, GenerateSVG, X1, X2
+    use PlotModule, only: ClearScreen, initializePlot, outputPlot, getYValues, gElapsedTime, gPressure, gViewOnly, gShowRunningMean, gShowRunningStandardDev, &
+                          GenerateSVG, X1, X2
     use HelpTextModule, only: PLOT_HELP_TEXT
 
     implicit none
@@ -982,10 +983,15 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
                 case (VK_ESCAPE)
                     call PostQuitMessage(0)
-
+    ! A: Toggle between running mean average and instantaneous flows
                 case (ICHAR('A'))
                     ! If we are integrating the model [gViewOnly = false), allow toggling between plotting the instantaneous versus running mean value
                     if (.NOT. gViewOnly) gShowRunningMean = .NOT. gShowRunningMean
+    ! V: Toggle between running mean standard deviation and instantaneous flows
+                case (ICHAR('V'))
+                    ! If we are integrating the model [gViewOnly = false), allow toggling between plotting the instantaneous versus running mean value
+                    if (.NOT. gViewOnly) gShowRunningStandardDev = .NOT. gShowRunningStandardDev
+
     ! L, R, U, D: Move phase space x-origin Left, Right and y-origin Up, Down. Change by CartesianData%axis_dx
                 ! Left
                 case (ICHAR('L'))
@@ -1282,7 +1288,7 @@ integer(LRESULT) function MainWndProc ( hWnd, mesg, wParam, lParam )
 
             type(CartesianData) :: cartData
 
-            ! Find the correct phase space option being displayed
+            ! Find the correct phase space option being displayed. If not phase space, exit
             if (gModIntParams%plotType .NE. PHASE_SPACE .AND. gModIntParams%plotType .NE. PHASE_AND_MAP) return
 
             ! Make copy of correct CartesianData field

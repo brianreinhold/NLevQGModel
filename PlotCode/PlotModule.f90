@@ -255,6 +255,7 @@ module PlotModule
     Logical :: gShowRunningMean = .FALSE.  ! When true this global is used to tell the 'loadFields()' routine to return the running mean of the varaible to
                                            ! be displayed versus the instantaneous value. Currently running means can only be displayed for those fields
                                            ! which have been associated with a Welford type. At the moment that is PS, TH, KE, ADS, ADT
+    Logical :: gShowRunningStandardDev = .FALSE. ! Toggles between displaying maps as standard deviation (Heights only)
     
 !=====================  SUBMODULE INTERFACES ============================
 ! These are subroutines implemented in submodules. In order to put subroutine
@@ -2003,7 +2004,7 @@ module PlotModule
                     return
             end select
 
-            isOdd = BTEST(plotLevel, 0) ! if Bit 0 is 1, the function returns true and the number is odd. This means we are in the middle of a layer 
+            isOdd = BTEST(plotLevel, 0) ! if Bit 0 is 1, the function returns true and the number is odd. This means we are at an interface. 
 
             if (isTempField) then
                 if (isOdd .OR. (plotLevel .LE. 3) .OR. (plotLevel .GE. gCurrentDims%LVS - 2)) then
@@ -2107,6 +2108,37 @@ module PlotModule
             ! Debug: plotLevel= 21  -> level= 10  levelt= 9  isOdd= T  is Temp:  F  is Interpolated:  F
 
         end subroutine loadFields
+
+        subroutine loadVarGrid(grid, plotlevel, interpArrSelection)
+
+            use ModelFieldsModule, only: gEnergyArr, gVertArr
+            use ModelParamsModule, only: gModIntParams
+            use ArrayDimensionsModule, only: gCurrentDims
+            use WelfordModule, only: getVariance
+
+            real, intent(out) :: grid(:, :)
+            integer, intent(in)        :: plotLevel, interpArrSelection
+
+            integer :: kx, ly, level, levelt
+            logical :: isOdd
+            real :: weight
+
+            level = min(1 + (plotLevel - 1) / 2, gModIntParams%NLEV)
+            levelt = min(1 + (plotLevel - 2) / 2, gModIntParams%NLEV - 1)
+
+            isOdd = BTEST(plotlevel, 0)  ! if Bit 0 is 1, the function returns true and the number is odd. This means we are at an interface. 
+            if (isOdd .AND. (plotLevel .GE. 3) .AND. (plotLevel .LT. gCurrentDims%LVS - 1)) then
+                weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
+                return
+            else
+                ! No interpolation
+                do ly = 1, gCurrentDims%IYMAX / 2 + 1
+                    do kx = 1, gCurrentDims%IXMAX + 1
+                        grid(kx, ly) = SQRT(getVariance(gEnergyArr%WelfordPS_VAR(kx, ly, level), .FALSE.))
+                    end do                        
+                end do                
+            endif
+        end subroutine loadVarGrid
         
         ! Gets the unit text strings for display legends
         function getUnits(field) result(text)
@@ -2636,7 +2668,7 @@ module PlotModule
             if (latVertCrossSec%useSolidColor) then
                 call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height, latVertCrossSec%hovMap, latVertCrossSec%contourIntervalInv)
             else
-                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, latVertCrossSec%hovMap, latVertCrossSec%contourIntervalInv)
+                call drawLineContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, latVertCrossSec%hovMap, latVertCrossSec%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.true., invalidate)
@@ -2870,7 +2902,7 @@ module PlotModule
             if (lonVertCrossSec%useSolidColor) then
                 call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height, lonVertCrossSec%hovMap, lonVertCrossSec%contourIntervalInv)
             else
-                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, lonVertCrossSec%hovMap, lonVertCrossSec%contourIntervalInv)
+                call drawLineContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height, lonVertCrossSec%hovMap, lonVertCrossSec%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.true., invalidate)
@@ -3044,7 +3076,7 @@ module PlotModule
         ! @param weatherMapType: struct containing all information not dependent upon the integrated values
         subroutine plotWeatherMap(invalidate, weatherMapType)
             use ArrayDimensionsModule, only: gCurrentDims
-            use ConstantsModule, only: PLOTTING_OFF, wp
+            use ConstantsModule, only: PLOTTING_OFF, HEIGHT
             use NLevQGModelGlobals, only: gBitMapInfo
             use ModelFieldsModule, only: gTransArr
             use ModelParamsModule, only: gModIntParams
@@ -3056,17 +3088,19 @@ module PlotModule
 
             LOGICAL(BOOL)   :: bret
             type (InterpolationBounds) b
-        
+
             integer(c_int), pointer :: pixelArray(:, :) ! Our map to the DIBSection
                    
             if (weatherMapType%field == PLOTTING_OFF) return    ! Do nothing
-            
-            call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP, weatherMapType%interpArrSelection)
-        
-            ! This routine also dimensionalizes the values
-            call computeGrid(weatherMapType%value, gTransArr%plotFull, weatherMapType%scale)
-            !call createGrid(gTransArr%plotFull, weatherMapType)
-            
+
+            if (gShowRunningStandardDev .AND. weatherMapType%field == HEIGHT) then
+                call loadVarGrid(gTransArr%plotFull, gModIntParams%LEVP, weatherMapType%interpArrSelection)
+            else
+                call loadFields( weatherMapType%value, weatherMapType%field, gModIntParams%LEVP, weatherMapType%interpArrSelection)
+                ! This routine also dimensionalizes the values
+                call computeGrid(weatherMapType%value, gTransArr%plotFull, weatherMapType%scale)
+            endif
+
             ! Interpolate the grid array to a resolution that matches the size of the display of the
             ! weather map on the screen.
             b%il = 1
@@ -3092,7 +3126,7 @@ module PlotModule
             if (weatherMapType%useSolidColor) then
                 call drawSolidContours(gBitMapInfo%width, gBitMapInfo%height / 2, weatherMapType%wxMap, weatherMapType%contourIntervalInv)
             else
-                call drawContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height / 2, weatherMapType%wxMap, weatherMapType%contourIntervalInv)
+                call drawLineContours(pixelArray, gBitMapInfo%width, gBitMapInfo%height / 2, weatherMapType%wxMap, weatherMapType%contourIntervalInv)
             endif
             call labelPlotsAndDisplayTime(.false.)
             call DrawGridLines(.false., invalidate)
@@ -3153,7 +3187,7 @@ module PlotModule
 
         !! Routine to draw line contours in both a 2-d grid and a 3-striped
         !! Hovmoller grid.
-        subroutine drawContours(pixelArray, width, height, dataMap, cntInv)
+        subroutine drawLineContours(pixelArray, width, height, dataMap, cntInv)
             use NLevQGModelGlobals, only: gBitMapInfo
             USE, INTRINSIC :: iso_c_binding, only: C_F_POINTER
             implicit none
@@ -3190,7 +3224,7 @@ module PlotModule
                     iVal = iValRight
                 end do
             end do
-        end subroutine drawContours
+        end subroutine drawLineContours
 
         ! Function to replace slow an inefficient Floor()
         pure integer function bin(val)

@@ -226,7 +226,7 @@ module SettingsDialogModule
                                     STB: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
 
-                                        call LogMessage("EN_CHANGE signaled from edit control ")
+                                        !call LogMessage("EN_CHANGE signaled from edit control ")
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_USERSETTINGS)
                                         ! Get the updated text from the edit control
                                         newValue = GetDlgItemInt(hDlg, IDC_EDIT_USERSETTINGS, LOC(bret), .TRUE.)

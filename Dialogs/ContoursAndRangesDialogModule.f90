@@ -183,7 +183,7 @@ module ContoursAndRangesDialogModule
                                         logical, save :: isUpdating = .FALSE.
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
                                         
-                                        call LogMessage("EN_CHANGE signaled from edit real control ")
+                                        !call LogMessage("EN_CHANGE signaled from edit real control ")
                                         if (isUpdating) exit EN
                                         isUpdating = .TRUE.
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_CONTOURS)

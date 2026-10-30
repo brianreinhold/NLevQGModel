@@ -134,9 +134,9 @@ module ModelParamsModule
     end type ModelSensParams
     
     type :: ContourIntervals ! This is a new type to hold the scaling factors for the model
-        real :: Contours(30)    ! Contour intervals for each field for maps and Hovmollers
-        real :: Ranges(30) ! Ranges
-        real :: VSEN(30)  ! Scaling factors for the sensitivity runs
+        real :: Contours(30) ! Contour intervals for each field for maps and Hovmollers
+        real :: Ranges(30)   ! Ranges for phase space and time series axes
+        real :: VSEN(30)     ! Scaling factors for the sensitivity runs
     end type ContourIntervals
     
     type :: PlotControls
@@ -299,7 +299,7 @@ module ModelParamsModule
             gFieldLabels(TEMPERATURE)%s = "Temperature "//ACHAR(176)//"C"
             gFieldLabels(VERTICAL_WIND)%s = "Omega mb/hr"
             gFieldLabels(TOT_HGT_TEND)%s = "Tot hgt tend m/day"
-            gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ß m/day"
+            gFieldLabels(ADV_BETA_HGT_TEND)%s = "Height adv + ï¿½ m/day"
             gFieldLabels(DIABATIC_HGT_TEND)%s = "Diab hgt tend m/day"
             gFieldLabels(OMEGA_HGT_TEND)%s = "Omega hgt tend m/day"
             gFieldLabels(TEMP_FORCING)%s = "Temperature driving "//ACHAR(176)//"C"

@@ -191,8 +191,8 @@ MODULE ModelFieldsModule
         REAL, POINTER :: DAT(:) => null()       !  DAT(ITOT) is an all purpose array for computing some variable at a level.
         REAL, POINTER :: AKL(:) => null()       !  AKL(ITOT) two dimensional wavenumber used for calculating things like the vorticity
         REAL, POINTER :: AKLI(:) => null()      !  AKLI(ITOT) are the two dimensional inverse wavenumber used for calculating things like the vorticity
-        real, pointer :: Interp_one(:) => null() !  An ITOT array to compute the strm variables at an interpolated level for plotting
-        real, pointer :: Interp_two(:) => null() !  An ITOT array to compute the temp variables at an interpolated level for plotting
+        real, pointer :: Interp_one(:) => null() !  An ITOT array to compute the variables at an interpolated level for plotting for field 1
+        real, pointer :: Interp_two(:) => null() !  An ITOT array to compute the variables at an interpolated level for plotting for field 2
         real, pointer :: RK(:) => null()        !  RK(maxZonalWaves) is the zonal wavenumber as a real value
         real, pointer :: RL(:) => null()        !  RL(maxMeridWaves) is the zonal wavenumber as a real value
         REAL, POINTER :: ZS(:,:) => null()      !  ZS(ITOT,maxLevels)
@@ -228,7 +228,7 @@ MODULE ModelFieldsModule
     REAL, ALLOCATABLE, TARGET :: ZonalAPE_Pool(:)
     REAL, ALLOCATABLE, TARGET :: PS_AMP_FAS_Pool(:)
     REAL, ALLOCATABLE, TARGET :: WW_AMP_FAS_Pool(:)
-    REAL, ALLOCATABLE, TARGET :: PS_VARIANCE(:)
+    REAL, ALLOCATABLE, TARGET :: PS_VAR_Pool(:)
     type(WelfordType), allocatable, target :: WelfordKE_Pool(:)
     type(WelfordType), allocatable, target :: WelfordPS_Pool(:)
     type(WelfordType), allocatable, target :: WelfordTH_Pool(:)
@@ -252,6 +252,8 @@ MODULE ModelFieldsModule
         real, pointer :: PS_AMP_FAS(:, :) ! This array holds the amplitude and phase instead of the cosknx, sinknx components in the same form as
                                          ! all the other arrays. The first LMAX2 are zonal flows then amplitude and phase for each L for all K
         real, pointer :: WW_AMP_FAS(:, :) ! This array holds the amplitude and phase instead of the WW cosknx, sinknx components
+
+        real, pointer :: PS_VAR(:, :, :)
 
         type(WelfordType), pointer :: WelfordKE(:)
         type(WelfordType), pointer :: WelfordPS(:, :)   ! This array holds the WelfordType for each of the streamfunction spectral components at each level.
@@ -323,6 +325,11 @@ MODULE ModelFieldsModule
                 status = DeallocateEnergyArrays()
                 RETURN
             endif
+            ALLOCATE(PS_VAR_Pool(gArrayDims%KX * gArrayDims%LY * gUserSettings%maxLevels), STAT = status)
+            if (status /= 0) then
+                status = DeallocateEnergyArrays()
+                RETURN
+            endif
             allocate(WelfordKE_Pool(gUserSettings%maxZonalWaves), STAT = status)
             if (status /= 0) then
                 status = DeallocateEnergyArrays()
@@ -378,6 +385,7 @@ MODULE ModelFieldsModule
             ZonalKE_Pool = 0.0
             ZonalAPE_Pool = 0.0
             PS_AMP_FAS_Pool = 0.0
+            PS_VAR_Pool = 0.0
             WelfordKE_Pool(1 : gModIntParams%KMAX2) = WelfordType()
             WelfordPS_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
             WelfordTH_Pool(1 : gCurrentDims%itot * gModIntParams%nlev) = WelfordType()
@@ -409,6 +417,7 @@ MODULE ModelFieldsModule
             gEnergyArr%ZonalAPE(1 : lmax)  => ZonalAPE_Pool(1 : lmax)
             gEnergyArr%PS_AMP_FAS(1 : itot, 1 : nlev) => PS_AMP_FAS_Pool(1 : itot * nlev)
             gEnergyArr%WW_AMP_FAS(1 : itot, 1 : nlev) => WW_AMP_FAS_Pool(1 : itot * nlev)
+            gEnergyArr%PS_VAR(1 : kx, 1: ly, 1 : nlev) => PS_VAR_Pool(1 : kx * ly * nlev)
             gEnergyArr%WelfordKE(1 : kmax) => WelfordKE_Pool(1 : kmax)
             gEnergyArr%WelfordPS(1 : itot, 1 : nlev) => WelfordPS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordTH(1 : itot, 1 : nlev) => WelfordTH_Pool(1 : itot * nlev)
@@ -430,6 +439,8 @@ MODULE ModelFieldsModule
             IF (ALLOCATED(ZonalAPE_Pool)) DEALLOCATE(ZonalAPE_Pool, STAT = statusErr)
             IF (ALLOCATED(PS_AMP_FAS_Pool)) DEALLOCATE(PS_AMP_FAS_Pool, STAT = statusErr)
             IF (ALLOCATED(WW_AMP_FAS_Pool)) DEALLOCATE(WW_AMP_FAS_Pool, STAT = statusErr)
+            IF (ALLOCATED(WW_AMP_FAS_Pool)) DEALLOCATE(WW_AMP_FAS_Pool, STAT = statusErr)
+            IF (ALLOCATED(PS_VAR_Pool)) DEALLOCATE(PS_VAR_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordPS_Pool)) DEALLOCATE(WelfordPS_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordTH_Pool)) DEALLOCATE(WelfordTH_Pool, STAT = statusErr)
             IF (ALLOCATED(WelfordKE_Pool)) DEALLOCATE(WelfordKE_Pool, STAT = statusErr)
@@ -444,8 +455,10 @@ MODULE ModelFieldsModule
             NULLIFY(gEnergyArr%ZonalAPE)
             NULLIFY(gEnergyArr%PS_AMP_FAS)
             NULLIFY(gEnergyArr%WW_AMP_FAS)
+            NULLIFY(gEnergyArr%PS_VAR)
             NULLIFY(gEnergyArr%WelfordKE)
             NULLIFY(gEnergyArr%WelfordPS)
+            NULLIFY(gEnergyArr%WelfordTH)
             NULLIFY(gEnergyArr%Welford_PS_AMP_FAS)
             NULLIFY(gEnergyArr%Welford_WW_AMP_FAS)
             NULLIFY(gEnergyArr%WelfordADS)

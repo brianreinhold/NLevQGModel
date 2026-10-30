@@ -281,7 +281,7 @@ module ModelControlDialogModule
                                         CHARACTER(:), ALLOCATABLE :: str ! fortran string with no null terminator
                                         logical, save :: isUpdating = .FALSE.
 
-                                        call LogMessage("EN_CHANGE signaled from edit real control ")
+                                        !call LogMessage("EN_CHANGE signaled from edit real control ")
                                         if (isUpdating) exit EN
                                         isUpdating = .TRUE.
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_REALVALUES)
@@ -322,7 +322,7 @@ module ModelControlDialogModule
                                     ENB: BLOCK
                                         character(LEN=16) :: strC ! C-string will have null terminator
 
-                                        call LogMessage("EN_CHANGE signaled from edit integer control ")
+                                        !call LogMessage("EN_CHANGE signaled from edit integer control ")
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_INTEGERVALUES)
                                         ! Get the updated text from the edit control
                                         newValue = GetDlgItemInt(hDlg, IDC_EDIT_INTEGERVALUES, LOC(bret), .TRUE.)

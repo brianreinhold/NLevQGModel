@@ -263,7 +263,7 @@ module VerticalParamsDialogModule
                                         
                                         if (isUpdating) exit EN
                                         isUpdating = .TRUE.
-                                        call LogMessage("EN_CHANGE signaled from edit real control ")
+                                        !call LogMessage("EN_CHANGE signaled from edit real control ")
 
                                         hEdit = GetDlgItem(hDlg, IDC_EDIT_VERTICAL)
                                         

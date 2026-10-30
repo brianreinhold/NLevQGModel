@@ -15,7 +15,7 @@ module ModelModule
     public :: STERMS
     public :: TTERMS
     public :: PROFIL
-    public :: PICK
+    !public :: PICK
     
     ! Supports the Sleep() subroutine
     interface
@@ -200,6 +200,8 @@ module ModelModule
                             END DO
                         end if
                         ! So now it seems I need to put in the : and change the subroutine to PRF(:) instead of PRF(*)
+                        ! Since there is nothing after the colon, fortran assumes the array slice is from 
+                        ! 2 * gUserSettings%maxLevels to the end of the array.
                         CALL PROFIL(gVertArr%PRF(2 * gUserSettings%maxLevels :), R, gModIntParams%IPRM2)  ! PRF(1, 3)
                     END IF
                     !---------------------------------------------Are we looping?
@@ -293,6 +295,7 @@ module ModelModule
                                     call updateRunStats(gHorzArr%TH(:, N), gEnergyArr%WelfordTH(:, N))
                                     call updateRunStats(gHorzArr%ADS(:, N), gEnergyArr%WelfordADS(:, N))
                                     call updateRunStats(gHorzArr%ADT(:, N), gEnergyArr%WelfordADT(:, N))
+                                    call computeVariance(gHorzArr%PS(:, N), gEnergyArr%PS_VAR(:, :, N), gEnergyArr%WelfordPS_VAR(:, :, N))
                                 end do
                                 call outputPlot(.FALSE.)
                                 gHorzArr%FS = 0.0
@@ -1355,34 +1358,34 @@ module ModelModule
             ENDIF
         END SUBROUTINE PROFIL
 
-        SUBROUTINE PICK(DAT, PS, N, IP)
-            use ArrayDimensionsModule, only: gCurrentDims
-            use ModelParamsModule, only: gUserSettings
+        ! SUBROUTINE PICK(DAT, PS, N, IP)
+        !     use ArrayDimensionsModule, only: gCurrentDims
+        !     use ModelParamsModule, only: gUserSettings
 
-            implicit none
+        !     implicit none
 
-            INTEGER, intent(in) :: IP
-            INTEGER, intent(in) :: N
-            REAL, intent(inout) :: DAT(:)
-            real, intent(in) :: PS(:, :)
+        !     INTEGER, intent(in) :: IP
+        !     INTEGER, intent(in) :: N
+        !     REAL, intent(inout) :: DAT(:)
+        !     real, intent(in) :: PS(:, :)
 
-            ! local variables
-            INTEGER :: I, K
+        !     ! local variables
+        !     INTEGER :: I, K
 
-            K = (IP - 2) * gUserSettings%maxLevels + N
-            IF(IP .GE. 14) K = 12 * gUserSettings%maxLevels + IP - 13
-            !----------------------------------Special case for vorticity:
-            IF(IP .EQ. 1) THEN
-                K = N
-                DO I = 1, gCurrentDims%ITOT
-                    DAT(I) = -PS(I, K) * DAT(I + gCurrentDims%ITOTA)
-                END DO
-            ELSE
-                DO I = 1, gCurrentDims%ITOT
-                   DAT(I) = PS(I, K)
-                END DO
-            ENDIF
-        END subroutine PICK
+        !     K = (IP - 2) * gUserSettings%maxLevels + N
+        !     IF(IP .GE. 14) K = 12 * gUserSettings%maxLevels + IP - 13
+        !     !----------------------------------Special case for vorticity:
+        !     IF(IP .EQ. 1) THEN
+        !         K = N
+        !         DO I = 1, gCurrentDims%ITOT
+        !             DAT(I) = -PS(I, K) * DAT(I + gCurrentDims%ITOTA)
+        !         END DO
+        !     ELSE
+        !         DO I = 1, gCurrentDims%ITOT
+        !            DAT(I) = PS(I, K)
+        !         END DO
+        !     ENDIF
+        ! END subroutine PICK
 
         !******************************************** Subroutine QG for Amp-G values:
         SUBROUTINE ComputeGQ()      !(DAT,PS,DPI,GQ,GQA,PSA,PSS)
@@ -1609,7 +1612,7 @@ module ModelModule
 
         END SUBROUTINE ComputeEnergySpectrum
         
-        !> Returns the total wave energy (kinetic + available potential) as a function of zonal wavenumber (for all L and N) 
+        !> Returns the wave KE and APE as a function of zonal wavenumber (for all L and N) 
         !> in gTransArr%G2Zonal (reuse of a transform array) and
         !> the total zonal energy as a function of meridional wavenumber for all N in gTransArr%GZonal.
         SUBROUTINE ComputeZonalSpectrum()
@@ -1709,8 +1712,6 @@ module ModelModule
             END DO
 
             call updateRunStats(totalKE, gEnergyArr%WelfordKE)
-
-
         END SUBROUTINE ComputeZonalSpectrum
 
         ! This computes G-Q between Streamfunction and temperature fields
@@ -1838,12 +1839,35 @@ module ModelModule
             end do
             !print '(*(F10.4))', (gEnergyArr%Welford_PS_AMP_FAS(3, N)%mean, N = 1, SIZE(gEnergyArr%Welford_PS_AMP_FAS, 2))
         end subroutine ComputeVertStructures
+
+        subroutine computeVariance(PS, PS_VAR, WelfordPS_VAR)
+            use ConstantsModule, only: HEIGHT
+            use ArrayDimensionsModule, only: gCurrentDims
+            use ModelFieldsModule, only: gHorzArr, gEnergyArr
+            use ModelParamsModule, only: gPlotScales
+            use WelfordModule, only: WelfordType, updateRunStats
+            use PlotModule, only: computeGrid
+
+            implicit none
+
+            real, intent(in) :: PS(:)
+            real, intent(inout) :: PS_VAR(:, :)
+            type(WelfordType), intent(inout) :: WelfordPS_VAR(:, :)
+
+            integer :: kx, ly
+
+            call computeGrid(PS, PS_VAR, gPlotScales(HEIGHT))
+
+            do ly = 1, gCurrentDims%IYMAX / 2 + 1
+                call updateRunStats(PS_VAR(1 : gCurrentDims%IXMAX + 1, ly), WelfordPS_VAR(1 : gCurrentDims%IXMAX + 1, ly))
+            end do
+
+        end subroutine computeVariance
         
         ! Be sure to save the PS field when calling this routine and restore before integrating the model.
         subroutine ComputeAverageFields()
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gEnergyArr, gHorzArr
-            !use ModelParamsModule, only: gModIntParams
             implicit none
             
             REAL, ALLOCATABLE :: buffer(:)
