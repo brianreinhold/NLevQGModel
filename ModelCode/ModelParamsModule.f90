@@ -133,6 +133,14 @@ module ModelParamsModule
         integer :: integralEnergyIndicator3 ! integralEnergyIndicator3 is the indicator for the integral energy (MSEN(14))
     end type ModelSensParams
     
+    type :: EnhancedDriving
+        real :: amp = 10.0 ! Amplitude of the enhanced driving 
+        real :: zoneStart = 90. ! Start of the zone in degrees latitude of the region of enhanced driving
+        real :: zoneEnd = 210.  ! End of the zone in degrees latitude of the region of enhanced driving
+        real :: smoothness = 6. ! Smoothness of the transition between the enhanced driving zone and the rest of the domain.
+                                  ! The higher the value, the sharper the transition.
+    end type EnhancedDriving
+    
     type :: ContourIntervals ! This is a new type to hold the scaling factors for the model
         real :: Contours(30) ! Contour intervals for each field for maps and Hovmollers
         real :: Ranges(30)   ! Ranges for phase space and time series axes
@@ -188,6 +196,7 @@ module ModelParamsModule
     type(FileStruct) :: gSensFile
     type(ScaleFactors) :: gScaleFactors
     type(ModelState) :: gModelState
+    type(EnhancedDriving) :: gEnhancedDriving
 
     ! Labels for the plots
     type :: FieldLabels

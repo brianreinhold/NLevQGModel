@@ -9,7 +9,6 @@
 #define IDD_CONTOURS                    112
 #define IDD_VIEW_VARIABLES              114
 #define IDD_BOMB                        116
-#define IDD_DIALOG1                     118
 #define IDD_HELP_DIALOG                 118
 #define IDC_USERSETTINGS                1008
 #define IDC_EDIT_USERSETTINGS           1010
@@ -113,7 +112,9 @@
 #define IDC_BUTTON_INIT_ZERO_OROGRAPHY2 1078
 #define IDC_BUTTON_INIT_ZERO_SF         1078
 #define IDC_BUTTON_EXIT_CONTOURS        1079
+#define IDC_BUTTON_GENERATE_ZONE        1079
 #define IDC_EDIT_CONTOURS               1080
+#define IDC_BUTTON_GENERATE_ZONE_STRM   1080
 #define IDC_CHECK1                      1081
 #define IDC_CHECK_RUN_INVISCID          1081
 #define IDC_CHECK_VIEW_DIMENSIONAL      1081
@@ -149,6 +150,16 @@
 #define IDC_CHECK_VIEW_COMPONENT_LEVEL_TOGGLE 1107
 #define IDC_STATIC_VIEW_COMPONENT       1108
 #define IDC_COMBO_VIEW_COMPONENT        1109
+#define IDC_EDIT_START                  1111
+#define IDC_STATIC_START                1112
+#define IDC_STATIC_END                  1113
+#define IDC_EDIT_END                    1114
+#define IDC_STATIC_SMOOTHNESS           1115
+#define IDC_EDIT_SMOOTHNESS             1116
+#define IDC_STATIC_ENHANCED_ZONE        1117
+#define IDC_EDIT_AMPLITUDE              1118
+#define IDC_STATIC_SMOOTHNESS2          1119
+#define IDC_STATIC_AMPLITUDE            1119
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 
@@ -158,7 +169,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        120
 #define _APS_NEXT_COMMAND_VALUE         30018
-#define _APS_NEXT_CONTROL_VALUE         1111
+#define _APS_NEXT_CONTROL_VALUE         1118
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

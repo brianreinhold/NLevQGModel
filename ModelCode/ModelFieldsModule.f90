@@ -253,7 +253,7 @@ MODULE ModelFieldsModule
                                          ! all the other arrays. The first LMAX2 are zonal flows then amplitude and phase for each L for all K
         real, pointer :: WW_AMP_FAS(:, :) ! This array holds the amplitude and phase instead of the WW cosknx, sinknx components
 
-        real, pointer :: PS_VAR(:, :, :)
+        real, pointer :: PS_VAR(:, :)     ! Temp array to compute the PS field at a given level as grid points for the variance computation.
 
         type(WelfordType), pointer :: WelfordKE(:)
         type(WelfordType), pointer :: WelfordPS(:, :)   ! This array holds the WelfordType for each of the streamfunction spectral components at each level.
@@ -417,7 +417,7 @@ MODULE ModelFieldsModule
             gEnergyArr%ZonalAPE(1 : lmax)  => ZonalAPE_Pool(1 : lmax)
             gEnergyArr%PS_AMP_FAS(1 : itot, 1 : nlev) => PS_AMP_FAS_Pool(1 : itot * nlev)
             gEnergyArr%WW_AMP_FAS(1 : itot, 1 : nlev) => WW_AMP_FAS_Pool(1 : itot * nlev)
-            gEnergyArr%PS_VAR(1 : kx, 1: ly, 1 : nlev) => PS_VAR_Pool(1 : kx * ly * nlev)
+            gEnergyArr%PS_VAR(1 : kx, 1: ly) => PS_VAR_Pool(1 : kx * ly)
             gEnergyArr%WelfordKE(1 : kmax) => WelfordKE_Pool(1 : kmax)
             gEnergyArr%WelfordPS(1 : itot, 1 : nlev) => WelfordPS_Pool(1 : itot * nlev)
             gEnergyArr%WelfordTH(1 : itot, 1 : nlev) => WelfordTH_Pool(1 : itot * nlev)

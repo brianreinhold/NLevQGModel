@@ -295,7 +295,7 @@ module ModelModule
                                     call updateRunStats(gHorzArr%TH(:, N), gEnergyArr%WelfordTH(:, N))
                                     call updateRunStats(gHorzArr%ADS(:, N), gEnergyArr%WelfordADS(:, N))
                                     call updateRunStats(gHorzArr%ADT(:, N), gEnergyArr%WelfordADT(:, N))
-                                    call computeVariance(gHorzArr%PS(:, N), gEnergyArr%PS_VAR(:, :, N), gEnergyArr%WelfordPS_VAR(:, :, N))
+                                    call computeVariance(gHorzArr%PS(:, N), gEnergyArr%PS_VAR(:, :), gEnergyArr%WelfordPS_VAR(:, :, N))
                                 end do
                                 call outputPlot(.FALSE.)
                                 gHorzArr%FS = 0.0

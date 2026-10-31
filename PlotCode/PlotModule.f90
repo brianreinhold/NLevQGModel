@@ -2129,7 +2129,13 @@ module PlotModule
             isOdd = BTEST(plotlevel, 0)  ! if Bit 0 is 1, the function returns true and the number is odd. This means we are at an interface. 
             if (isOdd .AND. (plotLevel .GE. 3) .AND. (plotLevel .LT. gCurrentDims%LVS - 1)) then
                 weight = (gVertArr%PV(level - 1) - gVertArr%PP(level)) / gVertArr%DP(level)
-                return
+                do ly = 1, gCurrentDims%IYMAX / 2 + 1
+                    do kx = 1, gCurrentDims%IXMAX + 1
+                        grid(kx, ly) = SQRT(getVariance(gEnergyArr%WelfordPS_VAR(kx, ly, level), .FALSE.))
+                        gEnergyArr%PS_VAR(kx, ly) = SQRT(getVariance(gEnergyArr%WelfordPS_VAR(kx, ly, level - 1), .FALSE.))
+                        grid(kx, ly) = (1.0 - weight) * gEnergyArr%PS_VAR(kx, ly) + weight * grid(kx, ly)
+                    end do                        
+                end do
             else
                 ! No interpolation
                 do ly = 1, gCurrentDims%IYMAX / 2 + 1

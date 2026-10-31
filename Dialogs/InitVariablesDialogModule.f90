@@ -223,28 +223,33 @@ module InitVariablesDialogModule
                         case (IDC_BUTTON_INIT_ZERO_ALL)
                             call ZeroVariables()
                             InitVariablesDlgProc = 1
+!--F2: Create ZOnal enhancement ============================================
+                        case (IDC_BUTTON_GENERATE_ZONE)
+                            call generateEnhancedGradientZone(1)
+                            call initializeDialog()
+                            InitVariablesDlgProc = 1
                             
-!--F2: Zero PS ====================================================
-                        case (IDC_BUTTON_INIT_ZERO_PS)
-                            gHorzArr%PS = 0.0
-                            gHorzArr%TH = 0.0
-                            call populateListControls(levelIndex)
-                            InitVariablesDlgProc = 1
-!--F3: Zero TF ====================================================
-                        case (IDC_BUTTON_INIT_ZERO_TF)
-                            gHorzArr%TF = 0.0
-                            call populateListControls(levelIndex)
-                            InitVariablesDlgProc = 1
-!--F4: Zero OROGRAPHY ====================================================
-                        case (IDC_BUTTON_INIT_ZERO_OROGRAPHY)
-                            gHorzArr%TOP= 0.0
-                            call populateListControls(levelIndex)
-                            InitVariablesDlgProc = 1
-!--F5: Zero SF ====================================================
-                        case (IDC_BUTTON_INIT_ZERO_SF)
-                            gHorzArr%SF = 0.0
-                            call populateListControls(levelIndex)
-                            InitVariablesDlgProc = 1
+! !--F2: Zero PS ====================================================
+!                         case (IDC_BUTTON_INIT_ZERO_PS)
+!                             gHorzArr%PS = 0.0
+!                             gHorzArr%TH = 0.0
+!                             call populateListControls(levelIndex)
+!                             InitVariablesDlgProc = 1
+! !--F3: Zero TF ====================================================
+!                         case (IDC_BUTTON_INIT_ZERO_TF)
+!                             gHorzArr%TF = 0.0
+!                             call populateListControls(levelIndex)
+!                             InitVariablesDlgProc = 1
+! !--F4: Zero OROGRAPHY ====================================================
+!                         case (IDC_BUTTON_INIT_ZERO_OROGRAPHY)
+!                             gHorzArr%TOP= 0.0
+!                             call populateListControls(levelIndex)
+!                             InitVariablesDlgProc = 1
+! !--F5: Zero SF ====================================================
+!                         case (IDC_BUTTON_INIT_ZERO_SF)
+!                             gHorzArr%SF = 0.0
+!                             call populateListControls(levelIndex)
+!                             InitVariablesDlgProc = 1
                             
 !--F6: View all variables ====================================================
                         case (IDC_BUTTON_VIEW_VARIABLES)
@@ -702,6 +707,38 @@ module InitVariablesDialogModule
                     end if
                 end function getRowClickedFromId
         end function InitVariablesDlgProc
+        
+        subroutine generateEnhancedGradientZone(level)
+            !  x1 is the start longitude and x2 is the end longitude
+            !  c is the center = (x1 + x2 ) /2
+            !  Δ is the difference = (x2 - x1)
+            !  ks is a smoothness coefficient
+            !  a(k​)=(2/πk)​sin(kΔ)cos(kc​)exp[−(k/​ks​)**2], 
+            !  b(k)=)2/πk)sin⁡(kΔ)sin⁡(kc)exp⁡ ⁣[−(k/ks)**2].
+
+            use ModelParamsModule, only: gEnhancedDriving, gModIntParams
+            use ModelFieldsModule, only: gHorzArr
+            use ConstantsModule, only: PI_INVERSE, DEGREES_TO_RAD
+
+            implicit none
+
+            integer, intent(in) :: level
+
+            integer :: k, index
+            real :: rk, ex, range, center, fac
+
+            range = (gEnhancedDriving%zoneEnd - gEnhancedDriving%zoneStart) * 0.5 * DEGREES_TO_RAD
+            center = ((gEnhancedDriving%zoneEnd + gEnhancedDriving%zoneStart) * 0.5) * DEGREES_TO_RAD
+            index = gModIntParams%LMAX2 + 2
+            do k = 1, gModIntParams%KMAX2
+                rk = REAL(k)
+                ex = exp(-(rk / gEnhancedDriving%smoothness) * (rk / gEnhancedDriving%smoothness) )
+                fac = gEnhancedDriving%amp * (2.0 * PI_INVERSE / rk) * sin(rk * range)
+                gHorzArr%TF(index + 1, level) = fac * cos(rk * center) * ex
+                gHorzArr%TF(index + 2, level) = fac * sin(rk * center) * ex
+                index = index + 2 * gModIntParams%LMAX2
+            end do
+        end subroutine generateEnhancedGradientZone
         
 !-------------------- External helper functions.
 
