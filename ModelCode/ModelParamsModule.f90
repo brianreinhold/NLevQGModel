@@ -134,11 +134,13 @@ module ModelParamsModule
     end type ModelSensParams
     
     type :: EnhancedDriving
-        real :: amp = 10.0 ! Amplitude of the enhanced driving 
+        real :: amp = 10.0      ! Amplitude of the enhanced driving 
         real :: zoneStart = 90. ! Start of the zone in degrees latitude of the region of enhanced driving
         real :: zoneEnd = 210.  ! End of the zone in degrees latitude of the region of enhanced driving
         real :: smoothness = 6. ! Smoothness of the transition between the enhanced driving zone and the rest of the domain.
-                                  ! The higher the value, the sharper the transition.
+                                ! The higher the value, the sharper the transition.
+        integer :: lMode = 2    ! The sin(lMode*y) of the waves creating the enhanced zone
+        integer :: levels = 1   ! The number of levels that this driving will be placed starting at the lowest level.
     end type EnhancedDriving
     
     type :: ContourIntervals ! This is a new type to hold the scaling factors for the model

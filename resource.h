@@ -158,8 +158,12 @@
 #define IDC_EDIT_SMOOTHNESS             1116
 #define IDC_STATIC_ENHANCED_ZONE        1117
 #define IDC_EDIT_AMPLITUDE              1118
-#define IDC_STATIC_SMOOTHNESS2          1119
 #define IDC_STATIC_AMPLITUDE            1119
+#define IDC_STATIC_LMODE                1120
+#define IDC_EDIT_LMODE                  1121
+#define IDC_STATIC_LEVELS_TO_SET        1122
+#define IDC_EDIT_LMODE2                 1123
+#define IDC_EDIT_LEVELS_TO_SET          1123
 #define IDM_ABOUT                       30015
 #define ID_CONFIGURATION_SETTINGS       30016
 

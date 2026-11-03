@@ -72,7 +72,7 @@ module ModelModule
 
         function StartTimeLoop() result(errorCode)
             use ConstantsModule, only: ADV_BETA_HGT_TEND, RUNNING, SENS_STATIC_LAPSE_RATE, STATS_OPT_NONE, STATS_OPT_VAR, &
-                ZONAL_MEAN_FLOW, BAROCLINIC_STRUCTS, STOPPED, PAUSED, ERR_NUMERIC_INSTABILITY
+                ZONAL_MEAN_FLOW, BAROCLINIC_STRUCTS, STOPPED, PAUSED, ERR_NUMERIC_INSTABILITY, HEIGHT, TEMPERATURE
             use ArrayDimensionsModule
             use ModelParamsModule, only: gUserSettings, gModRealParams, gModIntParams, gScaleFactors, FileStruct, gPlotScales, gModelState, &
                 gContourIntervals
@@ -295,7 +295,8 @@ module ModelModule
                                     call updateRunStats(gHorzArr%TH(:, N), gEnergyArr%WelfordTH(:, N))
                                     call updateRunStats(gHorzArr%ADS(:, N), gEnergyArr%WelfordADS(:, N))
                                     call updateRunStats(gHorzArr%ADT(:, N), gEnergyArr%WelfordADT(:, N))
-                                    call computeVariance(gHorzArr%PS(:, N), gEnergyArr%PS_VAR(:, :), gEnergyArr%WelfordPS_VAR(:, :, N))
+                                    call computeVariance(gHorzArr%PS(:, N), gEnergyArr%PS_VAR(:, :), gEnergyArr%WelfordPS_VAR(:, :, N), HEIGHT, N)
+                                    call computeVariance(gHorzArr%TH(:, N), gEnergyArr%TH_VAR(:, :), gEnergyArr%WelfordTH_VAR(:, :, N), TEMPERATURE, N)
                                 end do
                                 call outputPlot(.FALSE.)
                                 gHorzArr%FS = 0.0
@@ -1840,23 +1841,31 @@ module ModelModule
             !print '(*(F10.4))', (gEnergyArr%Welford_PS_AMP_FAS(3, N)%mean, N = 1, SIZE(gEnergyArr%Welford_PS_AMP_FAS, 2))
         end subroutine ComputeVertStructures
 
-        subroutine computeVariance(PS, PS_VAR, WelfordPS_VAR)
-            use ConstantsModule, only: HEIGHT
+        subroutine computeVariance(PS, PS_VAR, WelfordPS_VAR, variable, level)
+            use ConstantsModule, only: HEIGHT, TEMPERATURE
             use ArrayDimensionsModule, only: gCurrentDims
             use ModelFieldsModule, only: gHorzArr, gEnergyArr
             use ModelParamsModule, only: gPlotScales
             use WelfordModule, only: WelfordType, updateRunStats
-            use PlotModule, only: computeGrid
+            use PlotModule, only: computeGrid, interpolateTemperatureScale
 
             implicit none
 
             real, intent(in) :: PS(:)
             real, intent(inout) :: PS_VAR(:, :)
             type(WelfordType), intent(inout) :: WelfordPS_VAR(:, :)
+            integer, intent(in) :: variable, integer
 
             integer :: kx, ly
+            real :: scale
 
-            call computeGrid(PS, PS_VAR, gPlotScales(HEIGHT))
+            if (variable == HEIGHT) then
+                scale = gPlotScales(HEIGHT)
+            else if (variable == TEMPERATURE) then
+                scale = gPlotScales(TEMPERATURE) / interpolateTemperatureScale(level)
+            endif
+
+            call computeGrid(PS, PS_VAR, scale)
 
             do ly = 1, gCurrentDims%IYMAX / 2 + 1
                 call updateRunStats(PS_VAR(1 : gCurrentDims%IXMAX + 1, ly), WelfordPS_VAR(1 : gCurrentDims%IXMAX + 1, ly))

@@ -16,11 +16,13 @@
       integer, parameter :: IDC_STATIC_VERT_PROFILES = 1100
       integer, parameter :: IDC_STATIC_START = 1112
       integer, parameter :: IDC_CHECK_INIT_COMPONENT_LEVEL_TOGGLE = 1081
+      integer, parameter :: IDC_STATIC_LEVELS_TO_SET = 1122
       integer, parameter :: IDC_COMBO_LEVEL = 1073
       integer, parameter :: IDC_BUTTON_EXIT_VERTICAL = 1045
       integer, parameter :: IDC_CHECK_BOMB_ADD = 1081
+      integer, parameter :: IDC_STATIC_LMODE = 1120
       integer, parameter :: IDC_STATIC_COMBO_MODEL_TYPE = 1040
-      integer, parameter :: IDC_STATIC_SMOOTHNESS2 = 1119
+      integer, parameter :: IDC_EDIT_LMODE2 = 1123
       integer, parameter :: IDC_COMBO_COMPONENT = 1105
       integer, parameter :: IDC_CHECK_VIEW_AVERAGES = 1106
       integer, parameter :: IDC_EDIT_USERSETTINGS = 1010
@@ -62,6 +64,7 @@
       integer, parameter :: IDC_STATIC_INIT_OROGRAPHY = 1069
       integer, parameter :: IDC_EDIT_SMOOTHNESS = 1116
       integer, parameter :: IDC_EDIT_CONTOURS = 1080
+      integer, parameter :: IDC_EDIT_LMODE = 1121
       integer, parameter :: IDC_BUTTON_CONTOURS = 1041
       integer, parameter :: IDD_VIEW_VARIABLES = 114
       integer, parameter :: IDC_BUTTON_INIT_ZERO_TF = 1076
@@ -130,6 +133,7 @@
       integer, parameter :: IDC_EDIT_BOMB_PHASE_DIFF = 1050
       integer, parameter :: IDC_BUTTON_EDIT_DONE = 1031
       integer, parameter :: IDC_STATIC_VIEW_HTG_TEND_INFO = 1101
+      integer, parameter :: IDC_EDIT_LEVELS_TO_SET = 1123
       integer, parameter :: IDC_BUTTON_MODEL_CONTROL = 1019
       integer, parameter :: IDC_BUTTON_EXIT_SETTINGS = 1051
       integer, parameter :: IDC_STATIC_SMOOTHNESS = 1115

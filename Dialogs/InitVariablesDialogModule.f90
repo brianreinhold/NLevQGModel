@@ -31,7 +31,7 @@ module InitVariablesDialogModule
             use UtilitiesModule, only: RealToAsciiToReal
             use DialogHelpersModule, only: moveEditBox, initListView, AddListViewRow, ResizeListViewToFitItems, &
                                            updateListViewValue, HideMyEdit, GetComboIndex
-            use ModelParamsModule, only: gModIntParams
+            use ModelParamsModule, only: gModIntParams, gEnhancedDriving
             use KeyboardHooksModule, only: KeyboardForDlgInitVariablesProc
             use ModelFieldsModule, only: gVertArr, gHorzArr
             use SetUpModule, only: DimensionalizeHorizontalParams, NonDimensionalizeHorizontalParams
@@ -52,7 +52,7 @@ module InitVariablesDialogModule
             ! Local variables
             integer(KIND=4) :: lData
             integer(kind=4) :: iData
-            integer(kind=4) :: iret
+            integer(kind=4) :: iret, ios
             integer(BOOL) ::   bret
             integer(HANDLE), save :: hHook
 
@@ -225,7 +225,11 @@ module InitVariablesDialogModule
                             InitVariablesDlgProc = 1
 !--F2: Create ZOnal enhancement ============================================
                         case (IDC_BUTTON_GENERATE_ZONE)
-                            call generateEnhancedGradientZone(1)
+                            M = gEnhancedDriving%levels
+                            if (M .GT. gModIntParams%NLEV) M = gModIntParams%NLEV
+                            do i = 1, M
+                                call generateEnhancedGradientZone(i)
+                            enddo
                             call initializeDialog()
                             InitVariablesDlgProc = 1
                             
@@ -262,6 +266,29 @@ module InitVariablesDialogModule
                         case (IDC_BUTTON_EXIT_INIT_VARIABLES) ! F10 Close
                             bret = EndDialog(hDlg, 0)
                             InitVariablesDlgProc = 1
+
+                        case (IDC_EDIT_START)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            bret = GetDlgItemText(hDlg, IDC_EDIT_START, buffer, LEN(buffer))
+                            read(buffer, *, iostat=ios) gEnhancedDriving%zoneStart
+                        case (IDC_EDIT_END)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            bret = GetDlgItemText(hDlg, IDC_EDIT_END, buffer, LEN(buffer))
+                            read(buffer, *, iostat=ios) gEnhancedDriving%zoneEnd
+                        case (IDC_EDIT_SMOOTHNESS)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            bret = GetDlgItemText(hDlg, IDC_EDIT_SMOOTHNESS, buffer, LEN(buffer))
+                            read(buffer, *, iostat=ios) gEnhancedDriving%smoothness
+                        case (IDC_EDIT_AMPLITUDE)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            bret = GetDlgItemText(hDlg, IDC_EDIT_AMPLITUDE, buffer, LEN(buffer))
+                            read(buffer, *, iostat=ios) gEnhancedDriving%amp
+                        case (IDC_EDIT_LMODE)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            gEnhancedDriving%lMode = GetDlgItemInt(hDlg, IDC_EDIT_LMODE, bret, .FALSE.)
+                        case (IDC_EDIT_LEVELS_TO_SET)
+                            if (ISHFT(wParam, -16) /= en_killfocus) return ! ignore other edit box events (like typing)
+                            gEnhancedDriving%levels = GetDlgItemInt(hDlg, IDC_EDIT_LEVELS_TO_SET, bret, .FALSE.)
 
                         case (IDC_CHECK_HORZ_DIMENSIONALIZE)
                             if (ISHFT(wParam, -16) == BN_CLICKED) then
@@ -489,6 +516,21 @@ module InitVariablesDialogModule
                         bret = SendMessage(hCombo, CB_SETCURSEL, INT(componentIndex - 1, UINT_PTR), 0) ! These are not zero based in our code
                         call populateListControlsLevel(componentIndex)
                     endif
+                    ! Load edit boxes for regionalized enhanced forcing zone
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_START)
+                    write(buffer, '(F10.4)', iostat=ios) gEnhancedDriving%zoneStart
+                    if (ios == 0) iret = SetDlgItemText(hDlg, IDC_EDIT_START, adjustl(trim(buffer)) // char(0))
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_END)
+                    write(buffer, '(F10.4)', iostat=ios) gEnhancedDriving%zoneEnd
+                    if (ios == 0) iret = SetDlgItemText(hDlg, IDC_EDIT_END, adjustl(trim(buffer)) // char(0))
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_SMOOTHNESS)
+                    write(buffer, '(F10.4)', iostat=ios) gEnhancedDriving%smoothness
+                    if (ios == 0) iret = SetDlgItemText(hDlg, IDC_EDIT_SMOOTHNESS, adjustl(trim(buffer)) // char(0))
+                    hEdit = GetDlgItem(hDlg, IDC_EDIT_AMPLITUDE)
+                    write(buffer, '(F10.4)', iostat=ios) gEnhancedDriving%amp
+                    if (ios == 0) iret = SetDlgItemText(hDlg, IDC_EDIT_AMPLITUDE, adjustl(trim(buffer)) // char(0))
+                    bret = SetDlgItemInt(hDlg, IDC_EDIT_LMODE, gEnhancedDriving%lMode, .FALSE.)
+                    bret = SetDlgItemInt(hDlg, IDC_EDIT_LEVELS_TO_SET, gEnhancedDriving%levels, .FALSE.)
                 end subroutine initializeDialog
 
                 subroutine populateListControls(N)
@@ -729,7 +771,7 @@ module InitVariablesDialogModule
 
             range = (gEnhancedDriving%zoneEnd - gEnhancedDriving%zoneStart) * 0.5 * DEGREES_TO_RAD
             center = ((gEnhancedDriving%zoneEnd + gEnhancedDriving%zoneStart) * 0.5) * DEGREES_TO_RAD
-            index = gModIntParams%LMAX2 + 2
+            index = gModIntParams%LMAX2 + (gEnhancedDriving%lMode - 1) * 2
             do k = 1, gModIntParams%KMAX2
                 rk = REAL(k)
                 ex = exp(-(rk / gEnhancedDriving%smoothness) * (rk / gEnhancedDriving%smoothness) )
